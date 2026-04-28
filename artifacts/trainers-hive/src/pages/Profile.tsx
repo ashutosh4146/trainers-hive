@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -134,7 +135,7 @@ function VendorProfile({ vendorId }: { vendorId: string }) {
             </div>
 
             <div className="space-y-2">
-              <FormLabel>Email Address (Read-only)</FormLabel>
+              <Label>Email Address (Read-only)</Label>
               <Input value={vendor?.email || ""} disabled className="bg-muted" />
               <p className="text-xs text-muted-foreground">Contact support to change your account email.</p>
             </div>
@@ -317,13 +318,13 @@ function TrainerProfile({ trainerId }: { trainerId: string }) {
             {/* Read-only sections for demo */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
               <div>
-                <FormLabel>Certifications (Read-only)</FormLabel>
+                <Label>Certifications (Read-only)</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {trainer?.certifications?.map((cert, i) => <Badge key={i} variant="secondary">{cert}</Badge>) || <span className="text-sm text-muted-foreground">None listed</span>}
                 </div>
               </div>
               <div>
-                <FormLabel>Languages (Read-only)</FormLabel>
+                <Label>Languages (Read-only)</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {trainer?.languages?.map((lang, i) => <Badge key={i} variant="outline">{lang}</Badge>) || <span className="text-sm text-muted-foreground">None listed</span>}
                 </div>
