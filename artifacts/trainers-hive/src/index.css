@@ -256,3 +256,7 @@
     inset: -1px;
   }
 }
+
+@keyframes cursor-spin {
+  to { transform: rotate(360deg); }
+}

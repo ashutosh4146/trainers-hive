@@ -3,6 +3,7 @@ import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CursorLoader } from "@/components/ui/cursor-loader";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -77,6 +78,7 @@ function App() {
           <Router />
         </WouterRouter>
         <Toaster />
+        <CursorLoader />
       </TooltipProvider>
     </QueryClientProvider>
   );
