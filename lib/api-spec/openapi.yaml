@@ -755,10 +755,7 @@ components:
         - skill
         - subSkills
         - durationDays
-        - budget
-        - feeType
         - location
-        - remote
         - deadline
         - status
         - createdAt
@@ -782,10 +779,6 @@ components:
             type: string
         durationDays:
           type: integer
-        budget:
-          type: integer
-        feeType:
-          $ref: "#/components/schemas/FeeType"
         location:
           type: string
         remote:
@@ -800,6 +793,24 @@ components:
           format: date-time
         applicationCount:
           type: integer
+        trainingType:
+          type: string
+        trainingMode:
+          type: string
+        trainerCount:
+          type: integer
+        trainerType:
+          type: string
+        benefits:
+          type: string
+        certifications:
+          type: string
+        language:
+          type: string
+        trainerScope:
+          type: string
+        startDate:
+          type: string
 
     RequirementDetail:
       allOf:
@@ -819,12 +830,14 @@ components:
         - skill
         - subSkills
         - durationDays
-        - budget
-        - feeType
-        - location
-        - remote
         - deadline
         - description
+        - trainingType
+        - trainingMode
+        - trainerCount
+        - trainerType
+        - benefits
+        - trainerScope
       properties:
         title:
           type: string
@@ -836,18 +849,30 @@ components:
             type: string
         durationDays:
           type: integer
-        budget:
-          type: integer
-        feeType:
-          $ref: "#/components/schemas/FeeType"
         location:
           type: string
-        remote:
-          type: boolean
         deadline:
           type: string
           format: date-time
         description:
+          type: string
+        trainingType:
+          type: string
+        trainingMode:
+          type: string
+        trainerCount:
+          type: integer
+        trainerType:
+          type: string
+        benefits:
+          type: string
+        certifications:
+          type: string
+        language:
+          type: string
+        trainerScope:
+          type: string
+        startDate:
           type: string
 
     UpdateRequirementBody:
@@ -863,14 +888,8 @@ components:
             type: string
         durationDays:
           type: integer
-        budget:
-          type: integer
-        feeType:
-          $ref: "#/components/schemas/FeeType"
         location:
           type: string
-        remote:
-          type: boolean
         deadline:
           type: string
           format: date-time
@@ -878,6 +897,24 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/RequirementStatus"
+        trainingType:
+          type: string
+        trainingMode:
+          type: string
+        trainerCount:
+          type: integer
+        trainerType:
+          type: string
+        benefits:
+          type: string
+        certifications:
+          type: string
+        language:
+          type: string
+        trainerScope:
+          type: string
+        startDate:
+          type: string
 
     ApplicationStatus:
       type: string

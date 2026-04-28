@@ -158,8 +158,9 @@ export default function RequirementDetail() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Briefcase className="h-4 w-4" />
-                  <span className="font-medium text-foreground">${requirement.budget.toLocaleString()}</span>
-                  {requirement.feeType === "negotiable" && <span>(Negotiable)</span>}
+                  <span className="font-medium text-foreground capitalize">
+                    {(requirement as any).trainingMode ?? "Discuss payout"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4" />

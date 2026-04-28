@@ -261,10 +261,9 @@ export default function Requirements() {
 
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Briefcase className="h-4 w-4" />
-                            <span className="font-medium text-foreground">
-                              ${req.budget.toLocaleString()}
+                            <span className="font-medium text-foreground capitalize">
+                              {(req as any).trainingMode ?? "Contact for pricing"}
                             </span>
-                            {req.feeType === "negotiable" && <span className="text-xs">(Negotiable)</span>}
                           </div>
 
                           <div className="flex items-center gap-2 text-muted-foreground">

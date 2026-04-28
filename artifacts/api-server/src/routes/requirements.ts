@@ -39,14 +39,21 @@ async function buildRequirementCard(
     skill: r.skill,
     subSkills: r.subSkills ?? [],
     durationDays: r.durationDays,
-    budget: r.budget,
-    feeType: r.feeType as "fixed" | "negotiable",
     location: r.location,
     remote: r.remote,
     deadline: r.deadline.toISOString(),
     status: r.status as "open" | "closed" | "vacant",
     createdAt: r.createdAt.toISOString(),
     applicationCount,
+    trainingType: r.trainingType ?? undefined,
+    trainingMode: r.trainingMode ?? undefined,
+    trainerCount: r.trainerCount ?? undefined,
+    trainerType: r.trainerType ?? undefined,
+    benefits: r.benefits ?? undefined,
+    certifications: r.certifications ?? undefined,
+    language: r.language ?? undefined,
+    trainerScope: r.trainerScope ?? undefined,
+    startDate: r.startDate ?? undefined,
   };
 }
 
@@ -141,6 +148,7 @@ router.post("/requirements", async (req, res) => {
   const deadline = parsed.data.deadline instanceof Date
     ? parsed.data.deadline
     : new Date(parsed.data.deadline);
+  const isRemote = parsed.data.trainingMode === "remote";
   await db.insert(requirementsTable).values({
     id,
     vendorId: active.vendorId,
@@ -148,13 +156,22 @@ router.post("/requirements", async (req, res) => {
     skill: parsed.data.skill,
     subSkills: parsed.data.subSkills,
     durationDays: parsed.data.durationDays,
-    budget: parsed.data.budget,
-    feeType: parsed.data.feeType,
-    location: parsed.data.location,
-    remote: parsed.data.remote,
+    budget: 0,
+    feeType: "negotiable",
+    location: parsed.data.location ?? "",
+    remote: isRemote,
     deadline,
     description: parsed.data.description,
     status: "open",
+    trainingType: parsed.data.trainingType,
+    trainingMode: parsed.data.trainingMode,
+    trainerCount: parsed.data.trainerCount,
+    trainerType: parsed.data.trainerType,
+    benefits: parsed.data.benefits,
+    certifications: parsed.data.certifications ?? null,
+    language: parsed.data.language ?? null,
+    trainerScope: parsed.data.trainerScope,
+    startDate: parsed.data.startDate ?? null,
   });
   await db.insert(activityTable).values({
     id: newId("act"),

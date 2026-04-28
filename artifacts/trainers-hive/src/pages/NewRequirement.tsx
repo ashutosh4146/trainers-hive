@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,94 +7,285 @@ import {
   useCreateRequirement,
   useListSkills,
   useGetCurrentUser,
-  getListRequirementsQueryKey
+  useListRequirements,
+  getListRequirementsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Building2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  Wifi,
+  MapPin,
+  LayoutGrid,
+  Clock,
+  Briefcase,
+  BookOpen,
+  Users,
+  Globe,
+  Navigation,
+  Gift,
+  Car,
+  BedDouble,
+  XCircle,
+  Copy,
+  CheckCircle2,
+} from "lucide-react";
 import { Link } from "wouter";
+import { cn } from "@/lib/utils";
+
+const TRAINING_TYPES = [
+  { value: "technical", label: "Technical / IT" },
+  { value: "soft-skills", label: "Soft Skills / Behavioral" },
+  { value: "leadership", label: "Leadership & Management" },
+  { value: "sales", label: "Sales & Marketing" },
+  { value: "compliance", label: "Safety & Compliance" },
+  { value: "domain", label: "Domain / Industry-Specific" },
+  { value: "other", label: "Other" },
+];
+
+function countWords(text: string) {
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
+}
 
 const requirementSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
   skill: z.string().min(1, "Please select a primary skill"),
-  subSkills: z.string(), // We'll handle this as a comma separated string for simplicity in the form if multi-select isn't available
+  subSkills: z.string(),
+  trainingType: z.string().min(1, "Please select a training type"),
+  trainingMode: z.enum(["remote", "in-person", "hybrid"], {
+    required_error: "Please select a delivery mode",
+  }),
+  location: z.string().optional(),
+  trainerCount: z.coerce.number().min(1, "At least 1 trainer required"),
+  trainerType: z.enum(["part-time", "full-time", "mentor"], {
+    required_error: "Please select an engagement type",
+  }),
+  trainerScope: z.enum(["local", "pan-india"], {
+    required_error: "Please select trainer reach",
+  }),
+  benefits: z.enum(["ta-da", "stay-only", "none"], {
+    required_error: "Please select benefits",
+  }),
+  startDate: z.string().optional(),
   durationDays: z.coerce.number().min(1, "Duration must be at least 1 day"),
-  budget: z.coerce.number().min(1, "Budget must be greater than 0"),
-  feeType: z.enum(["fixed", "negotiable"]),
-  location: z.string().min(2, "Location is required"),
-  remote: z.boolean().default(false),
-  deadline: z.string().min(1, "Deadline is required"),
-  description: z.string().min(30, "Description must be at least 30 characters"),
+  deadline: z.string().min(1, "Application deadline is required"),
+  description: z
+    .string()
+    .min(1, "Description is required")
+    .refine((val) => countWords(val) >= 35, {
+      message: "Description must be at least 35 words",
+    }),
+  certifications: z.string().optional(),
+  language: z.string().optional(),
 });
 
-type RequirementFormValues = z.infer<typeof requirementSchema>;
+type FormValues = z.infer<typeof requirementSchema>;
+
+interface IconCardProps {
+  selected: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+}
+
+function IconCard({ selected, onClick, icon, label, sub }: IconCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-sm font-medium transition-all cursor-pointer w-full",
+        selected
+          ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400"
+          : "border-border bg-background hover:border-teal-300 hover:bg-muted/50 text-muted-foreground",
+      )}
+    >
+      <span className={cn("text-2xl", selected ? "text-teal-600" : "")}>
+        {icon}
+      </span>
+      <span>{label}</span>
+      {sub && <span className="text-xs opacity-70">{sub}</span>}
+    </button>
+  );
+}
 
 export default function NewRequirement() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
 
   const { data: user, isLoading: userLoading } = useGetCurrentUser();
   const { data: skillsData } = useListSkills();
   const createRequirement = useCreateRequirement();
 
-  const form = useForm<RequirementFormValues>({
+  const vendorId = user?.vendorId ?? undefined;
+  const { data: previousRequirements } = useListRequirements(
+    { vendorId },
+    { query: { enabled: !!vendorId } },
+  );
+
+  const form = useForm<FormValues>({
     resolver: zodResolver(requirementSchema),
     defaultValues: {
       title: "",
       skill: "",
       subSkills: "",
-      durationDays: 30,
-      budget: 0,
-      feeType: "fixed",
+      trainingType: "",
+      trainingMode: undefined,
       location: "",
-      remote: false,
+      trainerCount: 1,
+      trainerType: undefined,
+      trainerScope: undefined,
+      benefits: undefined,
+      startDate: "",
+      durationDays: 30,
       deadline: "",
       description: "",
+      certifications: "",
+      language: "",
     },
   });
 
-  const onSubmit = (data: RequirementFormValues) => {
-    // Parse subSkills from comma separated string
-    const subSkillsArray = data.subSkills.split(",").map(s => s.trim()).filter(Boolean);
+  const trainingMode = form.watch("trainingMode");
+  const descriptionValue = form.watch("description");
+  const wordCount = countWords(descriptionValue || "");
+
+  useEffect(() => {
+    if (!selectedTemplate || !previousRequirements) return;
+    const template = previousRequirements.find((r) => r.id === selectedTemplate);
+    if (!template) return;
+
+    form.reset({
+      title: template.title,
+      skill: template.skill,
+      subSkills: (template.subSkills ?? []).join(", "),
+      trainingType: (template as any).trainingType ?? "",
+      trainingMode:
+        ((template as any).trainingMode as FormValues["trainingMode"]) ??
+        (template.remote ? "remote" : "in-person"),
+      location: template.location ?? "",
+      trainerCount: (template as any).trainerCount ?? 1,
+      trainerType:
+        ((template as any).trainerType as FormValues["trainerType"]) ??
+        undefined,
+      trainerScope:
+        ((template as any).trainerScope as FormValues["trainerScope"]) ??
+        undefined,
+      benefits:
+        ((template as any).benefits as FormValues["benefits"]) ?? undefined,
+      startDate: (template as any).startDate ?? "",
+      durationDays: template.durationDays,
+      deadline: template.deadline
+        ? new Date(template.deadline).toISOString().split("T")[0]
+        : "",
+      description: "",
+      certifications: (template as any).certifications ?? "",
+      language: (template as any).language ?? "",
+    });
+
+    toast({
+      title: "Template loaded",
+      description: "Fields filled from your previous post. Update as needed.",
+    });
+  }, [selectedTemplate]);
+
+  const onSubmit = (data: FormValues) => {
+    const subSkillsArray = data.subSkills
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     createRequirement.mutate(
       {
         data: {
-          ...data,
+          title: data.title,
+          skill: data.skill,
           subSkills: subSkillsArray,
-        }
+          trainingType: data.trainingType,
+          trainingMode: data.trainingMode,
+          location: data.location || undefined,
+          trainerCount: data.trainerCount,
+          trainerType: data.trainerType,
+          trainerScope: data.trainerScope,
+          benefits: data.benefits,
+          startDate: data.startDate || undefined,
+          durationDays: data.durationDays,
+          deadline: new Date(data.deadline).toISOString(),
+          description: data.description,
+          certifications: data.certifications || undefined,
+          language: data.language || undefined,
+        },
       },
       {
         onSuccess: (newReq) => {
-          toast({ title: "Requirement posted", description: "Your requirement has been successfully created." });
-          queryClient.invalidateQueries({ queryKey: getListRequirementsQueryKey() });
+          toast({
+            title: "Requirement posted!",
+            description: "Trainers can now discover and apply.",
+          });
+          queryClient.invalidateQueries({
+            queryKey: getListRequirementsQueryKey(),
+          });
           setLocation(`/requirements/${newReq.id}`);
         },
         onError: () => {
-          toast({ title: "Error", description: "Failed to post requirement. Please try again.", variant: "destructive" });
-        }
-      }
+          toast({
+            title: "Failed to post",
+            description: "Something went wrong. Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
     );
   };
 
-  if (userLoading) return <div className="container py-12">Loading...</div>;
+  if (userLoading)
+    return (
+      <div className="container py-12 text-muted-foreground">Loading…</div>
+    );
 
   if (user?.role !== "vendor") {
     return (
       <div className="container mx-auto px-4 py-20 max-w-md text-center">
         <Building2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
         <h2 className="text-2xl font-bold mb-2">Vendor Access Required</h2>
-        <p className="text-muted-foreground mb-6">Only verified vendors can post training requirements.</p>
+        <p className="text-muted-foreground mb-6">
+          Only verified vendors can post training requirements.
+        </p>
         <Link href="/requirements">
           <Button variant="outline">Browse Requirements</Button>
         </Link>
@@ -102,228 +293,530 @@ export default function NewRequirement() {
     );
   }
 
+  const hasPrevious = !!previousRequirements && previousRequirements.length > 0;
+
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 max-w-3xl">
       <div className="mb-6">
-        <Link href="/requirements" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-4">
+        <Link
+          href="/requirements"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-4"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Requirements
         </Link>
-        <h1 className="text-3xl font-bold tracking-tight">Post a New Requirement</h1>
-        <p className="text-muted-foreground mt-1">Fill out the details below to find the perfect trainer for your needs.</p>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Post a Training Requirement
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Describe what you need — trainers will reach out to connect.
+        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Requirement Details</CardTitle>
-          <CardDescription>Be as specific as possible to attract the right trainers.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Basic Information</h3>
+      {hasPrevious && (
+        <Card className="mb-6 border-teal-200 bg-teal-50/50 dark:bg-teal-900/10 dark:border-teal-800">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2 text-teal-700 dark:text-teal-400 font-medium">
+                <Copy className="h-4 w-4" />
+                <span className="text-sm">Use a previous post as template</span>
+              </div>
+              <Select
+                value={selectedTemplate}
+                onValueChange={setSelectedTemplate}
+              >
+                <SelectTrigger className="flex-1 bg-white dark:bg-background border-teal-200">
+                  <SelectValue placeholder="Select a previous post…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {previousRequirements!.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="space-y-6"
+          noValidate
+        >
+          {/* ── SECTION 1: Basic Information ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  1
+                </Badge>
+                Basic Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Requirement Title</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. Advanced Python for Data Analysts — Batch 5"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="title"
+                  name="trainingType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Requirement Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Advanced React & Next.js Workshop" {...field} />
-                      </FormControl>
+                      <FormLabel>Training Type</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type…" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {TRAINING_TYPES.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="skill"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Primary Skill</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a primary skill" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {skillsData?.map((category) => (
-                              <SelectGroup key={category.id}>
-                                <SelectLabel>{category.name}</SelectLabel>
-                                {category.skills.map(skill => (
-                                  <SelectItem key={skill} value={skill}>{skill}</SelectItem>
-                                ))}
-                              </SelectGroup>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="subSkills"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sub-skills (comma separated)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. Typescript, Tailwind, Redux" {...field} />
-                        </FormControl>
-                        <FormDescription>Separate multiple skills with commas.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Logistics & Budget</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="location"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. New York, NY or Online" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="remote"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Remote Allowed</FormLabel>
-                          <FormDescription>Can this be done virtually?</FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="durationDays"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Duration (Days)</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={1} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="deadline"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Application Deadline</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="budget"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Budget (Total)</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                            <Input type="number" min={0} className="pl-7" {...field} />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="feeType"
-                    render={({ field }) => (
-                      <FormItem className="space-y-3">
-                        <FormLabel>Fee Type</FormLabel>
-                        <FormControl>
-                          <RadioGroup
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                            className="flex space-x-4"
-                          >
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="fixed" id="fee-type-fixed" />
-                              <Label htmlFor="fee-type-fixed" className="font-normal cursor-pointer">Fixed</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="negotiable" id="fee-type-negotiable" />
-                              <Label htmlFor="fee-type-negotiable" className="font-normal cursor-pointer">Negotiable</Label>
-                            </div>
-                          </RadioGroup>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b pb-2">Description</h3>
                 <FormField
                   control={form.control}
-                  name="description"
+                  name="skill"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Description</FormLabel>
+                      <FormLabel>Primary Skill / Topic</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select skill…" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {skillsData?.map((category) => (
+                            <SelectGroup key={category.id}>
+                              <SelectLabel>{category.name}</SelectLabel>
+                              {category.skills.map((skill) => (
+                                <SelectItem key={skill} value={skill}>
+                                  {skill}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="subSkills"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sub-topics / Additional Skills</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. Pandas, NumPy, Data Visualisation (comma separated)"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Separate multiple items with commas.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* ── SECTION 2: Delivery & Location ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  2
+                </Badge>
+                Delivery Mode & Location
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="trainingMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>How will the training be conducted?</FormLabel>
+                    <div className="grid grid-cols-3 gap-3 mt-1">
+                      <IconCard
+                        selected={field.value === "remote"}
+                        onClick={() => field.onChange("remote")}
+                        icon={<Wifi />}
+                        label="Remote"
+                        sub="Online / Virtual"
+                      />
+                      <IconCard
+                        selected={field.value === "in-person"}
+                        onClick={() => field.onChange("in-person")}
+                        icon={<MapPin />}
+                        label="In-Person"
+                        sub="At your premises"
+                      />
+                      <IconCard
+                        selected={field.value === "hybrid"}
+                        onClick={() => field.onChange("hybrid")}
+                        icon={<LayoutGrid />}
+                        label="Hybrid"
+                        sub="Mix of both"
+                      />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {(trainingMode === "in-person" || trainingMode === "hybrid") && (
+                <FormField
+                  control={form.control}
+                  name="location"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Training Location / City</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Provide full details about the requirement, expectations, and any specific trainer qualifications needed..." 
-                          className="min-h-[200px]" 
-                          {...field} 
+                        <Input
+                          placeholder="e.g. Mumbai, Maharashtra"
+                          {...field}
                         />
                       </FormControl>
-                      <FormDescription>Minimum 30 characters.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── SECTION 3: Trainer Requirements ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  3
+                </Badge>
+                Trainer Requirements
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="trainerCount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        Number of Trainers Needed
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="trainerScope"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1.5">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                        Trainer Reach
+                      </FormLabel>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <IconCard
+                          selected={field.value === "local"}
+                          onClick={() => field.onChange("local")}
+                          icon={<Navigation className="h-5 w-5" />}
+                          label="Local Only"
+                        />
+                        <IconCard
+                          selected={field.value === "pan-india"}
+                          onClick={() => field.onChange("pan-india")}
+                          icon={<Globe className="h-5 w-5" />}
+                          label="Pan India"
+                        />
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
 
-              <Button type="submit" size="lg" className="w-full" disabled={createRequirement.isPending}>
-                {createRequirement.isPending ? "Posting..." : "Post Requirement"}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+              <FormField
+                control={form.control}
+                name="trainerType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Engagement Type</FormLabel>
+                    <div className="grid grid-cols-3 gap-3 mt-1">
+                      <IconCard
+                        selected={field.value === "part-time"}
+                        onClick={() => field.onChange("part-time")}
+                        icon={<Clock className="h-5 w-5" />}
+                        label="Part-time"
+                        sub="Flexible hours"
+                      />
+                      <IconCard
+                        selected={field.value === "full-time"}
+                        onClick={() => field.onChange("full-time")}
+                        icon={<Briefcase className="h-5 w-5" />}
+                        label="Full-time"
+                        sub="Dedicated"
+                      />
+                      <IconCard
+                        selected={field.value === "mentor"}
+                        onClick={() => field.onChange("mentor")}
+                        icon={<BookOpen className="h-5 w-5" />}
+                        label="Mentor"
+                        sub="Advisory role"
+                      />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="benefits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      <Gift className="h-4 w-4 text-muted-foreground" />
+                      Extra Benefits Provided
+                    </FormLabel>
+                    <div className="grid grid-cols-3 gap-3 mt-1">
+                      <IconCard
+                        selected={field.value === "ta-da"}
+                        onClick={() => field.onChange("ta-da")}
+                        icon={<Car className="h-5 w-5" />}
+                        label="TA + DA"
+                        sub="Travel & daily allowance"
+                      />
+                      <IconCard
+                        selected={field.value === "stay-only"}
+                        onClick={() => field.onChange("stay-only")}
+                        icon={<BedDouble className="h-5 w-5" />}
+                        label="Stay Only"
+                        sub="Accommodation covered"
+                      />
+                      <IconCard
+                        selected={field.value === "none"}
+                        onClick={() => field.onChange("none")}
+                        icon={<XCircle className="h-5 w-5" />}
+                        label="No Benefits"
+                        sub="Payout only"
+                      />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* ── SECTION 4: Timeline ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  4
+                </Badge>
+                Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Expected Start Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormDescription>Optional</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="durationDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Duration (Days)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="deadline"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Application Deadline</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── SECTION 5: Description & Qualifications ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  5
+                </Badge>
+                Description & Qualifications
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Detailed Job Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe the training objective, audience profile, expected outcomes, modules to be covered, and any other requirements the trainer must fulfil…"
+                        className="min-h-[180px] resize-y"
+                        {...field}
+                      />
+                    </FormControl>
+                    <div className="flex items-center justify-between mt-1">
+                      <FormDescription>Minimum 35 words.</FormDescription>
+                      <span
+                        className={cn(
+                          "text-xs font-medium",
+                          wordCount >= 35
+                            ? "text-teal-600"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {wordCount >= 35 ? (
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> {wordCount}{" "}
+                            words
+                          </span>
+                        ) : (
+                          `${wordCount} / 35 words`
+                        )}
+                      </span>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Separator />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="certifications"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Certifications Required</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. AWS Certified, PMP, SHRM (optional)"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Optional</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="language"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Language Preference</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Hindi, English, Marathi (optional)"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Optional</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold"
+            disabled={createRequirement.isPending}
+          >
+            {createRequirement.isPending
+              ? "Posting Requirement…"
+              : "Post Requirement"}
+          </Button>
+        </form>
+      </Form>
     </div>
   );
 }
