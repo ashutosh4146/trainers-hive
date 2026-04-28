@@ -649,3 +649,65 @@ export const ListActivityResponseItem = zod.object({
   avatarUrl: zod.string().optional(),
 });
 export const ListActivityResponse = zod.array(ListActivityResponseItem);
+
+/**
+ * @summary Submit a managed-service inquiry (Hire Us)
+ */
+export const CreateHireInquiryBody = zod.object({
+  companyName: zod.string(),
+  contactName: zod.string(),
+  email: zod.string(),
+  phone: zod.string().optional(),
+  trainingNeed: zod.string(),
+  budget: zod.string().optional(),
+  timeline: zod.string().optional(),
+  headcount: zod.string().optional(),
+  location: zod.string().optional(),
+});
+
+/**
+ * @summary List all inquiries (admin only)
+ */
+export const ListHireInquiriesResponseItem = zod.object({
+  id: zod.string(),
+  companyName: zod.string(),
+  contactName: zod.string(),
+  email: zod.string(),
+  phone: zod.string().optional(),
+  trainingNeed: zod.string(),
+  budget: zod.string().optional(),
+  timeline: zod.string().optional(),
+  headcount: zod.string().optional(),
+  location: zod.string().optional(),
+  status: zod.enum(["new", "contacted", "in_progress", "closed"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListHireInquiriesResponse = zod.array(
+  ListHireInquiriesResponseItem,
+);
+
+/**
+ * @summary Update inquiry status (admin only)
+ */
+export const UpdateHireInquiryStatusParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateHireInquiryStatusBody = zod.object({
+  status: zod.enum(["new", "contacted", "in_progress", "closed"]),
+});
+
+export const UpdateHireInquiryStatusResponse = zod.object({
+  id: zod.string(),
+  companyName: zod.string(),
+  contactName: zod.string(),
+  email: zod.string(),
+  phone: zod.string().optional(),
+  trainingNeed: zod.string(),
+  budget: zod.string().optional(),
+  timeline: zod.string().optional(),
+  headcount: zod.string().optional(),
+  location: zod.string().optional(),
+  status: zod.enum(["new", "contacted", "in_progress", "closed"]),
+  createdAt: zod.coerce.date(),
+});

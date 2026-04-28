@@ -10,7 +10,9 @@ import {
   useListMyApplications,
   useListActivity,
   useListRecentRequirements,
-  useListFeaturedTrainers
+  useListFeaturedTrainers,
+  useListHireInquiries,
+  useUpdateHireInquiryStatus,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -260,11 +262,24 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
   );
 }
 
+const STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  new:         { label: "New",         className: "bg-blue-100 text-blue-700 border-blue-200" },
+  contacted:   { label: "Contacted",   className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  in_progress: { label: "In Progress", className: "bg-purple-100 text-purple-700 border-purple-200" },
+  closed:      { label: "Closed",      className: "bg-green-100 text-green-700 border-green-200" },
+};
+
+const STATUS_NEXT: Record<string, string> = {
+  new: "contacted", contacted: "in_progress", in_progress: "closed", closed: "new",
+};
+
 function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats();
   const { data: activity, isLoading: actLoading } = useListActivity();
   const { data: requirements, isLoading: reqsLoading } = useListRecentRequirements();
   const { data: trainers, isLoading: trainersLoading } = useListFeaturedTrainers();
+  const { data: inquiries, isLoading: inqLoading, refetch: refetchInquiries } = useListHireInquiries();
+  const updateStatus = useUpdateHireInquiryStatus();
 
   if (statsLoading) return <DashboardSkeleton />;
 
@@ -380,6 +395,80 @@ function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Hire Us Inquiries */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-primary" /> Hire Us Inquiries
+            </CardTitle>
+            <CardDescription>Companies that requested managed trainer sourcing</CardDescription>
+          </div>
+          <Badge variant="outline" className="text-xs">{inquiries?.length ?? 0} total</Badge>
+        </CardHeader>
+        <CardContent>
+          {inqLoading ? (
+            <Skeleton className="h-[200px] w-full" />
+          ) : !inquiries?.length ? (
+            <p className="text-muted-foreground text-sm text-center py-8">No inquiries yet — share the Hire Us page!</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="text-left pb-3 pr-4 font-medium">Company</th>
+                    <th className="text-left pb-3 pr-4 font-medium">Contact</th>
+                    <th className="text-left pb-3 pr-4 font-medium hidden md:table-cell">Requirement</th>
+                    <th className="text-left pb-3 pr-4 font-medium hidden lg:table-cell">Budget / Timeline</th>
+                    <th className="text-left pb-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {inquiries.map((inq) => {
+                    const s = STATUS_LABELS[inq.status] ?? STATUS_LABELS.new;
+                    return (
+                      <tr key={inq.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 pr-4">
+                          <p className="font-medium">{inq.companyName}</p>
+                          {inq.location && <p className="text-xs text-muted-foreground">{inq.location}</p>}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <p>{inq.contactName}</p>
+                          <p className="text-xs text-muted-foreground">{inq.email}</p>
+                          {inq.phone && <p className="text-xs text-muted-foreground">{inq.phone}</p>}
+                        </td>
+                        <td className="py-3 pr-4 hidden md:table-cell max-w-[200px]">
+                          <p className="truncate text-xs text-muted-foreground">{inq.trainingNeed}</p>
+                          {inq.headcount && <p className="text-xs mt-0.5">{inq.headcount} people</p>}
+                        </td>
+                        <td className="py-3 pr-4 hidden lg:table-cell text-xs">
+                          {inq.budget && <p className="font-medium">{inq.budget}</p>}
+                          {inq.timeline && <p className="text-muted-foreground">{inq.timeline}</p>}
+                        </td>
+                        <td className="py-3">
+                          <button
+                            title="Click to advance status"
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${s.className}`}
+                            onClick={() =>
+                              updateStatus.mutate(
+                                { id: inq.id, data: { status: STATUS_NEXT[inq.status] as any } },
+                                { onSuccess: () => refetchInquiries() }
+                              )
+                            }
+                          >
+                            {s.label}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

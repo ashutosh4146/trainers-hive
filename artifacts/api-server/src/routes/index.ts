@@ -8,6 +8,7 @@ import requirementsRouter from "./requirements";
 import applicationsRouter from "./applications";
 import statsRouter from "./stats";
 import authRouter from "./auth";
+import hireInquiriesRouter from "./hire-inquiries";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(vendorsRouter);
 router.use(requirementsRouter);
 router.use(applicationsRouter);
 router.use(statsRouter);
+router.use(hireInquiriesRouter);
 
 export default router;

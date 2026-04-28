@@ -22,10 +22,12 @@ import type {
   ApplicationWithRequirement,
   ApplicationWithTrainer,
   ApplyBody,
+  CreateHireInquiryBody,
   CreateRequirementBody,
   CreateReviewBody,
   CurrentUser,
   HealthStatus,
+  HireInquiry,
   ListRequirementsParams,
   ListTrainersParams,
   PlatformStats,
@@ -38,6 +40,7 @@ import type {
   TrainerDetail,
   TrainerStats,
   UpdateApplicationBody,
+  UpdateHireInquiryStatusBody,
   UpdateRequirementBody,
   UpdateTrainerBody,
   UpdateVendorBody,
@@ -2207,3 +2210,252 @@ export function useListActivity<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Submit a managed-service inquiry (Hire Us)
+ */
+export const getCreateHireInquiryUrl = () => {
+  return `/api/hire-inquiries`;
+};
+
+export const createHireInquiry = async (
+  createHireInquiryBody: CreateHireInquiryBody,
+  options?: RequestInit,
+): Promise<HireInquiry> => {
+  return customFetch<HireInquiry>(getCreateHireInquiryUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createHireInquiryBody),
+  });
+};
+
+export const getCreateHireInquiryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createHireInquiry>>,
+    TError,
+    { data: BodyType<CreateHireInquiryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createHireInquiry>>,
+  TError,
+  { data: BodyType<CreateHireInquiryBody> },
+  TContext
+> => {
+  const mutationKey = ["createHireInquiry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createHireInquiry>>,
+    { data: BodyType<CreateHireInquiryBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createHireInquiry(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateHireInquiryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createHireInquiry>>
+>;
+export type CreateHireInquiryMutationBody = BodyType<CreateHireInquiryBody>;
+export type CreateHireInquiryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Submit a managed-service inquiry (Hire Us)
+ */
+export const useCreateHireInquiry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createHireInquiry>>,
+    TError,
+    { data: BodyType<CreateHireInquiryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createHireInquiry>>,
+  TError,
+  { data: BodyType<CreateHireInquiryBody> },
+  TContext
+> => {
+  return useMutation(getCreateHireInquiryMutationOptions(options));
+};
+
+/**
+ * @summary List all inquiries (admin only)
+ */
+export const getListHireInquiriesUrl = () => {
+  return `/api/hire-inquiries`;
+};
+
+export const listHireInquiries = async (
+  options?: RequestInit,
+): Promise<HireInquiry[]> => {
+  return customFetch<HireInquiry[]>(getListHireInquiriesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListHireInquiriesQueryKey = () => {
+  return [`/api/hire-inquiries`] as const;
+};
+
+export const getListHireInquiriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listHireInquiries>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listHireInquiries>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListHireInquiriesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listHireInquiries>>
+  > = ({ signal }) => listHireInquiries({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listHireInquiries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListHireInquiriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listHireInquiries>>
+>;
+export type ListHireInquiriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all inquiries (admin only)
+ */
+
+export function useListHireInquiries<
+  TData = Awaited<ReturnType<typeof listHireInquiries>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listHireInquiries>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListHireInquiriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update inquiry status (admin only)
+ */
+export const getUpdateHireInquiryStatusUrl = (id: string) => {
+  return `/api/hire-inquiries/${id}/status`;
+};
+
+export const updateHireInquiryStatus = async (
+  id: string,
+  updateHireInquiryStatusBody: UpdateHireInquiryStatusBody,
+  options?: RequestInit,
+): Promise<HireInquiry> => {
+  return customFetch<HireInquiry>(getUpdateHireInquiryStatusUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateHireInquiryStatusBody),
+  });
+};
+
+export const getUpdateHireInquiryStatusMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHireInquiryStatus>>,
+    TError,
+    { id: string; data: BodyType<UpdateHireInquiryStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateHireInquiryStatus>>,
+  TError,
+  { id: string; data: BodyType<UpdateHireInquiryStatusBody> },
+  TContext
+> => {
+  const mutationKey = ["updateHireInquiryStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateHireInquiryStatus>>,
+    { id: string; data: BodyType<UpdateHireInquiryStatusBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateHireInquiryStatus(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateHireInquiryStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateHireInquiryStatus>>
+>;
+export type UpdateHireInquiryStatusMutationBody =
+  BodyType<UpdateHireInquiryStatusBody>;
+export type UpdateHireInquiryStatusMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update inquiry status (admin only)
+ */
+export const useUpdateHireInquiryStatus = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHireInquiryStatus>>,
+    TError,
+    { id: string; data: BodyType<UpdateHireInquiryStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateHireInquiryStatus>>,
+  TError,
+  { id: string; data: BodyType<UpdateHireInquiryStatusBody> },
+  TContext
+> => {
+  return useMutation(getUpdateHireInquiryStatusMutationOptions(options));
+};
