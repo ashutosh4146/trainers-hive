@@ -811,6 +811,10 @@ components:
           type: string
         startDate:
           type: string
+        budget:
+          type: integer
+        feeType:
+          $ref: "#/components/schemas/FeeType"
 
     RequirementDetail:
       allOf:
@@ -874,6 +878,10 @@ components:
           type: string
         startDate:
           type: string
+        budget:
+          type: integer
+        feeType:
+          $ref: "#/components/schemas/FeeType"
 
     UpdateRequirementBody:
       type: object

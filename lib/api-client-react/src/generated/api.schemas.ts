@@ -139,6 +139,8 @@ export interface Requirement {
   language?: string;
   trainerScope?: string;
   startDate?: string;
+  budget?: number;
+  feeType?: FeeType;
 }
 
 export type RequirementDetail = Requirement & {
@@ -163,6 +165,8 @@ export interface CreateRequirementBody {
   language?: string;
   trainerScope: string;
   startDate?: string;
+  budget?: number;
+  feeType?: FeeType;
 }
 
 export interface UpdateRequirementBody {

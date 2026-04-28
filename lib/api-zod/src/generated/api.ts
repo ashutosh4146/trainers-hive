@@ -300,6 +300,8 @@ export const ListRequirementsResponseItem = zod.object({
   language: zod.string().optional(),
   trainerScope: zod.string().optional(),
   startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
 });
 export const ListRequirementsResponse = zod.array(ListRequirementsResponseItem);
 
@@ -320,6 +322,8 @@ export const CreateRequirementBody = zod.object({
   language: zod.string().optional(),
   trainerScope: zod.string(),
   startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
 });
 
 /**
@@ -349,6 +353,8 @@ export const ListRecentRequirementsResponseItem = zod.object({
   language: zod.string().optional(),
   trainerScope: zod.string().optional(),
   startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
 });
 export const ListRecentRequirementsResponse = zod.array(
   ListRecentRequirementsResponseItem,
@@ -383,6 +389,8 @@ export const GetRequirementResponse = zod
     language: zod.string().optional(),
     trainerScope: zod.string().optional(),
     startDate: zod.string().optional(),
+    budget: zod.number().optional(),
+    feeType: zod.enum(["fixed", "negotiable"]).optional(),
   })
   .and(
     zod.object({
@@ -451,6 +459,8 @@ export const UpdateRequirementResponse = zod.object({
   language: zod.string().optional(),
   trainerScope: zod.string().optional(),
   startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
 });
 
 export const DeleteRequirementParams = zod.object({
@@ -543,6 +553,8 @@ export const ListMyApplicationsResponseItem = zod
         language: zod.string().optional(),
         trainerScope: zod.string().optional(),
         startDate: zod.string().optional(),
+        budget: zod.number().optional(),
+        feeType: zod.enum(["fixed", "negotiable"]).optional(),
       }),
     }),
   );
