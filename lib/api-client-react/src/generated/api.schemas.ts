@@ -305,6 +305,57 @@ export interface ActivityItem {
   avatarUrl?: string;
 }
 
+export type HireInquiryStatus =
+  (typeof HireInquiryStatus)[keyof typeof HireInquiryStatus];
+
+export const HireInquiryStatus = {
+  new: "new",
+  contacted: "contacted",
+  in_progress: "in_progress",
+  closed: "closed",
+} as const;
+
+export interface HireInquiry {
+  id: string;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string;
+  trainingNeed: string;
+  budget?: string;
+  timeline?: string;
+  headcount?: string;
+  location?: string;
+  status: HireInquiryStatus;
+  createdAt: string;
+}
+
+export interface CreateHireInquiryBody {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string;
+  trainingNeed: string;
+  budget?: string;
+  timeline?: string;
+  headcount?: string;
+  location?: string;
+}
+
+export type UpdateHireInquiryStatusBodyStatus =
+  (typeof UpdateHireInquiryStatusBodyStatus)[keyof typeof UpdateHireInquiryStatusBodyStatus];
+
+export const UpdateHireInquiryStatusBodyStatus = {
+  new: "new",
+  contacted: "contacted",
+  in_progress: "in_progress",
+  closed: "closed",
+} as const;
+
+export interface UpdateHireInquiryStatusBody {
+  status: UpdateHireInquiryStatusBodyStatus;
+}
+
 export type ListTrainersParams = {
   q?: string;
   skill?: string;

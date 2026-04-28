@@ -535,6 +535,63 @@ paths:
                 items:
                   $ref: "#/components/schemas/ActivityItem"
 
+  /hire-inquiries:
+    post:
+      operationId: createHireInquiry
+      tags: [hire]
+      summary: Submit a managed-service inquiry (Hire Us)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHireInquiryBody"
+      responses:
+        "201":
+          description: Inquiry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HireInquiry"
+    get:
+      operationId: listHireInquiries
+      tags: [hire]
+      summary: List all inquiries (admin only)
+      responses:
+        "200":
+          description: List of inquiries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HireInquiry"
+
+  /hire-inquiries/{id}/status:
+    patch:
+      operationId: updateHireInquiryStatus
+      tags: [hire]
+      summary: Update inquiry status (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHireInquiryStatusBody"
+      responses:
+        "200":
+          description: Updated inquiry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HireInquiry"
+
 components:
   schemas:
     HealthStatus:
@@ -1149,3 +1206,65 @@ components:
           format: date-time
         avatarUrl:
           type: string
+
+    HireInquiry:
+      type: object
+      required: [id, companyName, contactName, email, trainingNeed, status, createdAt]
+      properties:
+        id:
+          type: string
+        companyName:
+          type: string
+        contactName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        trainingNeed:
+          type: string
+        budget:
+          type: string
+        timeline:
+          type: string
+        headcount:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+          enum: [new, contacted, in_progress, closed]
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateHireInquiryBody:
+      type: object
+      required: [companyName, contactName, email, trainingNeed]
+      properties:
+        companyName:
+          type: string
+        contactName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        trainingNeed:
+          type: string
+        budget:
+          type: string
+        timeline:
+          type: string
+        headcount:
+          type: string
+        location:
+          type: string
+
+    UpdateHireInquiryStatusBody:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [new, contacted, in_progress, closed]
