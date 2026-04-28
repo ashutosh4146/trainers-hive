@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "python-3.11"]
 
 [deployment]
 router = "application"
@@ -14,6 +14,7 @@ runButton = "Project"
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
+integrations = ["github:1.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
@@ -37,3 +38,6 @@ externalPort = 3000
 VITE_FIREBASE_API_KEY = "AIzaSyC3m1IZj4o8Xgjy6z7M5rQpiFKrfmhS_do"
 VITE_FIREBASE_APP_ID = "1:491480752528:web:f3035c483319531a3ed315"
 VITE_FIREBASE_MESSAGING_SENDER_ID = "491480752528"
+
+[nix]
+channel = "stable-25_05"
