@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ihLhKnbeO_-ydD6eZ5Zv8"
+uri = "file://trainers-hive.tar.gz"
+type = "unspecified"
+title = "Trainers Hive — source code (330 KB)"
