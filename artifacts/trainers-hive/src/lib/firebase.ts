@@ -1,5 +1,12 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, signInWithCustomToken, signOut as firebaseSignOut, type User } from "firebase/auth";
+import {
+  getAuth,
+  signOut as firebaseSignOut,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  type User,
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -13,8 +20,48 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]!;
 export const auth = getAuth(app);
 
-export async function signInWithToken(customToken: string): Promise<User> {
-  const cred = await signInWithCustomToken(auth, customToken);
+const PENDING_AUTH_KEY = "th_pending_auth";
+
+export interface PendingAuth {
+  type: "login" | "signup";
+  role: string;
+  email: string;
+  name?: string;
+  orgName?: string;
+}
+
+export function savePendingAuth(data: PendingAuth): void {
+  localStorage.setItem(PENDING_AUTH_KEY, JSON.stringify(data));
+}
+
+export function loadPendingAuth(): PendingAuth | null {
+  try {
+    const raw = localStorage.getItem(PENDING_AUTH_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PendingAuth;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingAuth(): void {
+  localStorage.removeItem(PENDING_AUTH_KEY);
+}
+
+export async function sendEmailSignInLink(email: string): Promise<void> {
+  const callbackUrl = `${window.location.origin}/auth/callback`;
+  await sendSignInLinkToEmail(auth, email, {
+    url: callbackUrl,
+    handleCodeInApp: true,
+  });
+}
+
+export function isEmailLinkCallback(url: string = window.location.href): boolean {
+  return isSignInWithEmailLink(auth, url);
+}
+
+export async function completeEmailLinkSignIn(email: string, url: string = window.location.href): Promise<User> {
+  const cred = await signInWithEmailLink(auth, email, url);
   return cred.user;
 }
 

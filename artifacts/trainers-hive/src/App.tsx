@@ -20,6 +20,7 @@ const Settings = React.lazy(() => import("./pages/Settings"));
 const AppLayout = React.lazy(() => import("./components/layout/AppLayout"));
 const Signup = React.lazy(() => import("./pages/Signup"));
 const Login = React.lazy(() => import("./pages/Login"));
+const AuthCallback = React.lazy(() => import("./pages/AuthCallback"));
 
 function PrivateRoute({ component: Component }: { component: React.ComponentType }) {
   const { isSignedIn } = useAuth();
@@ -37,6 +38,7 @@ function Router() {
         <Route path="/login">
           {isSignedIn ? <Redirect to="/dashboard" /> : <Login />}
         </Route>
+        <Route path="/auth/callback" component={AuthCallback} />
 
         <Route>
           <AppLayout>

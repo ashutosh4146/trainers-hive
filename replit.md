@@ -18,10 +18,15 @@ A B2B training marketplace where vendors (companies, colleges, institutes) post 
 
 Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAuth.ts`).
 
-**Firebase Auth** is integrated for real identity management:
-- Backend: `firebase-admin` SDK initialised in `artifacts/api-server/src/lib/firebase.ts` using `FIREBASE_SERVICE_ACCOUNT` secret (JSON). After OTP verification, the backend issues a Firebase custom token (uid = sanitised email) returned in `POST /api/auth/otp/verify` response as `customToken`.
-- Frontend: `firebase` SDK initialised in `artifacts/trainers-hive/src/lib/firebase.ts` using `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID` env vars. After OTP success, `signInWithCustomToken` signs the user into Firebase; `signOutFirebase` is called on sign-out.
+**Firebase Auth** is integrated for real identity management using **Email Link (passwordless/magic link)** sign-in:
+- Firebase sends the sign-in email itself — no third-party email service needed.
+- Auth flow: user enters email → `sendSignInLinkToEmail()` → Firebase emails a magic link → user clicks link → redirected to `/auth/callback` → `signInWithEmailLink()` completes Firebase sign-in → backend session switch → dashboard.
+- Pending sign-in data (role, name, orgName) stored in `localStorage` key `th_pending_auth` until callback completes.
+- Backend: `firebase-admin` SDK in `artifacts/api-server/src/lib/firebase.ts` using `FIREBASE_SERVICE_ACCOUNT` secret (JSON). OTP routes still exist but are no longer used by the frontend.
+- Frontend: `firebase` SDK in `artifacts/trainers-hive/src/lib/firebase.ts` using `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID` env vars.
+- Auth callback page: `artifacts/trainers-hive/src/pages/AuthCallback.tsx` — route `/auth/callback`.
 - Firebase project: `trainershive-b2995`
+- **Required Firebase Console steps**: (1) Authentication → Sign-in method → Enable "Email link (passwordless sign-in)". (2) Authentication → Settings → Authorized domains → add your Replit dev domain.
 - Note: Firebase integration is NOT a Replit connector — credentials are stored as secrets/env vars manually.
 
 **Signup roles (user-facing):**
