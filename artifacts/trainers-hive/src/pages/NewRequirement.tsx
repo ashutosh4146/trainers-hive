@@ -68,6 +68,7 @@ import {
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { SubSkillTagInput } from "@/components/SubSkillTagInput";
+import { SkillCombobox } from "@/components/SkillCombobox";
 
 const TRAINING_TYPES = [
   { value: "technical", label: "Technical / IT" },
@@ -475,28 +476,14 @@ export default function NewRequirement() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Primary Skill / Topic</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select skill…" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {skillsData?.map((category) => (
-                            <SelectGroup key={category.id}>
-                              <SelectLabel>{category.name}</SelectLabel>
-                              {category.skills.map((skill) => (
-                                <SelectItem key={skill} value={skill}>
-                                  {skill}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <SkillCombobox
+                          value={field.value}
+                          onChange={field.onChange}
+                          categories={skillsData ?? []}
+                          placeholder="Search or select a skill…"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
