@@ -1,20 +1,24 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { Activity, Building2, GraduationCap, Users, Mail, ArrowLeft } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useSwitchUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useAuth,
   isBusinessEmail,
   roleRequiresBusinessEmail,
   getRoleLabel,
+  getRoleSessionKey,
   type UserRole,
 } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
-import { sendEmailSignInLink, savePendingAuth } from "@/lib/firebase";
+import { sendEmailSignInLink, savePendingAuth, signInWithGoogle } from "@/lib/firebase";
 
 const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
   { id: "trainer",  label: "Trainer",          icon: <Users className="h-5 w-5" /> },
@@ -30,10 +34,13 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSending, setIsSending] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  const { auth } = useAuth();
+  const { auth, signIn } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const switchUser = useSwitchUser();
 
   React.useEffect(() => {
     if (auth?.signedIn) navigate("/dashboard");
@@ -79,6 +86,43 @@ export default function Login() {
       toast({ title: "Could not resend", description: (err as Error).message, variant: "destructive" });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (!selectedRole) {
+      setErrors({ role: "Please select a role before signing in with Google." });
+      return;
+    }
+    setIsGoogleLoading(true);
+    try {
+      const user = await signInWithGoogle();
+      switchUser.mutate(
+        { data: { role: getRoleSessionKey(selectedRole) } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+            signIn({
+              signedIn: true,
+              name: user.displayName || user.email?.split("@")[0] || "User",
+              email: user.email || "",
+              role: selectedRole,
+            });
+            toast({ title: "Welcome back!", description: `Signed in as ${getRoleLabel(selectedRole)}.` });
+            navigate("/dashboard");
+          },
+          onError: () => {
+            toast({ title: "Sign in failed", description: "Please try again.", variant: "destructive" });
+            setIsGoogleLoading(false);
+          },
+        }
+      );
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (!msg.includes("popup-closed")) {
+        toast({ title: "Google sign-in failed", description: msg, variant: "destructive" });
+      }
+      setIsGoogleLoading(false);
     }
   };
 
@@ -166,11 +210,32 @@ export default function Login() {
                       {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                     </div>
 
-                    <Button type="submit" size="lg" className="w-full gap-2" disabled={isSending}>
+                    <Button type="submit" size="lg" className="w-full gap-2" disabled={isSending || isGoogleLoading}>
                       <Mail className="h-4 w-4" />
                       {isSending ? "Sending link…" : "Send Sign-In Link"}
                     </Button>
                   </form>
+
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="bg-card px-2 text-muted-foreground">or</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="w-full gap-2"
+                    disabled={isGoogleLoading || isSending}
+                    onClick={handleGoogleSignIn}
+                  >
+                    <FcGoogle className="h-5 w-5" />
+                    {isGoogleLoading ? "Signing in…" : "Continue with Google"}
+                  </Button>
                 </CardContent>
               </Card>
               <p className="text-center text-sm text-muted-foreground">

@@ -5,6 +5,8 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  signInWithPopup,
+  GoogleAuthProvider,
   type User,
 } from "firebase/auth";
 
@@ -62,6 +64,13 @@ export function isEmailLinkCallback(url: string = window.location.href): boolean
 
 export async function completeEmailLinkSignIn(email: string, url: string = window.location.href): Promise<User> {
   const cred = await signInWithEmailLink(auth, email, url);
+  return cred.user;
+}
+
+export async function signInWithGoogle(): Promise<User> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  const cred = await signInWithPopup(auth, provider);
   return cred.user;
 }
 
