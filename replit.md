@@ -16,7 +16,13 @@ A B2B training marketplace where vendors (companies, colleges, institutes) post 
 
 ## Auth & roles
 
-Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAuth.ts`). No real auth — backend uses a shared demo session per role.
+Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAuth.ts`).
+
+**Firebase Auth** is integrated for real identity management:
+- Backend: `firebase-admin` SDK initialised in `artifacts/api-server/src/lib/firebase.ts` using `FIREBASE_SERVICE_ACCOUNT` secret (JSON). After OTP verification, the backend issues a Firebase custom token (uid = sanitised email) returned in `POST /api/auth/otp/verify` response as `customToken`.
+- Frontend: `firebase` SDK initialised in `artifacts/trainers-hive/src/lib/firebase.ts` using `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID` env vars. After OTP success, `signInWithCustomToken` signs the user into Firebase; `signOutFirebase` is called on sign-out.
+- Firebase project: `trainershive-b2995`
+- Note: Firebase integration is NOT a Replit connector — credentials are stored as secrets/env vars manually.
 
 **Signup roles (user-facing):**
 - `trainer` → maps to `user-trainer` (Priya Sharma)

@@ -14,6 +14,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Activity, LayoutDashboard, Settings, User as UserIcon, LogOut, Plus } from "lucide-react";
 import { useAuth, getRoleLabel } from "@/hooks/useAuth";
+import { signOutFirebase } from "@/lib/firebase";
 
 export function Navbar() {
   const { data: user } = useGetCurrentUser();
@@ -21,7 +22,8 @@ export function Navbar() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try { await signOutFirebase(); } catch { /* ignore */ }
     signOut();
     queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
     navigate("/login");

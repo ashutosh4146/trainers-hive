@@ -10,7 +10,7 @@ export async function sendOtp(email: string): Promise<void> {
   }
 }
 
-export async function verifyOtp(email: string, otp: string): Promise<void> {
+export async function verifyOtp(email: string, otp: string): Promise<{ customToken: string | null }> {
   const res = await fetch("/api/auth/otp/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -20,4 +20,5 @@ export async function verifyOtp(email: string, otp: string): Promise<void> {
   if (!res.ok) {
     throw new Error((body as { error?: string }).error || "Invalid verification code.");
   }
+  return { customToken: (body as { customToken?: string | null }).customToken ?? null };
 }

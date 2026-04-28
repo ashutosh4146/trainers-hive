@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createOtp, verifyOtp } from "../lib/otp";
 import { sendOtpEmail } from "../lib/email";
+import { createCustomToken } from "../lib/firebase";
 
 const router: IRouter = Router();
 
@@ -23,7 +24,7 @@ router.post("/auth/otp/send", async (req, res) => {
   }
 });
 
-router.post("/auth/otp/verify", (req, res) => {
+router.post("/auth/otp/verify", async (req, res) => {
   const { email, otp } = req.body ?? {};
   if (typeof email !== "string" || !EMAIL_RE.test(email)) {
     res.status(400).json({ error: "Invalid email address" });
@@ -37,9 +38,17 @@ router.post("/auth/otp/verify", (req, res) => {
   const result = verifyOtp(email, otp);
 
   switch (result) {
-    case "valid":
-      res.json({ valid: true });
+    case "valid": {
+      try {
+        const uid = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+        const customToken = await createCustomToken(uid, { email });
+        res.json({ valid: true, customToken });
+      } catch (err) {
+        console.error("Failed to create Firebase custom token:", err);
+        res.json({ valid: true, customToken: null });
+      }
       break;
+    }
     case "invalid":
       res.status(422).json({ valid: false, error: "Incorrect code. Please try again." });
       break;

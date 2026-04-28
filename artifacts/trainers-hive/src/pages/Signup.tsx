@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { OtpInput } from "@/components/OtpInput";
 import { sendOtp, verifyOtp } from "@/lib/otpApi";
+import { signInWithToken } from "@/lib/firebase";
 
 const ROLES: {
   id: UserRole;
@@ -134,12 +135,22 @@ export default function Signup() {
   const handleVerify = async () => {
     if (!selectedRole || otp.length < 6) return;
     setIsVerifying(true);
+    let customToken: string | null = null;
     try {
-      await verifyOtp(email.trim(), otp);
+      const result = await verifyOtp(email.trim(), otp);
+      customToken = result.customToken;
     } catch (err) {
       toast({ title: "Verification failed", description: (err as Error).message, variant: "destructive" });
       setIsVerifying(false);
       return;
+    }
+
+    if (customToken) {
+      try {
+        await signInWithToken(customToken);
+      } catch (err) {
+        console.warn("Firebase sign-in failed, continuing without Firebase session:", err);
+      }
     }
 
     switchUser.mutate(
