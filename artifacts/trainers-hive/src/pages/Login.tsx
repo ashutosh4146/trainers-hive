@@ -216,26 +216,30 @@ export default function Login() {
                     </Button>
                   </form>
 
-                  <div className="relative my-2">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs">
-                      <span className="bg-card px-2 text-muted-foreground">or</span>
-                    </div>
-                  </div>
+                  {selectedRole === "trainer" && (
+                    <>
+                      <div className="relative my-2">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs">
+                          <span className="bg-card px-2 text-muted-foreground">or</span>
+                        </div>
+                      </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="w-full gap-2"
-                    disabled={isGoogleLoading || isSending}
-                    onClick={handleGoogleSignIn}
-                  >
-                    <FcGoogle className="h-5 w-5" />
-                    {isGoogleLoading ? "Signing in…" : "Continue with Google"}
-                  </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="lg"
+                        className="w-full gap-2"
+                        disabled={isGoogleLoading || isSending}
+                        onClick={handleGoogleSignIn}
+                      >
+                        <FcGoogle className="h-5 w-5" />
+                        {isGoogleLoading ? "Signing in…" : "Continue with Google"}
+                      </Button>
+                    </>
+                  )}
                 </CardContent>
               </Card>
               <p className="text-center text-sm text-muted-foreground">

@@ -314,26 +314,30 @@ export default function Signup() {
                         {isSending ? "Sending link…" : "Send Verification Link"}
                       </Button>
 
-                      <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t" />
-                        </div>
-                        <div className="relative flex justify-center text-xs">
-                          <span className="bg-card px-2 text-muted-foreground">or</span>
-                        </div>
-                      </div>
+                      {selectedRole === "trainer" && (
+                        <>
+                          <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                              <div className="w-full border-t" />
+                            </div>
+                            <div className="relative flex justify-center text-xs">
+                              <span className="bg-card px-2 text-muted-foreground">or</span>
+                            </div>
+                          </div>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="lg"
-                        className="w-full gap-2"
-                        disabled={isGoogleLoading || isSending}
-                        onClick={handleGoogleSignIn}
-                      >
-                        <FcGoogle className="h-5 w-5" />
-                        {isGoogleLoading ? "Signing in…" : "Continue with Google"}
-                      </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="lg"
+                            className="w-full gap-2"
+                            disabled={isGoogleLoading || isSending}
+                            onClick={handleGoogleSignIn}
+                          >
+                            <FcGoogle className="h-5 w-5" />
+                            {isGoogleLoading ? "Signing in…" : "Continue with Google"}
+                          </Button>
+                        </>
+                      )}
 
                       <Button type="button" variant="ghost" size="sm" className="w-full gap-1" onClick={() => setView("role")}>
                         <ArrowLeft className="h-4 w-4" /> Back
