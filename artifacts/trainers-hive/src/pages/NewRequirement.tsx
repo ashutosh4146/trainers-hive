@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,9 +61,13 @@ import {
   XCircle,
   Copy,
   CheckCircle2,
+  Upload,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { SubSkillTagInput } from "@/components/SubSkillTagInput";
 
 const TRAINING_TYPES = [
   { value: "technical", label: "Technical / IT" },
@@ -163,6 +167,53 @@ export default function NewRequirement() {
     { vendorId },
     { query: { enabled: !!vendorId } },
   );
+
+  const allSkillSuggestions: string[] = skillsData
+    ? skillsData.flatMap((cat) => cat.skills)
+    : [];
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileLoading(true);
+    try {
+      let text = "";
+      if (file.type === "text/plain" || file.name.endsWith(".txt")) {
+        text = await file.text();
+      } else if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
+        GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url,
+        ).toString();
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await getDocument({ data: arrayBuffer }).promise;
+        const pages = await Promise.all(
+          Array.from({ length: pdf.numPages }, (_, i) =>
+            pdf.getPage(i + 1).then((p) => p.getTextContent()),
+          ),
+        );
+        text = pages
+          .flatMap((page) => page.items.map((item: any) => item.str))
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+      } else {
+        toast({ title: "Unsupported file", description: "Please upload a .txt or .pdf file.", variant: "destructive" });
+        return;
+      }
+      form.setValue("description", text, { shouldValidate: true });
+      toast({ title: "File loaded", description: "Description filled from your file." });
+    } catch {
+      toast({ title: "Failed to read file", description: "Could not extract text. Try copy-pasting instead.", variant: "destructive" });
+    } finally {
+      setFileLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   const form = useForm<FormValues>({
     resolver: zodResolver(requirementSchema),
@@ -459,13 +510,15 @@ export default function NewRequirement() {
                   <FormItem>
                     <FormLabel>Sub-topics / Additional Skills</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g. Pandas, NumPy, Data Visualisation (comma separated)"
-                        {...field}
+                      <SubSkillTagInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        suggestions={allSkillSuggestions}
+                        placeholder="Search or type a sub-skill, press Enter or comma to add…"
                       />
                     </FormControl>
                     <FormDescription>
-                      Separate multiple items with commas.
+                      Type to search from the list, or enter any custom skill and press <kbd className="text-xs border rounded px-1">Enter</kbd> or <kbd className="text-xs border rounded px-1">,</kbd> to add it as a tag.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -840,7 +893,33 @@ export default function NewRequirement() {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Detailed Job Description</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Detailed Job Description</FormLabel>
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".txt,.pdf,text/plain,application/pdf"
+                          className="hidden"
+                          onChange={handleFileUpload}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-xs h-7"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={fileLoading}
+                        >
+                          {fileLoading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5" />
+                          )}
+                          {fileLoading ? "Reading…" : "Upload .txt or .pdf"}
+                        </Button>
+                      </div>
+                    </div>
                     <FormControl>
                       <Textarea
                         placeholder="Describe the training objective, audience profile, expected outcomes, modules to be covered, and any other requirements the trainer must fulfil…"
