@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Building2 } from "lucide-react";
@@ -277,18 +278,14 @@ export default function NewRequirement() {
                             defaultValue={field.value}
                             className="flex space-x-4"
                           >
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <RadioGroupItem value="fixed" />
-                              </FormControl>
-                              <FormLabel className="font-normal">Fixed</FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <RadioGroupItem value="negotiable" />
-                              </FormControl>
-                              <FormLabel className="font-normal">Negotiable</FormLabel>
-                            </FormItem>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="fixed" id="fee-type-fixed" />
+                              <Label htmlFor="fee-type-fixed" className="font-normal cursor-pointer">Fixed</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="negotiable" id="fee-type-negotiable" />
+                              <Label htmlFor="fee-type-negotiable" className="font-normal cursor-pointer">Negotiable</Label>
+                            </div>
                           </RadioGroup>
                         </FormControl>
                         <FormMessage />
