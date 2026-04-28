@@ -52,10 +52,10 @@ export function Navbar() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {user?.role === "vendor" && (
-            <Link href="/requirements/new" className="hidden sm:flex sm:mr-2 sm:pr-3 sm:border-r sm:border-border">
-              <Button size="sm" className="gap-1">
+            <Link href="/requirements/new" className="hidden sm:flex">
+              <Button size="sm" className="gap-1 shadow-sm">
                 <Plus className="h-4 w-4" /> Post Requirement
               </Button>
             </Link>
