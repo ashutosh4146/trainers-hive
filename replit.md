@@ -28,7 +28,7 @@ A header role switcher calls `POST /api/session/switch { role }` to flip the act
 
 - Vendor: post requirement → see applications → shortlist / hire / reject; leave reviews on hired trainers
 - Trainer: browse requirements → apply with message + proposed rate → track application status; edit profile
-- Admin: command-center dashboard with platform stats, activity feed, recent requirements, featured trainers
+- Admin: command-center dashboard with platform stats, activity feed, recent requirements, featured trainers; can remove any trainer or requirement from the marketplace via `DELETE /api/trainers/{id}` and `DELETE /api/requirements/{id}` (cascades child rows; logs a "removal" activity entry; UI gated on `user.role === "admin"` via `AdminRemoveButton`)
 
 ## Useful commands
 

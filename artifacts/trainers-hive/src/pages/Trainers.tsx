@@ -1,7 +1,16 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { useListTrainers, getListTrainersQueryKey, useListSkills, getListSkillsQueryKey } from "@workspace/api-client-react";
+import {
+  useListTrainers,
+  getListTrainersQueryKey,
+  useListSkills,
+  getListSkillsQueryKey,
+  useGetCurrentUser,
+  useDeleteTrainer,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -39,6 +48,11 @@ export default function Trainers() {
   const { data: skillsData } = useListSkills({
     query: { queryKey: getListSkillsQueryKey() }
   });
+
+  const { data: currentUser } = useGetCurrentUser();
+  const isAdmin = currentUser?.role === "admin";
+  const deleteTrainer = useDeleteTrainer();
+  const queryClient = useQueryClient();
 
   const allSkills = skillsData?.flatMap(cat => cat.skills) || [];
 
@@ -181,14 +195,30 @@ export default function Trainers() {
             ))
           ) : trainers?.length ? (
             trainers.map((trainer) => (
-              <Link key={trainer.id} href={`/trainers/${trainer.id}`}>
+              <div key={trainer.id} className="relative">
+                {isAdmin && (
+                  <div className="absolute top-3 right-3 z-10">
+                    <AdminRemoveButton
+                      label={`trainer ${trainer.name}`}
+                      description={`This permanently removes ${trainer.name} from the marketplace, along with all their reviews and applications. This cannot be undone.`}
+                      successMessage={`${trainer.name} has been removed from the marketplace.`}
+                      onConfirm={async () => {
+                        await deleteTrainer.mutateAsync({ id: trainer.id });
+                        await queryClient.invalidateQueries({
+                          queryKey: getListTrainersQueryKey(queryParams),
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+                <Link href={`/trainers/${trainer.id}`}>
                 <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
                   <CardHeader className="flex flex-row items-start gap-4 pb-2">
                     <Avatar className="h-12 w-12 border border-border">
                       <AvatarImage src={trainer.avatarUrl} alt={trainer.name} />
                       <AvatarFallback className="bg-primary/10 text-primary">{trainer.name.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pr-8">
                       <CardTitle className="text-lg flex items-center gap-2 truncate">
                         {trainer.name}
                         {trainer.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 px-1.5 py-0 h-5">Verified</Badge>}
@@ -236,6 +266,7 @@ export default function Trainers() {
                   </CardContent>
                 </Card>
               </Link>
+              </div>
             ))
           ) : (
             <div className="col-span-1 lg:col-span-2 flex flex-col items-center justify-center py-20 text-center border rounded-lg bg-muted/30 border-dashed">

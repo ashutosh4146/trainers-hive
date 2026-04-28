@@ -18,6 +18,7 @@ import {
   ApplyToRequirementParams,
   ApplyToRequirementBody,
   ListRequirementApplicationsParams,
+  DeleteRequirementParams,
 } from "@workspace/api-zod";
 import { newId } from "../lib/ids";
 import { getActiveUserId } from "../lib/session";
@@ -267,6 +268,45 @@ router.patch("/requirements/:id", async (req, res) => {
     .from(applicationsTable)
     .where(eq(applicationsTable.requirementId, r.id));
   res.json(await buildRequirementCard(r, vendor ?? null, count));
+});
+
+router.delete("/requirements/:id", async (req, res) => {
+  const params = DeleteRequirementParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const activeId = await getActiveUserId();
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active || active.role !== "admin") {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "requirement not found" });
+    return;
+  }
+  await db
+    .delete(applicationsTable)
+    .where(eq(applicationsTable.requirementId, params.data.id));
+  await db.delete(requirementsTable).where(eq(requirementsTable.id, params.data.id));
+  await db.insert(activityTable).values({
+    id: newId("act"),
+    type: "removal",
+    title: `Admin removed a requirement`,
+    subtitle: existing.title,
+    avatarUrl: active.avatarUrl,
+  });
+  res.status(204).end();
 });
 
 router.post("/requirements/:id/apply", async (req, res) => {

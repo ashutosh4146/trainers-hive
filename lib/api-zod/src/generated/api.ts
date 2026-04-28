@@ -182,6 +182,10 @@ export const UpdateTrainerResponse = zod
     }),
   );
 
+export const DeleteTrainerParams = zod.object({
+  id: zod.coerce.string(),
+});
+
 export const ListTrainerReviewsParams = zod.object({
   id: zod.coerce.string(),
 });
@@ -407,6 +411,10 @@ export const UpdateRequirementResponse = zod.object({
   status: zod.enum(["open", "closed", "vacant"]),
   createdAt: zod.coerce.date(),
   applicationCount: zod.number(),
+});
+
+export const DeleteRequirementParams = zod.object({
+  id: zod.coerce.string(),
 });
 
 export const ApplyToRequirementParams = zod.object({

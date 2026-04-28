@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
-import { 
-  useListRequirements, 
-  getListRequirementsQueryKey, 
-  useListSkills, 
+import {
+  useListRequirements,
+  getListRequirementsQueryKey,
+  useListSkills,
   getListSkillsQueryKey,
-  useGetCurrentUser
+  useGetCurrentUser,
+  useDeleteRequirement,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +47,10 @@ export default function Requirements() {
   const { data: skillsData } = useListSkills({
     query: { queryKey: getListSkillsQueryKey() }
   });
+
+  const isAdmin = user?.role === "admin";
+  const deleteRequirement = useDeleteRequirement();
+  const queryClient = useQueryClient();
 
   const allSkills = skillsData?.flatMap(cat => cat.skills) || [];
 
@@ -257,6 +264,21 @@ export default function Requirements() {
                         {new Date(req.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
                     </div>
+                    {isAdmin && (
+                      <AdminRemoveButton
+                        variant="full"
+                        label={`requirement "${req.title}"`}
+                        description={`This permanently removes this requirement and all applications submitted to it. This cannot be undone.`}
+                        successMessage={`Requirement removed.`}
+                        onConfirm={async () => {
+                          await deleteRequirement.mutateAsync({ id: req.id });
+                          await queryClient.invalidateQueries({
+                            queryKey: getListRequirementsQueryKey(queryParams),
+                          });
+                        }}
+                        className="w-full"
+                      />
+                    )}
                     <Link href={`/requirements/${req.id}`} className="ml-auto sm:ml-0 sm:w-full">
                       <Button className="w-full" variant={req.status === 'open' ? 'default' : 'secondary'}>
                         View Details <ArrowRight className="ml-2 h-4 w-4" />

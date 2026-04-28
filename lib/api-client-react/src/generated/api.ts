@@ -695,6 +695,84 @@ export const useUpdateTrainer = <
   return useMutation(getUpdateTrainerMutationOptions(options));
 };
 
+export const getDeleteTrainerUrl = (id: string) => {
+  return `/api/trainers/${id}`;
+};
+
+export const deleteTrainer = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteTrainerUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteTrainerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTrainer>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTrainer>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteTrainer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTrainer>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteTrainer(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTrainerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTrainer>>
+>;
+
+export type DeleteTrainerMutationError = ErrorType<unknown>;
+
+export const useDeleteTrainer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTrainer>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTrainer>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteTrainerMutationOptions(options));
+};
+
 export const getListTrainerReviewsUrl = (id: string) => {
   return `/api/trainers/${id}/reviews`;
 };
@@ -1427,6 +1505,84 @@ export const useUpdateRequirement = <
   TContext
 > => {
   return useMutation(getUpdateRequirementMutationOptions(options));
+};
+
+export const getDeleteRequirementUrl = (id: string) => {
+  return `/api/requirements/${id}`;
+};
+
+export const deleteRequirement = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteRequirementUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteRequirementMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRequirement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteRequirement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteRequirement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteRequirement>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteRequirement(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteRequirementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteRequirement>>
+>;
+
+export type DeleteRequirementMutationError = ErrorType<unknown>;
+
+export const useDeleteRequirement = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRequirement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteRequirement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteRequirementMutationOptions(options));
 };
 
 export const getApplyToRequirementUrl = (id: string) => {

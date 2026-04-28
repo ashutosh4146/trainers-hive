@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,10 +9,12 @@ import {
   useApplyToRequirement,
   useUpdateApplicationStatus,
   useUpdateRequirement,
+  useDeleteRequirement,
   getGetRequirementQueryKey,
   getListRequirementApplicationsQueryKey,
   getListRequirementsQueryKey
 } from "@workspace/api-client-react";
+import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,9 @@ export default function RequirementDetail() {
   });
 
   const isVendorOwner = user?.role === "vendor" && requirement?.vendorId === user.vendorId;
+  const isAdmin = user?.role === "admin";
+  const deleteRequirement = useDeleteRequirement();
+  const [, navigate] = useLocation();
 
   const { data: applications, isLoading: appsLoading } = useListRequirementApplications(id, {
     query: { enabled: !!id && isVendorOwner, queryKey: getListRequirementApplicationsQueryKey(id) },
@@ -225,6 +230,23 @@ export default function RequirementDetail() {
                   {requirement.status !== 'open' && (
                     <Button variant="outline" onClick={() => handleUpdateReqStatus('open')} disabled={updateReqMutation.isPending}>Reopen</Button>
                   )}
+                </div>
+              )}
+              {isAdmin && (
+                <div className="mt-2">
+                  <AdminRemoveButton
+                    variant="full"
+                    label={`requirement "${requirement.title}"`}
+                    description={`This permanently removes this requirement and all applications submitted to it. This cannot be undone.`}
+                    successMessage="Requirement removed."
+                    onConfirm={async () => {
+                      await deleteRequirement.mutateAsync({ id });
+                      await queryClient.invalidateQueries({
+                        queryKey: getListRequirementsQueryKey(),
+                      });
+                      navigate("/requirements");
+                    }}
+                  />
                 </div>
               )}
             </div>

@@ -9,7 +9,10 @@ import {
   CreateTrainerReviewParams,
   CreateTrainerReviewBody,
   ListTrainerReviewsParams,
+  DeleteTrainerParams,
 } from "@workspace/api-zod";
+import { applicationsTable, usersTable } from "@workspace/db";
+import { getActiveUserId } from "../lib/session";
 import { newId } from "../lib/ids";
 
 const router: IRouter = Router();
@@ -148,6 +151,46 @@ router.patch("/trainers/:id", async (req, res) => {
     completedTrainings: t.completedTrainings,
     portfolioUrl: t.portfolioUrl ?? undefined,
   });
+});
+
+router.delete("/trainers/:id", async (req, res) => {
+  const params = DeleteTrainerParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const activeId = await getActiveUserId();
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active || active.role !== "admin") {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(trainersTable)
+    .where(eq(trainersTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "trainer not found" });
+    return;
+  }
+  await db.delete(applicationsTable).where(eq(applicationsTable.trainerId, params.data.id));
+  await db.delete(reviewsTable).where(eq(reviewsTable.trainerId, params.data.id));
+  await db.delete(trainersTable).where(eq(trainersTable.id, params.data.id));
+
+  const { activityTable } = await import("@workspace/db");
+  await db.insert(activityTable).values({
+    id: newId("act"),
+    type: "removal",
+    title: `Admin removed trainer ${existing.name}`,
+    subtitle: existing.headline,
+    avatarUrl: active.avatarUrl,
+  });
+  res.status(204).end();
 });
 
 router.get("/trainers/:id/reviews", async (req, res) => {

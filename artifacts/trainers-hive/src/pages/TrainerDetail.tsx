@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,9 +7,12 @@ import {
   useListTrainerReviews,
   useGetCurrentUser,
   useCreateTrainerReview,
+  useDeleteTrainer,
   getGetTrainerQueryKey,
   getListTrainerReviewsQueryKey,
+  getListTrainersQueryKey,
 } from "@workspace/api-client-react";
+import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +48,9 @@ export default function TrainerDetail() {
 
   const isTrainerSelf = user?.role === "trainer" && user.trainerId === id;
   const isVendor = user?.role === "vendor";
+  const isAdmin = user?.role === "admin";
+  const deleteTrainer = useDeleteTrainer();
+  const [, navigate] = useLocation();
 
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +158,22 @@ export default function TrainerDetail() {
                 <Link href="/requirements" className="w-full md:w-auto">
                   <Button className="w-full md:w-auto">Invite to Requirement</Button>
                 </Link>
+              )}
+              {isAdmin && (
+                <AdminRemoveButton
+                  variant="full"
+                  label={`trainer ${trainer.name}`}
+                  description={`This permanently removes ${trainer.name} from the marketplace, along with all their reviews and applications. This cannot be undone.`}
+                  successMessage={`${trainer.name} has been removed.`}
+                  className="w-full md:w-auto"
+                  onConfirm={async () => {
+                    await deleteTrainer.mutateAsync({ id });
+                    await queryClient.invalidateQueries({
+                      queryKey: getListTrainersQueryKey(),
+                    });
+                    navigate("/trainers");
+                  }}
+                />
               )}
             </div>
           </div>
