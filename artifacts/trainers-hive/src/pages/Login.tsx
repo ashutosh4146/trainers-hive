@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-import { Activity, Building2, GraduationCap, Users } from "lucide-react";
+import { Activity, Building2, GraduationCap, Users, Mail, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,8 @@ import {
   type UserRole,
 } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { OtpInput } from "@/components/OtpInput";
+import { sendOtp, verifyOtp } from "@/lib/otpApi";
 
 const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
   { id: "trainer",  label: "Trainer",           icon: <Users className="h-5 w-5" /> },
@@ -24,10 +26,17 @@ const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
   { id: "college",  label: "College / Company",  icon: <GraduationCap className="h-5 w-5" /> },
 ];
 
+type View = "select" | "otp";
+
 export default function Login() {
+  const [view, setView] = useState<View>("select");
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSending, setIsSending] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const { signIn, auth } = useAuth();
   const [, navigate] = useLocation();
@@ -39,9 +48,15 @@ export default function Login() {
     if (auth?.signedIn) navigate("/dashboard");
   }, [auth]);
 
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!selectedRole) { errs.role = "Select a role to continue."; }
+    if (!selectedRole) errs.role = "Select a role to continue.";
     if (!email.trim()) {
       errs.email = "Email is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -53,9 +68,48 @@ export default function Login() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRole || !validate()) return;
+    if (!validate()) return;
+    setIsSending(true);
+    try {
+      await sendOtp(email.trim());
+      setOtp("");
+      setView("otp");
+      setResendCooldown(60);
+      toast({ title: "Verification code sent", description: `Check ${email} for your 6-digit code.` });
+    } catch (err) {
+      toast({ title: "Could not send code", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0) return;
+    setIsSending(true);
+    try {
+      await sendOtp(email.trim());
+      setOtp("");
+      setResendCooldown(60);
+      toast({ title: "New code sent", description: "Check your inbox for a fresh verification code." });
+    } catch (err) {
+      toast({ title: "Could not resend", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!selectedRole || otp.length < 6) return;
+    setIsVerifying(true);
+    try {
+      await verifyOtp(email.trim(), otp);
+    } catch (err) {
+      toast({ title: "Verification failed", description: (err as Error).message, variant: "destructive" });
+      setIsVerifying(false);
+      return;
+    }
 
     switchUser.mutate(
       { data: { role: getRoleSessionKey(selectedRole) } },
@@ -67,7 +121,8 @@ export default function Login() {
           navigate("/dashboard");
         },
         onError: () => {
-          toast({ title: "Sign in failed", description: "Could not complete sign-in. Try again.", variant: "destructive" });
+          toast({ title: "Sign in failed", description: "Please try again.", variant: "destructive" });
+          setIsVerifying(false);
         },
       }
     );
@@ -82,71 +137,140 @@ export default function Login() {
 
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-            <p className="text-muted-foreground">Sign in to your account</p>
+
+          {/* Step indicator */}
+          <div className="flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
+            {(["select", "otp"] as View[]).map((step, i) => {
+              const idx = ["select", "otp"].indexOf(view);
+              const isActive = view === step;
+              const isDone = ["select", "otp"].indexOf(step) < idx;
+              return (
+                <React.Fragment key={step}>
+                  {i > 0 && <div className={cn("h-px w-8", isDone ? "bg-primary" : "bg-border")} />}
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full",
+                    isActive ? "bg-primary text-primary-foreground" : isDone ? "text-primary" : "text-muted-foreground"
+                  )}>
+                    <span>{i + 1}</span>
+                    <span className="hidden sm:inline">
+                      {step === "otp" ? "Verify Email" : "Your Details"}
+                    </span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
 
-          <Card className="border-2">
-            <CardContent className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <Label>Sign in as</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {ROLES.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => setSelectedRole(r.id)}
-                        className={cn(
-                          "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs font-medium transition-all",
-                          selectedRole === r.id
-                            ? "border-primary bg-primary/5 text-primary"
-                            : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          {/* Step: Select role + email */}
+          {view === "select" && (
+            <>
+              <div className="text-center space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
+                <p className="text-muted-foreground">Sign in to your account</p>
+              </div>
+              <Card className="border-2">
+                <CardContent className="p-6">
+                  <form onSubmit={handleSendOtp} className="space-y-5">
+                    <div className="space-y-2">
+                      <Label>Sign in as</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {ROLES.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setSelectedRole(r.id)}
+                            className={cn(
+                              "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs font-medium transition-all",
+                              selectedRole === r.id
+                                ? "border-primary bg-primary/5 text-primary"
+                                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            )}
+                          >
+                            {r.icon}
+                            {r.label}
+                          </button>
+                        ))}
+                      </div>
+                      {errors.role && <p className="text-sm text-destructive">{errors.role}</p>}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="email">
+                        Email Address
+                        {selectedRole && roleRequiresBusinessEmail(selectedRole) && (
+                          <span className="ml-1 text-xs text-muted-foreground font-normal">(business email)</span>
                         )}
-                      >
-                        {r.icon}
-                        {r.label}
-                      </button>
-                    ))}
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                      {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                    </div>
+
+                    <Button type="submit" size="lg" className="w-full gap-2" disabled={isSending}>
+                      <Mail className="h-4 w-4" />
+                      {isSending ? "Sending code..." : "Send Verification Code"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+              <p className="text-center text-sm text-muted-foreground">
+                New to Trainers Hive?{" "}
+                <button type="button" className="text-primary underline underline-offset-2 hover:text-primary/80 font-medium" onClick={() => navigate("/signup")}>
+                  Create an account
+                </button>
+              </p>
+            </>
+          )}
+
+          {/* Step: OTP */}
+          {view === "otp" && selectedRole && (
+            <>
+              <div className="text-center space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight">Verify your email</h1>
+                <p className="text-muted-foreground">
+                  We sent a 6-digit code to <span className="font-semibold text-foreground">{email}</span>
+                </p>
+              </div>
+              <Card className="border-2">
+                <CardContent className="p-8 space-y-6">
+                  <OtpInput value={otp} onChange={setOtp} disabled={isVerifying} />
+
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    disabled={otp.length < 6 || isVerifying}
+                    onClick={handleVerify}
+                  >
+                    {isVerifying ? "Verifying..." : "Verify & Sign In"}
+                  </Button>
+
+                  <div className="text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">Didn't receive a code?</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={resendCooldown > 0 || isSending}
+                      onClick={handleResend}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                    </Button>
                   </div>
-                  {errors.role && <p className="text-sm text-destructive">{errors.role}</p>}
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">
-                    Email Address
-                    {selectedRole && roleRequiresBusinessEmail(selectedRole) && (
-                      <span className="ml-1 text-xs text-muted-foreground font-normal">(business email)</span>
-                    )}
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                </div>
-
-                <Button type="submit" size="lg" className="w-full" disabled={switchUser.isPending}>
-                  {switchUser.isPending ? "Signing in..." : "Sign In"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          <p className="text-center text-sm text-muted-foreground">
-            New to Trainers Hive?{" "}
-            <button
-              type="button"
-              className="text-primary underline underline-offset-2 hover:text-primary/80 font-medium"
-              onClick={() => navigate("/signup")}
-            >
-              Create an account
-            </button>
-          </p>
+                  <Button type="button" variant="ghost" size="sm" className="w-full gap-1" onClick={() => setView("select")}>
+                    <ArrowLeft className="h-4 w-4" /> Change email
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </div>
 

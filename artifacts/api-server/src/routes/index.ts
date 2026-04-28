@@ -7,10 +7,12 @@ import vendorsRouter from "./vendors";
 import requirementsRouter from "./requirements";
 import applicationsRouter from "./applications";
 import statsRouter from "./stats";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use(sessionRouter);
 router.use(skillsRouter);
 router.use(trainersRouter);

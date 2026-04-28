@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-import { Activity, Building2, GraduationCap, Users } from "lucide-react";
+import { Activity, Building2, GraduationCap, Users, Mail, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,8 @@ import {
   type UserRole,
 } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { OtpInput } from "@/components/OtpInput";
+import { sendOtp, verifyOtp } from "@/lib/otpApi";
 
 const ROLES: {
   id: UserRole;
@@ -48,7 +50,7 @@ const ROLES: {
   },
 ];
 
-type View = "role" | "details";
+type View = "role" | "details" | "otp";
 
 export default function Signup() {
   const [view, setView] = useState<View>("role");
@@ -56,7 +58,11 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [orgName, setOrgName] = useState("");
+  const [otp, setOtp] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSending, setIsSending] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const { signIn } = useAuth();
   const [, navigate] = useLocation();
@@ -64,12 +70,19 @@ export default function Signup() {
   const queryClient = useQueryClient();
   const switchUser = useSwitchUser();
 
+  // Countdown for resend cooldown
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
   const handleRoleContinue = () => {
     if (!selectedRole) return;
     setView("details");
   };
 
-  const validate = (): boolean => {
+  const validateDetails = (): boolean => {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = "Full name is required.";
     if (!email.trim()) {
@@ -86,14 +99,51 @@ export default function Signup() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleDetailsContinue = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRole || !validate()) return;
+    if (!selectedRole || !validateDetails()) return;
+    setIsSending(true);
+    try {
+      await sendOtp(email.trim());
+      setOtp("");
+      setView("otp");
+      setResendCooldown(60);
+      toast({ title: "Verification code sent", description: `Check ${email} for your 6-digit code.` });
+    } catch (err) {
+      toast({ title: "Could not send code", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsSending(false);
+    }
+  };
 
-    const sessionRole = getRoleSessionKey(selectedRole);
+  const handleResend = async () => {
+    if (resendCooldown > 0) return;
+    setIsSending(true);
+    try {
+      await sendOtp(email.trim());
+      setOtp("");
+      setResendCooldown(60);
+      toast({ title: "New code sent", description: "Check your inbox for a fresh verification code." });
+    } catch (err) {
+      toast({ title: "Could not resend", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!selectedRole || otp.length < 6) return;
+    setIsVerifying(true);
+    try {
+      await verifyOtp(email.trim(), otp);
+    } catch (err) {
+      toast({ title: "Verification failed", description: (err as Error).message, variant: "destructive" });
+      setIsVerifying(false);
+      return;
+    }
 
     switchUser.mutate(
-      { data: { role: sessionRole } },
+      { data: { role: getRoleSessionKey(selectedRole) } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
@@ -104,11 +154,12 @@ export default function Signup() {
             role: selectedRole,
             orgName: orgName.trim() || undefined,
           });
-          toast({ title: "Welcome to Trainers Hive!", description: `Signed up as ${getRoleLabel(selectedRole)}.` });
+          toast({ title: "Account created!", description: `Welcome to Trainers Hive as a ${getRoleLabel(selectedRole)}.` });
           navigate("/dashboard");
         },
         onError: () => {
-          toast({ title: "Something went wrong", description: "Could not complete sign-up. Try again.", variant: "destructive" });
+          toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+          setIsVerifying(false);
         },
       }
     );
@@ -123,22 +174,44 @@ export default function Signup() {
 
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-2xl space-y-6">
+
+          {/* Step indicator */}
+          <div className="flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
+            {(["role", "details", "otp"] as View[]).map((step, i) => {
+              const idx = ["role", "details", "otp"].indexOf(view);
+              const isActive = view === step;
+              const isDone = ["role", "details", "otp"].indexOf(step) < idx;
+              return (
+                <React.Fragment key={step}>
+                  {i > 0 && <div className={cn("h-px w-8", isDone ? "bg-primary" : "bg-border")} />}
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full",
+                    isActive ? "bg-primary text-primary-foreground" : isDone ? "text-primary" : "text-muted-foreground"
+                  )}>
+                    <span>{i + 1}</span>
+                    <span className="hidden sm:inline capitalize">
+                      {step === "otp" ? "Verify Email" : step === "details" ? "Your Details" : "Choose Role"}
+                    </span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+
+          {/* Step: Role selection */}
           {view === "role" && (
             <>
               <div className="text-center space-y-2">
                 <h1 className="text-3xl font-bold tracking-tight">Join Trainers Hive</h1>
                 <p className="text-muted-foreground">Select your role to get started</p>
               </div>
-
               <div className="grid gap-4">
                 {ROLES.map((r) => (
                   <Card
                     key={r.id}
                     className={cn(
                       "cursor-pointer border-2 transition-all duration-150 hover:shadow-md",
-                      selectedRole === r.id
-                        ? "border-primary shadow-sm bg-primary/5"
-                        : "border-border hover:border-primary/40"
+                      selectedRole === r.id ? "border-primary shadow-sm bg-primary/5" : "border-border hover:border-primary/40"
                     )}
                     onClick={() => setSelectedRole(r.id)}
                   >
@@ -170,52 +243,35 @@ export default function Signup() {
                   </Card>
                 ))}
               </div>
-
-              <Button
-                className="w-full"
-                size="lg"
-                disabled={!selectedRole}
-                onClick={handleRoleContinue}
-              >
+              <Button className="w-full" size="lg" disabled={!selectedRole} onClick={handleRoleContinue}>
                 Continue
               </Button>
-
               <p className="text-center text-sm text-muted-foreground">
                 Already have an account?{" "}
-                <button
-                  type="button"
-                  className="text-primary underline underline-offset-2 hover:text-primary/80 font-medium"
-                  onClick={() => navigate("/login")}
-                >
+                <button type="button" className="text-primary underline underline-offset-2 hover:text-primary/80 font-medium" onClick={() => navigate("/login")}>
                   Sign in
                 </button>
               </p>
             </>
           )}
 
+          {/* Step: Details */}
           {view === "details" && selectedRole && (
             <>
               <div className="text-center space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight">Create your account</h1>
+                <h1 className="text-3xl font-bold tracking-tight">Your details</h1>
                 <p className="text-muted-foreground">
                   Signing up as <span className="font-semibold text-foreground">{getRoleLabel(selectedRole)}</span>
                 </p>
               </div>
-
               <Card className="border-2">
                 <CardContent className="p-6">
-                  <form onSubmit={handleSubmit} className="space-y-5">
+                  <form onSubmit={handleDetailsContinue} className="space-y-5">
                     <div className="space-y-2">
                       <Label htmlFor="name">Full Name</Label>
-                      <Input
-                        id="name"
-                        placeholder="e.g. Arav Mehta"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
+                      <Input id="name" placeholder="e.g. Arav Mehta" value={name} onChange={(e) => setName(e.target.value)} />
                       {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
                     </div>
-
                     <div className="space-y-2">
                       <Label htmlFor="email">
                         Email Address
@@ -232,7 +288,6 @@ export default function Signup() {
                       />
                       {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                     </div>
-
                     {selectedRole !== "trainer" && (
                       <div className="space-y-2">
                         <Label htmlFor="orgName">
@@ -247,28 +302,66 @@ export default function Signup() {
                         {errors.orgName && <p className="text-sm text-destructive">{errors.orgName}</p>}
                       </div>
                     )}
-
                     {roleRequiresBusinessEmail(selectedRole) && (
                       <div className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground border">
-                        Business email addresses only. Personal email domains (Gmail, Yahoo, Outlook, etc.) are not accepted for this role.
+                        Business email only. Personal email domains (Gmail, Yahoo, Outlook, etc.) are not accepted for this role.
                       </div>
                     )}
-
                     <div className="flex flex-col gap-3 pt-1">
-                      <Button type="submit" size="lg" className="w-full" disabled={switchUser.isPending}>
-                        {switchUser.isPending ? "Creating account..." : "Create Account"}
+                      <Button type="submit" size="lg" className="w-full gap-2" disabled={isSending}>
+                        <Mail className="h-4 w-4" />
+                        {isSending ? "Sending code..." : "Send Verification Code"}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setView("role")}
-                      >
-                        Back
+                      <Button type="button" variant="ghost" size="sm" className="w-full gap-1" onClick={() => setView("role")}>
+                        <ArrowLeft className="h-4 w-4" /> Back
                       </Button>
                     </div>
                   </form>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Step: OTP */}
+          {view === "otp" && selectedRole && (
+            <>
+              <div className="text-center space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight">Verify your email</h1>
+                <p className="text-muted-foreground">
+                  We sent a 6-digit code to <span className="font-semibold text-foreground">{email}</span>
+                </p>
+              </div>
+              <Card className="border-2">
+                <CardContent className="p-8 space-y-6">
+                  <OtpInput value={otp} onChange={setOtp} disabled={isVerifying} />
+
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    disabled={otp.length < 6 || isVerifying}
+                    onClick={handleVerify}
+                  >
+                    {isVerifying ? "Verifying..." : "Verify & Create Account"}
+                  </Button>
+
+                  <div className="text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">Didn't receive a code?</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={resendCooldown > 0 || isSending}
+                      onClick={handleResend}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                    </Button>
+                  </div>
+
+                  <Button type="button" variant="ghost" size="sm" className="w-full gap-1" onClick={() => setView("details")}>
+                    <ArrowLeft className="h-4 w-4" /> Change email
+                  </Button>
                 </CardContent>
               </Card>
             </>
