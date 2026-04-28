@@ -48,6 +48,8 @@ import {
   MapPin,
   LayoutGrid,
   Clock,
+  IndianRupee,
+  MessageCircle,
   Briefcase,
   BookOpen,
   Users,
@@ -99,6 +101,9 @@ const requirementSchema = z.object({
   benefits: z.enum(["ta-da", "stay-only", "none"], {
     required_error: "Please select benefits",
   }),
+  payoutChoice: z.enum(["discuss", "reveal"]).default("discuss"),
+  budget: z.coerce.number().min(0).optional(),
+  feeType: z.enum(["fixed", "negotiable"]).optional(),
   startDate: z.string().optional(),
   durationDays: z.coerce.number().min(1, "Duration must be at least 1 day"),
   deadline: z.string().min(1, "Application deadline is required"),
@@ -172,6 +177,9 @@ export default function NewRequirement() {
       trainerType: undefined,
       trainerScope: undefined,
       benefits: undefined,
+      payoutChoice: "discuss",
+      budget: undefined,
+      feeType: "negotiable",
       startDate: "",
       durationDays: 30,
       deadline: "",
@@ -182,6 +190,7 @@ export default function NewRequirement() {
   });
 
   const trainingMode = form.watch("trainingMode");
+  const payoutChoice = form.watch("payoutChoice");
   const descriptionValue = form.watch("description");
   const wordCount = countWords(descriptionValue || "");
 
@@ -208,6 +217,9 @@ export default function NewRequirement() {
         undefined,
       benefits:
         ((template as any).benefits as FormValues["benefits"]) ?? undefined,
+      payoutChoice: (template as any).budget > 0 ? "reveal" : "discuss",
+      budget: (template as any).budget > 0 ? (template as any).budget : undefined,
+      feeType: ((template as any).feeType as FormValues["feeType"]) ?? "negotiable",
       startDate: (template as any).startDate ?? "",
       durationDays: template.durationDays,
       deadline: template.deadline
@@ -243,6 +255,9 @@ export default function NewRequirement() {
           trainerType: data.trainerType,
           trainerScope: data.trainerScope,
           benefits: data.benefits,
+          ...(data.payoutChoice === "reveal" && data.budget
+            ? { budget: data.budget, feeType: data.feeType ?? "negotiable" }
+            : {}),
           startDate: data.startDate || undefined,
           durationDays: data.durationDays,
           deadline: new Date(data.deadline).toISOString(),
@@ -656,12 +671,107 @@ export default function NewRequirement() {
             </CardContent>
           </Card>
 
-          {/* ── SECTION 4: Timeline ── */}
+          {/* ── PAYOUT SECTION ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">4</Badge>
+                Payout / Budget
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="payoutChoice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Would you like to disclose the budget?</FormLabel>
+                    <div className="grid grid-cols-2 gap-3 mt-1">
+                      <IconCard
+                        selected={field.value === "discuss"}
+                        onClick={() => field.onChange("discuss")}
+                        icon={<MessageCircle className="h-5 w-5" />}
+                        label="Discuss Later"
+                        sub="Trainer will contact you"
+                      />
+                      <IconCard
+                        selected={field.value === "reveal"}
+                        onClick={() => field.onChange("reveal")}
+                        icon={<IndianRupee className="h-5 w-5" />}
+                        label="Reveal Budget"
+                        sub="Show amount to trainers"
+                      />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {payoutChoice === "reveal" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                  <FormField
+                    control={form.control}
+                    name="budget"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                          Total Budget (₹)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="e.g. 50000"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Approximate total payout for the engagement.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="feeType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fee Type</FormLabel>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                          <IconCard
+                            selected={field.value === "fixed"}
+                            onClick={() => field.onChange("fixed")}
+                            icon={<IndianRupee className="h-5 w-5" />}
+                            label="Fixed"
+                            sub="Non-negotiable"
+                          />
+                          <IconCard
+                            selected={field.value === "negotiable"}
+                            onClick={() => field.onChange("negotiable")}
+                            icon={<MessageCircle className="h-5 w-5" />}
+                            label="Negotiable"
+                            sub="Open to discuss"
+                          />
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── SECTION 5: Timeline ── */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
-                  4
+                  5
                 </Badge>
                 Timeline
               </CardTitle>
@@ -714,12 +824,12 @@ export default function NewRequirement() {
             </CardContent>
           </Card>
 
-          {/* ── SECTION 5: Description & Qualifications ── */}
+          {/* ── SECTION 6: Description & Qualifications ── */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
-                  5
+                  6
                 </Badge>
                 Description & Qualifications
               </CardTitle>

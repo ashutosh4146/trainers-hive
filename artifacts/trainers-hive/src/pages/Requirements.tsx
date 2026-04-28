@@ -262,7 +262,9 @@ export default function Requirements() {
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Briefcase className="h-4 w-4" />
                             <span className="font-medium text-foreground capitalize">
-                              {(req as any).trainingMode ?? "Contact for pricing"}
+                              {(req as any).budget > 0
+                                ? `₹${((req as any).budget as number).toLocaleString("en-IN")}${(req as any).feeType === "negotiable" ? " (Negotiable)" : ""}`
+                                : "Discuss payout"}
                             </span>
                           </div>
 
