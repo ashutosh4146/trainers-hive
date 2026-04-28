@@ -59,7 +59,9 @@ Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAu
 
 - Trainer rating stored as `numeric`; always serialize with `Number()` before returning.
 - `subSkills`, `certifications`, `languages` stored as `jsonb` arrays.
-- `lib/api-zod/src/index.ts` exports only `./generated/api` to avoid name collisions.
+- **api-zod entry point**: `lib/api-zod/src/validators.ts` (NOT index.ts). Package exports point here. `index.ts` is orval-managed and excluded from tsconfig to avoid duplicate-export collisions.
+- **Requirements schema extended fields**: `trainingType`, `trainingMode` ("remote"|"in-person"|"hybrid"), `trainerCount`, `trainerType` ("part-time"|"full-time"|"mentor"), `benefits` ("ta-da"|"stay-only"|"none"), `certifications`, `language`, `trainerScope` ("local"|"pan-india"), `startDate`. All nullable, backward-compatible.
+- Budget/feeType are kept in DB for legacy data but NOT shown in the UI — payout is discussed directly between vendor and trainer.
 - Frontend imports hooks ONLY from `@workspace/api-client-react`.
 - After mutations, invalidate the matching `getXxxQueryKey(...)` query.
 - No emojis anywhere in the UI; use lucide-react icons.

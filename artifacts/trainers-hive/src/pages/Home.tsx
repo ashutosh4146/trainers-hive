@@ -267,12 +267,14 @@ export default function Home() {
                                 <Clock className="h-4 w-4" />
                                 <span>{req.durationDays} days</span>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <Briefcase className="h-4 w-4" />
-                                <span className="font-medium text-foreground">
-                                  ${req.budget.toLocaleString()} {req.feeType === "negotiable" && <span className="text-muted-foreground font-normal">(Negotiable)</span>}
-                                </span>
-                              </div>
+                              {(req as any).trainingMode && (
+                                <div className="flex items-center gap-1.5">
+                                  <Briefcase className="h-4 w-4" />
+                                  <span className="font-medium text-foreground capitalize">
+                                    {(req as any).trainingMode}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end justify-between mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0">

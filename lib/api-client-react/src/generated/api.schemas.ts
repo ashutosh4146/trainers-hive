@@ -124,14 +124,21 @@ export interface Requirement {
   skill: string;
   subSkills: string[];
   durationDays: number;
-  budget: number;
-  feeType: FeeType;
   location: string;
-  remote: boolean;
+  remote?: boolean;
   deadline: string;
   status: RequirementStatus;
   createdAt: string;
   applicationCount: number;
+  trainingType?: string;
+  trainingMode?: string;
+  trainerCount?: number;
+  trainerType?: string;
+  benefits?: string;
+  certifications?: string;
+  language?: string;
+  trainerScope?: string;
+  startDate?: string;
 }
 
 export type RequirementDetail = Requirement & {
@@ -144,12 +151,18 @@ export interface CreateRequirementBody {
   skill: string;
   subSkills: string[];
   durationDays: number;
-  budget: number;
-  feeType: FeeType;
-  location: string;
-  remote: boolean;
+  location?: string;
   deadline: string;
   description: string;
+  trainingType: string;
+  trainingMode: string;
+  trainerCount: number;
+  trainerType: string;
+  benefits: string;
+  certifications?: string;
+  language?: string;
+  trainerScope: string;
+  startDate?: string;
 }
 
 export interface UpdateRequirementBody {
@@ -157,13 +170,19 @@ export interface UpdateRequirementBody {
   skill?: string;
   subSkills?: string[];
   durationDays?: number;
-  budget?: number;
-  feeType?: FeeType;
   location?: string;
-  remote?: boolean;
   deadline?: string;
   description?: string;
   status?: RequirementStatus;
+  trainingType?: string;
+  trainingMode?: string;
+  trainerCount?: number;
+  trainerType?: string;
+  benefits?: string;
+  certifications?: string;
+  language?: string;
+  trainerScope?: string;
+  startDate?: string;
 }
 
 export type ApplicationStatus =
