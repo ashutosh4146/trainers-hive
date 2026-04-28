@@ -1,0 +1,39 @@
+ubuntu@ip-172-31-32-177:~/trainers-hive$ git fetch origin
+git reset --hard origin/main
+HEAD is now at c2b5bf4 Add compressed source code file for download
+ubuntu@ip-172-31-32-177:~/trainers-hive$ VITE_FIREBASE_API_KEY="AIzaSyC3m1IZj4o8Xgjy6z7M5rQpiFKrfmhS_do" \
+VITE_FIREBASE_APP_ID="1:491480752528:web:f3035c483319531a3ed315" \
+VITE_FIREBASE_MESSAGING_SENDER_ID="491480752528" \
+pnpm install && pnpm --filter @workspace/trainers-hive run build
+Scope: all 9 workspace projects
+Lockfile is up to date, resolution step is skipped
+Already up to date
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pn…
+└─ Done in 16ms
+╭ Warning ───────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                            │
+│   Ignored build scripts: @firebase/util@1.15.0, protobufjs@7.5.5.                          │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.   │
+│                                                                                            │
+╰────────────────────────────────────────────────────────────────────────────────────────────╯
+Done in 3.1s using pnpm v10.33.2
+
+> @workspace/trainers-hive@0.0.0 build /home/ubuntu/trainers-hive/artifacts/trainers-hive
+> vite build --config vite.config.ts
+
+failed to load config from /home/ubuntu/trainers-hive/artifacts/trainers-hive/vite.config.ts
+error during build:
+Error: PORT environment variable is required but was not provided.
+    at file:///home/ubuntu/trainers-hive/artifacts/trainers-hive/node_modules/.vite-temp/vite.config.ts.timestamp-1777398212662-91f038f8fecd5.mjs:10:9
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async loadConfigFromBundledFile (file:///home/ubuntu/trainers-hive/node_modules/.pnpm/vite@7.3.2_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:35920:12)
+    at async bundleAndLoadConfigFile (file:///home/ubuntu/trainers-hive/node_modules/.pnpm/vite@7.3.2_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:35808:17)
+    at async loadConfigFromFile (file:///home/ubuntu/trainers-hive/node_modules/.pnpm/vite@7.3.2_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:35775:42)
+    at async resolveConfig (file:///home/ubuntu/trainers-hive/node_modules/.pnpm/vite@7.3.2_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:35424:22)
+    at async createBuilder (file:///home/ubuntu/trainers-hive/node_modules/.pnpm/vite@7.3.2_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:33879:19)
+    at async CAC.<anonymous> (file:///home/ubuntu/trainers-hive/node_modules/.pnpm/vite@7.3.2_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/cli.js:629:10)
+/home/ubuntu/trainers-hive/artifacts/trainers-hive:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/trainers-hive@0.0.0 build: `vite build --config vite.config.ts`
+Exit status 1
+ubuntu@ip-172-31-32-177:~/trainers-hive$
