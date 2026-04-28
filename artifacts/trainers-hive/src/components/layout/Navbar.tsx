@@ -49,18 +49,17 @@ export function Navbar() {
                 Dashboard
               </Link>
             )}
+            {user?.role === "vendor" && (
+              <Link href="/requirements/new" className="hidden sm:flex ml-2">
+                <Button size="sm" className="gap-1 shadow-sm h-8">
+                  <Plus className="h-4 w-4" /> Post Requirement
+                </Button>
+              </Link>
+            )}
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
-          {user?.role === "vendor" && (
-            <Link href="/requirements/new" className="hidden sm:flex">
-              <Button size="sm" className="gap-1 shadow-sm">
-                <Plus className="h-4 w-4" /> Post Requirement
-              </Button>
-            </Link>
-          )}
-
           <div className="hidden sm:flex items-center rounded-full bg-muted p-1 text-sm border border-border">
             <span className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Demo Role:</span>
             <Button
