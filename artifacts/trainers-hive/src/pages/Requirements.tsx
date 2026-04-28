@@ -201,92 +201,94 @@ export default function Requirements() {
             ))
           ) : requirements?.length ? (
             requirements.map((req) => (
-              <Card key={req.id} className={`hover:shadow-md transition-all group overflow-hidden ${req.status === 'closed' ? 'opacity-70 grayscale-[0.3]' : 'hover:border-primary/50'}`}>
-                <div className="flex flex-col sm:flex-row">
-                  <div className="p-6 flex-1 flex flex-col gap-4">
-                    <div className="flex items-start gap-4">
-                      <Avatar className="h-12 w-12 rounded-md border bg-white shrink-0 mt-1">
-                        <AvatarImage src={req.vendorLogoUrl} alt={req.vendorName} className="object-contain p-1" />
-                        <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
-                          <Building className="h-6 w-6" />
-                        </AvatarFallback>
-                      </Avatar>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <h3 className="font-semibold text-xl truncate group-hover:text-primary transition-colors">
-                            {req.title}
-                          </h3>
-                          <Badge variant={req.status === 'open' ? 'default' : req.status === 'vacant' ? 'destructive' : 'secondary'} className="capitalize shrink-0">
-                            {req.status}
-                          </Badge>
+              <div key={req.id} className="relative">
+                {isAdmin && (
+                  <div className="absolute top-3 right-3 z-10">
+                    <AdminRemoveButton
+                      label={`requirement "${req.title}"`}
+                      description={`This permanently removes this requirement and all applications submitted to it. This cannot be undone.`}
+                      successMessage="Requirement removed."
+                      onConfirm={async () => {
+                        await deleteRequirement.mutateAsync({ id: req.id });
+                        await queryClient.invalidateQueries({
+                          queryKey: getListRequirementsQueryKey(queryParams),
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+                <Link href={`/requirements/${req.id}`}>
+                  <Card className={`hover:shadow-md transition-all group overflow-hidden cursor-pointer ${req.status === 'closed' ? 'opacity-70 grayscale-[0.3]' : 'hover:border-primary/50'}`}>
+                    <div className="flex flex-col sm:flex-row">
+                      <div className="p-6 flex-1 flex flex-col gap-4 min-w-0">
+                        <div className="flex items-start gap-4 min-w-0">
+                          <Avatar className="h-12 w-12 rounded-md border bg-white shrink-0 mt-1">
+                            <AvatarImage src={req.vendorLogoUrl} alt={req.vendorName} className="object-contain p-1" />
+                            <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
+                              <Building className="h-6 w-6" />
+                            </AvatarFallback>
+                          </Avatar>
+
+                          <div className="flex-1 min-w-0">
+                            <div className={`flex items-start justify-between gap-2 mb-1 ${isAdmin ? "pr-10" : ""}`}>
+                              <h3 className="font-semibold text-xl truncate group-hover:text-primary transition-colors min-w-0 flex-1">
+                                {req.title}
+                              </h3>
+                              <Badge variant={req.status === 'open' ? 'default' : req.status === 'vacant' ? 'destructive' : 'secondary'} className="capitalize shrink-0">
+                                {req.status}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium text-foreground">{req.vendorName}</span>
+                              <span>•</span>
+                              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {req.location} {req.remote && "(Remote Optional)"}</span>
+                              <span>•</span>
+                              <span>Posted {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}</span>
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-foreground">{req.vendorName}</span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {req.location} {req.remote && "(Remote Optional)"}</span>
-                          <span>•</span>
-                          <span>Posted {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}</span>
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm pt-2">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium bg-primary/5 text-primary px-2 py-0.5 rounded border border-primary/20">{req.skill}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span>{req.durationDays} days duration</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Briefcase className="h-4 w-4" />
-                        <span className="font-medium text-foreground">
-                          ${req.budget.toLocaleString()}
-                        </span>
-                        {req.feeType === "negotiable" && <span className="text-xs">(Negotiable)</span>}
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm pt-2">
+                          <div className="flex items-center gap-2">
+                            <BookOpen className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium bg-primary/5 text-primary px-2 py-0.5 rounded border border-primary/20">{req.skill}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <span>{req.durationDays} days duration</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Briefcase className="h-4 w-4" />
+                            <span className="font-medium text-foreground">
+                              ${req.budget.toLocaleString()}
+                            </span>
+                            {req.feeType === "negotiable" && <span className="text-xs">(Negotiable)</span>}
+                          </div>
+
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Users className="h-4 w-4" />
+                            <span>{req.applicationCount} Applicants</span>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Users className="h-4 w-4" />
-                        <span>{req.applicationCount} Applicants</span>
+                      <div className="bg-muted/30 p-6 flex flex-row sm:flex-col items-center sm:justify-center gap-4 border-t sm:border-t-0 sm:border-l sm:w-48 shrink-0">
+                        <div className="text-center sm:w-full">
+                          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Deadline</p>
+                          <p className="font-medium text-foreground">
+                            {new Date(req.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        </div>
+                        <Button className="w-full ml-auto sm:ml-0" variant={req.status === 'open' ? 'default' : 'secondary'} tabIndex={-1}>
+                          View Details <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="bg-muted/30 p-6 flex flex-row sm:flex-col items-center sm:justify-center gap-4 border-t sm:border-t-0 sm:border-l sm:w-48 shrink-0">
-                    <div className="text-center sm:w-full">
-                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Deadline</p>
-                      <p className="font-medium text-foreground">
-                        {new Date(req.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                    </div>
-                    {isAdmin && (
-                      <AdminRemoveButton
-                        variant="full"
-                        label={`requirement "${req.title}"`}
-                        description={`This permanently removes this requirement and all applications submitted to it. This cannot be undone.`}
-                        successMessage={`Requirement removed.`}
-                        onConfirm={async () => {
-                          await deleteRequirement.mutateAsync({ id: req.id });
-                          await queryClient.invalidateQueries({
-                            queryKey: getListRequirementsQueryKey(queryParams),
-                          });
-                        }}
-                        className="w-full"
-                      />
-                    )}
-                    <Link href={`/requirements/${req.id}`} className="ml-auto sm:ml-0 sm:w-full">
-                      <Button className="w-full" variant={req.status === 'open' ? 'default' : 'secondary'}>
-                        View Details <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              </Card>
+                  </Card>
+                </Link>
+              </div>
             ))
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center border rounded-lg bg-muted/30 border-dashed">
