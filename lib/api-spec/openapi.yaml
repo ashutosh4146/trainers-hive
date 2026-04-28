@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Trainers Hive — training marketplace API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: session
+  - name: skills
+  - name: trainers
+  - name: vendors
+  - name: requirements
+  - name: applications
+  - name: reviews
+  - name: stats
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +31,1052 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /session/me:
+    get:
+      operationId: getCurrentUser
+      tags: [session]
+      summary: Get the currently active demo user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+
+  /session/switch:
+    post:
+      operationId: switchUser
+      tags: [session]
+      summary: Switch the active demo user (vendor / trainer / admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwitchUserBody"
+      responses:
+        "200":
+          description: Switched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+
+  /skills:
+    get:
+      operationId: listSkills
+      tags: [skills]
+      summary: Skill taxonomy used across the platform
+      responses:
+        "200":
+          description: Skills list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SkillCategory"
+
+  /trainers:
+    get:
+      operationId: listTrainers
+      tags: [trainers]
+      summary: Browse trainers
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: skill
+          schema:
+            type: string
+        - in: query
+          name: location
+          schema:
+            type: string
+        - in: query
+          name: remote
+          schema:
+            type: boolean
+        - in: query
+          name: minExperience
+          schema:
+            type: integer
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [rating, experience, recent]
+      responses:
+        "200":
+          description: Trainers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trainer"
+
+  /trainers/featured:
+    get:
+      operationId: listFeaturedTrainers
+      tags: [trainers]
+      summary: Featured / top-rated trainers
+      responses:
+        "200":
+          description: Featured trainers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trainer"
+
+  /trainers/{id}:
+    get:
+      operationId: getTrainer
+      tags: [trainers]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trainer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainerDetail"
+    patch:
+      operationId: updateTrainer
+      tags: [trainers]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTrainerBody"
+      responses:
+        "200":
+          description: Updated trainer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainerDetail"
+
+  /trainers/{id}/reviews:
+    get:
+      operationId: listTrainerReviews
+      tags: [reviews]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+    post:
+      operationId: createTrainerReview
+      tags: [reviews]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewBody"
+      responses:
+        "201":
+          description: Created review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  /vendors/{id}:
+    get:
+      operationId: getVendor
+      tags: [vendors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+    patch:
+      operationId: updateVendor
+      tags: [vendors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVendorBody"
+      responses:
+        "200":
+          description: Updated vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+
+  /requirements:
+    get:
+      operationId: listRequirements
+      tags: [requirements]
+      summary: Browse training requirements
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: skill
+          schema:
+            type: string
+        - in: query
+          name: location
+          schema:
+            type: string
+        - in: query
+          name: remote
+          schema:
+            type: boolean
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, closed, vacant]
+        - in: query
+          name: vendorId
+          schema:
+            type: string
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [recent, deadline, budget]
+      responses:
+        "200":
+          description: Requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Requirement"
+    post:
+      operationId: createRequirement
+      tags: [requirements]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequirementBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
+
+  /requirements/recent:
+    get:
+      operationId: listRecentRequirements
+      tags: [requirements]
+      summary: Recent open requirements (wow feed)
+      responses:
+        "200":
+          description: Requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Requirement"
+
+  /requirements/{id}:
+    get:
+      operationId: getRequirement
+      tags: [requirements]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Requirement detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequirementDetail"
+    patch:
+      operationId: updateRequirement
+      tags: [requirements]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRequirementBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
+
+  /requirements/{id}/apply:
+    post:
+      operationId: applyToRequirement
+      tags: [applications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyBody"
+      responses:
+        "201":
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+
+  /requirements/{id}/applications:
+    get:
+      operationId: listRequirementApplications
+      tags: [applications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Applications for a requirement
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApplicationWithTrainer"
+
+  /applications:
+    get:
+      operationId: listMyApplications
+      tags: [applications]
+      summary: Applications for current user (trainer view)
+      responses:
+        "200":
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApplicationWithRequirement"
+
+  /applications/{id}:
+    patch:
+      operationId: updateApplicationStatus
+      tags: [applications]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApplicationBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+
+  /stats/vendor:
+    get:
+      operationId: getVendorStats
+      tags: [stats]
+      summary: Dashboard stats for the active vendor
+      responses:
+        "200":
+          description: Vendor stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorStats"
+
+  /stats/trainer:
+    get:
+      operationId: getTrainerStats
+      tags: [stats]
+      summary: Dashboard stats for the active trainer
+      responses:
+        "200":
+          description: Trainer stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainerStats"
+
+  /stats/platform:
+    get:
+      operationId: getPlatformStats
+      tags: [stats]
+      summary: Marketplace-wide stats (for landing page / admin)
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformStats"
+
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [stats]
+      summary: Recent activity feed across the marketplace
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    UserRole:
+      type: string
+      enum: [vendor, trainer, admin]
+
+    CurrentUser:
+      type: object
+      required: [id, role, name, email]
+      properties:
+        id:
+          type: string
+        role:
+          $ref: "#/components/schemas/UserRole"
+        name:
+          type: string
+        email:
+          type: string
+        avatarUrl:
+          type: string
+        vendorId:
+          type: string
+        trainerId:
+          type: string
+
+    SwitchUserBody:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/UserRole"
+
+    SkillCategory:
+      type: object
+      required: [id, name, skills]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+
+    Trainer:
+      type: object
+      required:
+        - id
+        - name
+        - headline
+        - mainSkill
+        - subSkills
+        - experienceYears
+        - location
+        - remote
+        - rating
+        - reviewCount
+        - hourlyRate
+        - verified
+        - avatarUrl
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        headline:
+          type: string
+        mainSkill:
+          type: string
+        subSkills:
+          type: array
+          items:
+            type: string
+        experienceYears:
+          type: integer
+        location:
+          type: string
+        remote:
+          type: boolean
+        rating:
+          type: number
+        reviewCount:
+          type: integer
+        hourlyRate:
+          type: integer
+        verified:
+          type: boolean
+        avatarUrl:
+          type: string
+        availability:
+          type: string
+
+    TrainerDetail:
+      allOf:
+        - $ref: "#/components/schemas/Trainer"
+        - type: object
+          required: [bio, certifications, languages, completedTrainings]
+          properties:
+            bio:
+              type: string
+            certifications:
+              type: array
+              items:
+                type: string
+            languages:
+              type: array
+              items:
+                type: string
+            completedTrainings:
+              type: integer
+            portfolioUrl:
+              type: string
+
+    UpdateTrainerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        headline:
+          type: string
+        mainSkill:
+          type: string
+        subSkills:
+          type: array
+          items:
+            type: string
+        experienceYears:
+          type: integer
+        location:
+          type: string
+        remote:
+          type: boolean
+        hourlyRate:
+          type: integer
+        bio:
+          type: string
+        availability:
+          type: string
+
+    Vendor:
+      type: object
+      required:
+        - id
+        - companyName
+        - industry
+        - location
+        - contactName
+        - contactDesignation
+        - email
+        - logoUrl
+        - verified
+      properties:
+        id:
+          type: string
+        companyName:
+          type: string
+        industry:
+          type: string
+        location:
+          type: string
+        contactName:
+          type: string
+        contactDesignation:
+          type: string
+        email:
+          type: string
+        about:
+          type: string
+        logoUrl:
+          type: string
+        verified:
+          type: boolean
+        websiteUrl:
+          type: string
+
+    UpdateVendorBody:
+      type: object
+      properties:
+        companyName:
+          type: string
+        industry:
+          type: string
+        location:
+          type: string
+        contactName:
+          type: string
+        contactDesignation:
+          type: string
+        about:
+          type: string
+        websiteUrl:
+          type: string
+
+    RequirementStatus:
+      type: string
+      enum: [open, closed, vacant]
+
+    FeeType:
+      type: string
+      enum: [fixed, negotiable]
+
+    Requirement:
+      type: object
+      required:
+        - id
+        - vendorId
+        - vendorName
+        - vendorLogoUrl
+        - title
+        - skill
+        - subSkills
+        - durationDays
+        - budget
+        - feeType
+        - location
+        - remote
+        - deadline
+        - status
+        - createdAt
+        - applicationCount
+      properties:
+        id:
+          type: string
+        vendorId:
+          type: string
+        vendorName:
+          type: string
+        vendorLogoUrl:
+          type: string
+        title:
+          type: string
+        skill:
+          type: string
+        subSkills:
+          type: array
+          items:
+            type: string
+        durationDays:
+          type: integer
+        budget:
+          type: integer
+        feeType:
+          $ref: "#/components/schemas/FeeType"
+        location:
+          type: string
+        remote:
+          type: boolean
+        deadline:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/RequirementStatus"
+        createdAt:
+          type: string
+          format: date-time
+        applicationCount:
+          type: integer
+
+    RequirementDetail:
+      allOf:
+        - $ref: "#/components/schemas/Requirement"
+        - type: object
+          required: [description, vendor]
+          properties:
+            description:
+              type: string
+            vendor:
+              $ref: "#/components/schemas/Vendor"
+
+    CreateRequirementBody:
+      type: object
+      required:
+        - title
+        - skill
+        - subSkills
+        - durationDays
+        - budget
+        - feeType
+        - location
+        - remote
+        - deadline
+        - description
+      properties:
+        title:
+          type: string
+        skill:
+          type: string
+        subSkills:
+          type: array
+          items:
+            type: string
+        durationDays:
+          type: integer
+        budget:
+          type: integer
+        feeType:
+          $ref: "#/components/schemas/FeeType"
+        location:
+          type: string
+        remote:
+          type: boolean
+        deadline:
+          type: string
+          format: date-time
+        description:
+          type: string
+
+    UpdateRequirementBody:
+      type: object
+      properties:
+        title:
+          type: string
+        skill:
+          type: string
+        subSkills:
+          type: array
+          items:
+            type: string
+        durationDays:
+          type: integer
+        budget:
+          type: integer
+        feeType:
+          $ref: "#/components/schemas/FeeType"
+        location:
+          type: string
+        remote:
+          type: boolean
+        deadline:
+          type: string
+          format: date-time
+        description:
+          type: string
+        status:
+          $ref: "#/components/schemas/RequirementStatus"
+
+    ApplicationStatus:
+      type: string
+      enum: [submitted, shortlisted, rejected, hired]
+
+    Application:
+      type: object
+      required:
+        - id
+        - requirementId
+        - trainerId
+        - status
+        - message
+        - proposedRate
+        - createdAt
+      properties:
+        id:
+          type: string
+        requirementId:
+          type: string
+        trainerId:
+          type: string
+        status:
+          $ref: "#/components/schemas/ApplicationStatus"
+        message:
+          type: string
+        proposedRate:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    ApplicationWithTrainer:
+      allOf:
+        - $ref: "#/components/schemas/Application"
+        - type: object
+          required: [trainer]
+          properties:
+            trainer:
+              $ref: "#/components/schemas/Trainer"
+
+    ApplicationWithRequirement:
+      allOf:
+        - $ref: "#/components/schemas/Application"
+        - type: object
+          required: [requirement]
+          properties:
+            requirement:
+              $ref: "#/components/schemas/Requirement"
+
+    ApplyBody:
+      type: object
+      required: [message, proposedRate]
+      properties:
+        message:
+          type: string
+        proposedRate:
+          type: integer
+
+    UpdateApplicationBody:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/ApplicationStatus"
+
+    Review:
+      type: object
+      required:
+        - id
+        - trainerId
+        - vendorId
+        - vendorName
+        - rating
+        - comment
+        - createdAt
+      properties:
+        id:
+          type: string
+        trainerId:
+          type: string
+        vendorId:
+          type: string
+        vendorName:
+          type: string
+        vendorLogoUrl:
+          type: string
+        rating:
+          type: integer
+        comment:
+          type: string
+        engagementTitle:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateReviewBody:
+      type: object
+      required: [rating, comment]
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+        engagementTitle:
+          type: string
+
+    VendorStats:
+      type: object
+      required:
+        - totalRequirements
+        - openRequirements
+        - applicationsReceived
+        - shortlistedTrainers
+        - hiredTrainers
+        - skillBreakdown
+        - applicationsTrend
+      properties:
+        totalRequirements:
+          type: integer
+        openRequirements:
+          type: integer
+        applicationsReceived:
+          type: integer
+        shortlistedTrainers:
+          type: integer
+        hiredTrainers:
+          type: integer
+        skillBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillCount"
+        applicationsTrend:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrendPoint"
+
+    TrainerStats:
+      type: object
+      required:
+        - applicationsSent
+        - shortlisted
+        - hired
+        - averageRating
+        - totalReviews
+        - profileViews
+        - applicationsTrend
+      properties:
+        applicationsSent:
+          type: integer
+        shortlisted:
+          type: integer
+        hired:
+          type: integer
+        averageRating:
+          type: number
+        totalReviews:
+          type: integer
+        profileViews:
+          type: integer
+        applicationsTrend:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrendPoint"
+
+    PlatformStats:
+      type: object
+      required:
+        - trainerCount
+        - vendorCount
+        - openRequirementCount
+        - completedEngagements
+        - skillBreakdown
+      properties:
+        trainerCount:
+          type: integer
+        vendorCount:
+          type: integer
+        openRequirementCount:
+          type: integer
+        completedEngagements:
+          type: integer
+        skillBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillCount"
+
+    SkillCount:
+      type: object
+      required: [skill, count]
+      properties:
+        skill:
+          type: string
+        count:
+          type: integer
+
+    TrendPoint:
+      type: object
+      required: [date, count]
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+
+    ActivityItem:
+      type: object
+      required: [id, type, title, subtitle, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [application, requirement, review, hire]
+        title:
+          type: string
+        subtitle:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        avatarUrl:
+          type: string
