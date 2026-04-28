@@ -14,15 +14,22 @@ A B2B training marketplace where vendors (companies, colleges, institutes) post 
   - `lib/db` — Drizzle schema (one table per file in `src/schema/`)
 - **Mockup sandbox**: `artifacts/mockup-sandbox` — design exploration only
 
-## Roles & demo session
+## Auth & roles
 
-No real authentication this build. The active demo user is stored in `session_state` table with key `"default"`. Three demo users exist:
+Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAuth.ts`). No real auth — backend uses a shared demo session per role.
 
-- `user-vendor` — Aarav Mehta @ Northwind Corp (`vendorId: ven-northwind`)
-- `user-trainer` — Priya Sharma (`trainerId: tr-priya`)
-- `user-admin` — Trainers Hive Admin
+**Signup roles (user-facing):**
+- `trainer` → maps to `user-trainer` (Priya Sharma)
+- `vendor` → maps to `user-vendor` (Aarav Mehta @ Northwind Corp)
+- `college` → also maps to `user-vendor` session (same capabilities, different label)
 
-A header role switcher calls `POST /api/session/switch { role }` to flip the active user. All role-gated routes (post requirement, apply, review, application status updates) check the active user.
+**Admin**: not shown in signup; accessible by backend session only (no role switcher in UI).
+
+**Business email** required for `vendor` and `college` roles. Free domains (Gmail, Yahoo, etc.) are blocked on the signup/login forms.
+
+**Routes**: `/signup` and `/login` are public. `/dashboard`, `/profile`, `/settings`, `/requirements/new` redirect to `/login` if not signed in.
+
+`POST /api/session/switch { role }` switches the active demo user. The `college` role sends `"vendor"` to the backend.
 
 ## Key flows
 
