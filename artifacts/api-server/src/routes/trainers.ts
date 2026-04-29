@@ -178,9 +178,18 @@ router.delete("/trainers/:id", async (req, res) => {
     res.status(404).json({ error: "trainer not found" });
     return;
   }
+  const trainerUser = await db
+    .select({ email: usersTable.email, name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.trainerId, params.data.id))
+    .limit(1);
+
   await db.delete(applicationsTable).where(eq(applicationsTable.trainerId, params.data.id));
   await db.delete(reviewsTable).where(eq(reviewsTable.trainerId, params.data.id));
   await db.delete(trainersTable).where(eq(trainersTable.id, params.data.id));
+  if (trainerUser.length > 0) {
+    await db.delete(usersTable).where(eq(usersTable.trainerId, params.data.id));
+  }
 
   const { activityTable } = await import("@workspace/db");
   await db.insert(activityTable).values({
@@ -190,6 +199,12 @@ router.delete("/trainers/:id", async (req, res) => {
     subtitle: existing.headline,
     avatarUrl: active.avatarUrl,
   });
+
+  if (trainerUser.length > 0) {
+    const { notifyRemovedTrainer } = await import("../lib/mailer");
+    notifyRemovedTrainer({ trainerEmail: trainerUser[0]!.email, trainerName: existing.name }).catch(() => {});
+  }
+
   res.status(204).end();
 });
 

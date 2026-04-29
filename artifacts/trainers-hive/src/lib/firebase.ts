@@ -6,6 +6,7 @@ import {
   isSignInWithEmailLink,
   signInWithEmailLink,
   signInWithPopup,
+  signInWithCustomToken,
   GoogleAuthProvider,
   type User,
 } from "firebase/auth";
@@ -76,6 +77,11 @@ export async function signInWithGoogle(): Promise<User> {
 
 export async function signOutFirebase(): Promise<void> {
   await firebaseSignOut(auth);
+}
+
+export async function signInWithAdminToken(customToken: string): Promise<User> {
+  const cred = await signInWithCustomToken(auth, customToken);
+  return cred.user;
 }
 
 export function getCurrentFirebaseUser(): User | null {
