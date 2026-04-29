@@ -38,7 +38,7 @@ function Router() {
   const { isSignedIn } = useAuth();
 
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen" />}>
       <Switch>
         <Route path="/signup" component={Signup} />
         <Route path="/login">
