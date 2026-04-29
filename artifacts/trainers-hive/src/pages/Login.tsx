@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-import { Activity, Building2, GraduationCap, Users, Mail, ArrowLeft } from "lucide-react";
+import { Activity, Building2, GraduationCap, Users, Mail, ArrowLeft, KeyRound, Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useSwitchUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAuth,
@@ -18,7 +19,7 @@ import {
   type UserRole,
 } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
-import { sendEmailSignInLink, savePendingAuth, signInWithGoogle } from "@/lib/firebase";
+import { sendEmailSignInLink, savePendingAuth, signInWithGoogle, signInWithAdminToken } from "@/lib/firebase";
 
 const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
   { id: "trainer",  label: "Trainer",          icon: <Users className="h-5 w-5" /> },
@@ -27,14 +28,19 @@ const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
 ];
 
 type View = "select" | "sent";
+type LoginMethod = "link" | "password";
 
 export default function Login() {
   const [view, setView] = useState<View>("select");
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("link");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSending, setIsSending] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
 
   const { auth, signIn } = useAuth();
   const [, navigate] = useLocation();
@@ -132,6 +138,64 @@ export default function Login() {
     }
   };
 
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs: Record<string, string> = {};
+    if (!selectedRole) errs.role = "Select a role to continue.";
+    if (!email.trim()) errs.email = "Email is required.";
+    if (!password) errs.password = "Password is required.";
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setIsPasswordLoading(true);
+    try {
+      const res = await fetch("/api/auth/password/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setErrors({ password: data.error ?? "Invalid email or password." });
+        setIsPasswordLoading(false);
+        return;
+      }
+
+      const { customToken, user } = await res.json() as {
+        customToken: string;
+        user: { name: string; email: string; role: string };
+      };
+
+      const firebaseUser = await signInWithAdminToken(customToken);
+      setAuthTokenGetter(async () => await firebaseUser.getIdToken());
+
+      switchUser.mutate(
+        { data: { role: getRoleSessionKey(selectedRole!), email: user.email, name: user.name } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+            signIn({
+              signedIn: true,
+              name: user.name,
+              email: user.email,
+              role: selectedRole!,
+            });
+            toast({ title: "Welcome back!", description: `Signed in as ${getRoleLabel(selectedRole!)}.` });
+            navigate("/dashboard");
+          },
+          onError: () => {
+            toast({ title: "Sign in failed", description: "Please try again.", variant: "destructive" });
+            setIsPasswordLoading(false);
+          },
+        }
+      );
+    } catch (err) {
+      toast({ title: "Sign in failed", description: (err as Error).message, variant: "destructive" });
+      setIsPasswordLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background flex flex-col">
       <header className="flex items-center gap-2 px-8 py-5 border-b bg-background/80 backdrop-blur">
@@ -166,7 +230,7 @@ export default function Login() {
             })}
           </div>
 
-          {/* Step: Select role + email */}
+          {/* Step: Select role + login */}
           {view === "select" && (
             <>
               <div className="text-center space-y-2">
@@ -174,57 +238,118 @@ export default function Login() {
                 <p className="text-muted-foreground">Sign in to your account</p>
               </div>
               <Card className="border-2">
-                <CardContent className="p-6">
-                  <form onSubmit={handleSendLink} className="space-y-5">
-                    <div className="space-y-2">
-                      <Label>Sign in as</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {ROLES.map((r) => (
-                          <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => setSelectedRole(r.id)}
-                            className={cn(
-                              "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs font-medium transition-all",
-                              selectedRole === r.id
-                                ? "border-primary bg-primary/5 text-primary"
-                                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                            )}
-                          >
-                            {r.icon}
-                            {r.label}
-                          </button>
-                        ))}
-                      </div>
-                      {errors.role && <p className="text-sm text-destructive">{errors.role}</p>}
+                <CardContent className="p-6 space-y-5">
+                  {/* Role selector */}
+                  <div className="space-y-2">
+                    <Label>Sign in as</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {ROLES.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => { setSelectedRole(r.id); setLoginMethod("link"); setErrors({}); }}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs font-medium transition-all",
+                            selectedRole === r.id
+                              ? "border-primary bg-primary/5 text-primary"
+                              : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          )}
+                        >
+                          {r.icon}
+                          {r.label}
+                        </button>
+                      ))}
                     </div>
+                    {errors.role && <p className="text-sm text-destructive">{errors.role}</p>}
+                  </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="email">
-                        Email Address
-                        {selectedRole && roleRequiresBusinessEmail(selectedRole) && (
-                          <span className="ml-1 text-xs text-muted-foreground font-normal">(business email)</span>
-                        )}
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                      {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                    </div>
+                  {/* Email field */}
+                  <div className="space-y-2">
+                    <Label htmlFor="email">
+                      Email Address
+                      {selectedRole && roleRequiresBusinessEmail(selectedRole) && (
+                        <span className="ml-1 text-xs text-muted-foreground font-normal">(business email)</span>
+                      )}
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                    {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                  </div>
 
-                    <Button type="submit" size="lg" className="w-full gap-2" disabled={isSending || isGoogleLoading}>
-                      <Mail className="h-4 w-4" />
-                      {isSending ? "Sending link…" : "Send Sign-In Link"}
-                    </Button>
-                  </form>
-
+                  {/* Trainer: toggle between link and password */}
                   {selectedRole === "trainer" && (
+                    <div className="flex rounded-lg border overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setLoginMethod("link")}
+                        className={cn(
+                          "flex-1 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5",
+                          loginMethod === "link" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Mail className="h-4 w-4" /> Magic Link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLoginMethod("password")}
+                        className={cn(
+                          "flex-1 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5",
+                          loginMethod === "password" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                        )}
+                      >
+                        <KeyRound className="h-4 w-4" /> Password
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Password field (trainer + password method) */}
+                  {selectedRole === "trainer" && loginMethod === "password" ? (
+                    <form onSubmit={handlePasswordLogin} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="password">Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="password"
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Your password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            autoComplete="current-password"
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setShowPassword((v) => !v)}
+                            tabIndex={-1}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+                      </div>
+                      <Button type="submit" size="lg" className="w-full gap-2" disabled={isPasswordLoading}>
+                        <KeyRound className="h-4 w-4" />
+                        {isPasswordLoading ? "Signing in…" : "Sign In with Password"}
+                      </Button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleSendLink}>
+                      <Button type="submit" size="lg" className="w-full gap-2" disabled={isSending || isGoogleLoading}>
+                        <Mail className="h-4 w-4" />
+                        {isSending ? "Sending link…" : "Send Sign-In Link"}
+                      </Button>
+                    </form>
+                  )}
+
+                  {/* Google option for trainers using link method */}
+                  {selectedRole === "trainer" && loginMethod === "link" && (
                     <>
-                      <div className="relative my-2">
+                      <div className="relative">
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t" />
                         </div>
@@ -232,7 +357,6 @@ export default function Login() {
                           <span className="bg-card px-2 text-muted-foreground">or</span>
                         </div>
                       </div>
-
                       <Button
                         type="button"
                         variant="outline"

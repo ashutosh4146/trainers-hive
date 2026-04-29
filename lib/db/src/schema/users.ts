@@ -8,6 +8,7 @@ export const usersTable = pgTable("users", {
   avatarUrl: text("avatar_url"),
   vendorId: text("vendor_id"),
   trainerId: text("trainer_id"),
+  passwordHash: text("password_hash"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
