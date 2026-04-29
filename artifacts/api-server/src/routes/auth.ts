@@ -2,8 +2,10 @@ import { Router, type IRouter } from "express";
 import { createOtp, verifyOtp } from "../lib/otp";
 import { sendOtpEmail } from "../lib/email";
 import { createCustomToken } from "../lib/firebase";
+import { getActiveUserId } from "../lib/session";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 const router: IRouter = Router();
 
@@ -97,6 +99,60 @@ router.post("/auth/admin/login", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to create admin session." });
+  }
+});
+
+router.post("/auth/set-password", async (req, res) => {
+  const activeId = await getActiveUserId(req);
+  if (!activeId) {
+    res.status(401).json({ error: "Not authenticated." });
+    return;
+  }
+
+  const { password } = (req.body ?? {}) as { password?: string };
+  if (!password || password.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters." });
+    return;
+  }
+
+  const hash = await bcrypt.hash(password, 10);
+  await db.update(usersTable).set({ passwordHash: hash }).where(eq(usersTable.id, activeId));
+  res.json({ ok: true });
+});
+
+router.post("/auth/password/login", async (req, res) => {
+  const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+  if (!email || !password) {
+    res.status(400).json({ error: "Email and password are required." });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email.toLowerCase().trim()))
+    .limit(1);
+
+  if (!user || !user.passwordHash) {
+    res.status(401).json({ error: "Invalid email or password." });
+    return;
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) {
+    res.status(401).json({ error: "Invalid email or password." });
+    return;
+  }
+
+  try {
+    const uid = user.email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const customToken = await createCustomToken(uid, { email: user.email });
+    res.json({
+      customToken,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, trainerId: user.trainerId, vendorId: user.vendorId },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create session." });
   }
 });
 

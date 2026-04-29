@@ -1,12 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useGetCurrentUser } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useTheme } from "next-themes";
-import { Bell, Moon, Sun, Lock, User, Monitor } from "lucide-react";
+import { Bell, Moon, Sun, Lock, User, Monitor, KeyRound, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Settings() {
@@ -14,11 +15,40 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
 
-  const handleSignOut = () => {
-    toast({
-      title: "Demo Session",
-      description: "This is a demo environment. Sign out is simulated.",
-    });
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast({ title: "Password too short", description: "Must be at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast({ title: "Passwords don't match", description: "Please re-enter the same password.", variant: "destructive" });
+      return;
+    }
+    setIsSavingPassword(true);
+    try {
+      const res = await fetch("/api/auth/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error ?? "Failed to set password.");
+      }
+      toast({ title: "Password saved", description: "You can now sign in with your email and password." });
+      setPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
   return (
@@ -120,6 +150,60 @@ export default function Settings() {
           </Card>
         </motion.div>
 
+        {user?.role === "trainer" && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5 text-primary" /> Password Login
+                </CardTitle>
+                <CardDescription>
+                  Set a password so you can sign in with your email and password instead of a magic link every time.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSetPassword} className="space-y-4 max-w-sm">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="new-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Min. 6 characters"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPassword((v) => !v)}
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="confirm-password">Confirm Password</Label>
+                    <Input
+                      id="confirm-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Re-enter password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <Button type="submit" disabled={isSavingPassword || !password || !confirmPassword}>
+                    {isSavingPassword ? "Saving…" : "Save Password"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <Card>
             <CardHeader>
@@ -140,7 +224,6 @@ export default function Settings() {
                       </span>
                     </div>
                   </div>
-                  <Button variant="destructive" onClick={handleSignOut}>Sign Out</Button>
                 </div>
               )}
             </CardContent>
