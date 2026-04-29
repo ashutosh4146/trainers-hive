@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import { createOtp, verifyOtp } from "../lib/otp";
 import { sendOtpEmail } from "../lib/email";
 import { createCustomToken } from "../lib/firebase";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -58,6 +60,43 @@ router.post("/auth/otp/verify", async (req, res) => {
     case "too_many_attempts":
       res.status(429).json({ valid: false, error: "Too many incorrect attempts. Please request a new code." });
       break;
+  }
+});
+
+router.post("/auth/admin/login", async (req, res) => {
+  const { passcode } = (req.body ?? {}) as { passcode?: string };
+  const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || "trainershive@admin";
+
+  if (!passcode || passcode !== ADMIN_PASSCODE) {
+    res.status(401).json({ error: "Incorrect passcode." });
+    return;
+  }
+
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) {
+    res.status(500).json({ error: "Admin email not configured on server." });
+    return;
+  }
+
+  try {
+    const uid = `admin_${adminEmail.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+    const customToken = await createCustomToken(uid, { email: adminEmail });
+
+    const [adminUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.role, "admin"))
+      .limit(1);
+
+    res.json({
+      customToken,
+      adminEmail,
+      user: adminUser
+        ? { id: adminUser.id, name: adminUser.name, email: adminUser.email, role: adminUser.role }
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create admin session." });
   }
 });
 

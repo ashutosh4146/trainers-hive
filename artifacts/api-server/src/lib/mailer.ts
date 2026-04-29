@@ -84,6 +84,46 @@ export async function notifyVendorNewApplication(opts: {
   await send(opts.vendorEmail, `New Application for "${opts.requirementTitle}"`, html);
 }
 
+export async function notifyRemovedTrainer(opts: {
+  trainerEmail: string;
+  trainerName: string;
+}): Promise<void> {
+  const html = wrap(`
+    <h2 style="margin:0 0 8px;font-size:20px;color:#111827">Your Profile Has Been Removed</h2>
+    <p style="margin:0 0 20px;color:#6b7280">Hi <strong>${opts.trainerName}</strong>,</p>
+    <p style="margin:0 0 16px;color:#374151">Your trainer profile has been removed from the Trainers Hive marketplace by an administrator.</p>
+    <p style="margin:0;color:#6b7280;font-size:14px">If you believe this was done in error, please contact our support team.</p>
+  `);
+  await send(opts.trainerEmail, "Your Trainers Hive profile has been removed", html);
+}
+
+export async function notifyRemovedVendor(opts: {
+  vendorEmail: string;
+  vendorName: string;
+}): Promise<void> {
+  const html = wrap(`
+    <h2 style="margin:0 0 8px;font-size:20px;color:#111827">Your Organisation Has Been Removed</h2>
+    <p style="margin:0 0 20px;color:#6b7280">Hi <strong>${opts.vendorName}</strong>,</p>
+    <p style="margin:0 0 16px;color:#374151">Your organisation profile on Trainers Hive has been removed by an administrator.</p>
+    <p style="margin:0;color:#6b7280;font-size:14px">If you believe this was done in error, please contact our support team.</p>
+  `);
+  await send(opts.vendorEmail, "Your Trainers Hive organisation has been removed", html);
+}
+
+export async function notifyRemovedRequirement(opts: {
+  vendorEmail: string;
+  vendorName: string;
+  requirementTitle: string;
+}): Promise<void> {
+  const html = wrap(`
+    <h2 style="margin:0 0 8px;font-size:20px;color:#111827">Your Training Requirement Has Been Removed</h2>
+    <p style="margin:0 0 20px;color:#6b7280">Hi <strong>${opts.vendorName}</strong>,</p>
+    <p style="margin:0 0 16px;color:#374151">Your training post <strong>"${opts.requirementTitle}"</strong> has been removed from Trainers Hive by an administrator.</p>
+    <p style="margin:0;color:#6b7280;font-size:14px">If you believe this was done in error, please contact our support team.</p>
+  `);
+  await send(opts.vendorEmail, `Your requirement "${opts.requirementTitle}" has been removed`, html);
+}
+
 export async function notifyTrainerStatusUpdate(opts: {
   trainerEmail: string;
   trainerName: string;

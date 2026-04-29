@@ -7,10 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useSwitchUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-
-const ADMIN_PASSCODE = "trainershive@admin";
+import { signInWithAdminToken } from "@/lib/firebase";
 
 export default function AdminLogin() {
   const [passcode, setPasscode] = useState("");
@@ -26,33 +26,51 @@ export default function AdminLogin() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (passcode !== ADMIN_PASSCODE) {
-      setError("Incorrect passcode.");
-      return;
-    }
-
     setIsLoading(true);
-    switchUser.mutate(
-      { data: { role: "admin" } },
-      {
-        onSuccess: (user) => {
-          queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-          signIn({
-            signedIn: true,
-            name: user.name ?? "Admin",
-            email: user.email ?? "",
-            role: "admin",
-          });
-          toast({ title: "Welcome, Admin", description: "You are signed in as administrator." });
-          navigate("/dashboard");
-        },
-        onError: () => {
-          setError("Admin account not found. Make sure the database is seeded.");
-          setIsLoading(false);
-        },
+
+    try {
+      const res = await fetch("/api/auth/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data as { error?: string }).error ?? "Incorrect passcode.");
+        setIsLoading(false);
+        return;
       }
-    );
+
+      const { customToken, adminEmail } = await res.json() as { customToken: string; adminEmail: string; user: unknown };
+
+      const firebaseUser = await signInWithAdminToken(customToken);
+      setAuthTokenGetter(async () => await firebaseUser.getIdToken());
+
+      switchUser.mutate(
+        { data: { role: "admin", email: adminEmail } },
+        {
+          onSuccess: (user) => {
+            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+            signIn({
+              signedIn: true,
+              name: user.name ?? "Admin",
+              email: user.email ?? "",
+              role: "admin",
+            });
+            toast({ title: "Welcome, Admin", description: "You are signed in as administrator." });
+            navigate("/dashboard");
+          },
+          onError: () => {
+            setError("Admin account not found. Make sure the database is seeded.");
+            setIsLoading(false);
+          },
+        }
+      );
+    } catch (err) {
+      setError((err as Error).message || "Sign in failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -315,6 +315,12 @@ router.delete("/requirements/:id", async (req, res) => {
     res.status(404).json({ error: "requirement not found" });
     return;
   }
+  const vendorRow = await db
+    .select({ email: vendorsTable.email, companyName: vendorsTable.companyName })
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, existing.vendorId))
+    .limit(1);
+
   await db
     .delete(applicationsTable)
     .where(eq(applicationsTable.requirementId, params.data.id));
@@ -326,6 +332,16 @@ router.delete("/requirements/:id", async (req, res) => {
     subtitle: existing.title,
     avatarUrl: active.avatarUrl,
   });
+
+  if (vendorRow.length > 0) {
+    const { notifyRemovedRequirement } = await import("../lib/mailer");
+    notifyRemovedRequirement({
+      vendorEmail: vendorRow[0]!.email,
+      vendorName: vendorRow[0]!.companyName,
+      requirementTitle: existing.title,
+    }).catch(() => {});
+  }
+
   res.status(204).end();
 });
 
