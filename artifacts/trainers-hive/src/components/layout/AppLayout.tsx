@@ -9,7 +9,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
       <Navbar />
-      <main className="flex-1 flex flex-col relative w-full overflow-hidden">
+      <main className="flex-1 flex flex-col relative w-full overflow-x-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={location}
