@@ -8,6 +8,7 @@ import {
   activityTable,
   trainersTable,
 } from "@workspace/db";
+
 import { eq, desc, sql } from "drizzle-orm";
 import {
   UpdateApplicationStatusParams,
@@ -15,6 +16,7 @@ import {
 } from "@workspace/api-zod";
 import { getActiveUserId } from "../lib/session";
 import { newId } from "../lib/ids";
+import { notifyTrainerStatusUpdate } from "../lib/mailer";
 
 const router: IRouter = Router();
 
@@ -125,6 +127,26 @@ router.patch("/applications/:id", async (req, res) => {
       subtitle: "",
       avatarUrl: trainer?.avatarUrl,
     });
+    const [req] = await db
+      .select({ r: requirementsTable, v: vendorsTable })
+      .from(requirementsTable)
+      .leftJoin(vendorsTable, eq(requirementsTable.vendorId, vendorsTable.id))
+      .where(eq(requirementsTable.id, a.requirementId))
+      .limit(1);
+    const [trainerUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.trainerId, a.trainerId))
+      .limit(1);
+    if (trainerUser?.email && req?.r) {
+      notifyTrainerStatusUpdate({
+        trainerEmail: trainerUser.email,
+        trainerName: trainer?.name ?? "Trainer",
+        requirementTitle: req.r.title,
+        vendorName: req.v?.companyName ?? "the vendor",
+        status: body.data.status,
+      }).catch(() => {});
+    }
   }
   res.json({
     id: a.id,
