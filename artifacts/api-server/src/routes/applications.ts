@@ -97,6 +97,7 @@ router.patch("/applications/:id", async (req, res) => {
     res.status(400).json({ error: "invalid body", details: body.error.issues });
     return;
   }
+  const _activeId = await getActiveUserId(req);
   await db
     .update(applicationsTable)
     .set({ status: body.data.status })

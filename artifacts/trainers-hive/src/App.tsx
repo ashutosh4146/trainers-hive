@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,6 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { CursorLoader } from "@/components/ui/cursor-loader";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/useAuth";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +78,17 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setAuthTokenGetter(() => user.getIdToken());
+      } else {
+        setAuthTokenGetter(null);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

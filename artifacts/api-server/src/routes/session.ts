@@ -7,7 +7,7 @@ import { getActiveUserId, setActiveUserId } from "../lib/session";
 const router: IRouter = Router();
 
 router.get("/session/me", async (req, res) => {
-  const id = await getActiveUserId();
+  const id = await getActiveUserId(req);
   const rows = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1);
   if (rows.length === 0) {
     res.status(404).json({ error: "active user not found" });
