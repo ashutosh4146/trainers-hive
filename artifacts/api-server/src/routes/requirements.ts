@@ -22,6 +22,7 @@ import {
 } from "@workspace/api-zod";
 import { newId } from "../lib/ids";
 import { getActiveUserId } from "../lib/session";
+import { notifyVendorNewApplication } from "../lib/mailer";
 
 const router: IRouter = Router();
 
@@ -375,6 +376,23 @@ router.post("/requirements/:id/apply", async (req, res) => {
     subtitle: r?.title ?? "",
     avatarUrl: active.avatarUrl,
   });
+  if (r) {
+    const [vendor] = await db
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, r.vendorId))
+      .limit(1);
+    if (vendor?.email) {
+      notifyVendorNewApplication({
+        vendorEmail: vendor.email,
+        vendorName: vendor.companyName,
+        trainerName: active.name ?? "A trainer",
+        requirementTitle: r.title,
+        proposedRate: body.data.proposedRate,
+        message: body.data.message,
+      }).catch(() => {});
+    }
+  }
   res.status(201).json({
     id,
     requirementId: params.data.id,

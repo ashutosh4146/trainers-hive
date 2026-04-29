@@ -4,6 +4,7 @@ import { hireInquiriesTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { newId } from "../lib/ids";
 import { getActiveUserId } from "../lib/session";
+import { notifyAdminNewInquiry } from "../lib/mailer";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,18 @@ router.post("/hire-inquiries", async (req, res) => {
       location: location || null,
     })
     .returning();
+
+  notifyAdminNewInquiry({
+    companyName,
+    contactName,
+    email,
+    phone,
+    trainingNeed,
+    budget,
+    timeline,
+    headcount,
+    location,
+  }).catch(() => {});
 
   res.status(201).json(inquiry[0]);
 });
