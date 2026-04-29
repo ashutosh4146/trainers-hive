@@ -23,10 +23,10 @@ export function Navbar() {
   const queryClient = useQueryClient();
 
   const handleSignOut = async () => {
-    try { await signOutFirebase(); } catch { /* ignore */ }
     signOut();
-    queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
     navigate("/login");
+    try { await signOutFirebase(); } catch { /* ignore */ }
+    queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
   };
 
   const displayName = auth?.name || user?.name || "User";
