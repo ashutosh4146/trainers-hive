@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2 } from "lucide-react";
+import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export default function TrainerDetail() {
@@ -51,6 +51,41 @@ export default function TrainerDetail() {
   const isAdmin = user?.role === "admin";
   const deleteTrainer = useDeleteTrainer();
   const [, navigate] = useLocation();
+
+  const [vreq, setVreq] = useState<{ id: string; status: string } | null | undefined>(undefined);
+  const [isSubmittingVreq, setIsSubmittingVreq] = useState(false);
+  const [vreqMessage, setVreqMessage] = useState("");
+  const [showVreqForm, setShowVreqForm] = useState(false);
+
+  useEffect(() => {
+    if (!isTrainerSelf) return;
+    fetch("/api/verification-requests/my")
+      .then(r => r.json())
+      .then(data => setVreq(data))
+      .catch(() => setVreq(null));
+  }, [isTrainerSelf]);
+
+  const handleApplyVerification = async () => {
+    setIsSubmittingVreq(true);
+    try {
+      const res = await fetch("/api/verification-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: vreqMessage.trim() || undefined }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVreq(data);
+        setShowVreqForm(false);
+        toast({ title: "Request submitted!", description: "Your verification request has been sent to the admin." });
+      } else {
+        const err = await res.json();
+        toast({ title: "Could not submit", description: err.error || "Please try again.", variant: "destructive" });
+      }
+    } finally {
+      setIsSubmittingVreq(false);
+    }
+  };
 
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,9 +186,46 @@ export default function TrainerDetail() {
                 <p className="text-3xl font-bold text-foreground">${trainer.hourlyRate}</p>
               </div>
               {isTrainerSelf ? (
-                <Link href="/profile" className="w-full md:w-auto">
-                  <Button variant="outline" className="w-full">Edit Profile</Button>
-                </Link>
+                <>
+                  <Link href="/profile" className="w-full md:w-auto">
+                    <Button variant="outline" className="w-full">Edit Profile</Button>
+                  </Link>
+                  {!trainer.verified && (
+                    vreq === undefined ? null :
+                    vreq === null || vreq.status === "rejected" ? (
+                      showVreqForm ? (
+                        <div className="w-full space-y-2">
+                          <Textarea
+                            placeholder="Optional: describe your expertise, certifications, or why you'd like to be verified..."
+                            value={vreqMessage}
+                            onChange={e => setVreqMessage(e.target.value)}
+                            className="text-sm resize-none"
+                            rows={3}
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" className="flex-1" onClick={handleApplyVerification} disabled={isSubmittingVreq}>
+                              {isSubmittingVreq ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Request"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setShowVreqForm(false)}>Cancel</Button>
+                          </div>
+                          {vreq?.status === "rejected" && (
+                            <p className="text-xs text-red-500">Your previous request was rejected. You can apply again.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <Button variant="outline" className="w-full gap-2 border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => setShowVreqForm(true)}>
+                          <ShieldCheck className="h-4 w-4" />
+                          Apply for Verification
+                        </Button>
+                      )
+                    ) : vreq.status === "pending" ? (
+                      <div className="w-full text-center py-1.5 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm flex items-center justify-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Verification pending review
+                      </div>
+                    ) : null
+                  )}
+                </>
               ) : (
                 <Link href="/requirements" className="w-full md:w-auto">
                   <Button className="w-full md:w-auto">Invite to Requirement</Button>

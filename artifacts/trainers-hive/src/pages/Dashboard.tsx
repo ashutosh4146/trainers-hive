@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -42,9 +42,21 @@ import {
   TrendingUp,
   FileText,
   Activity,
-  Plus
+  Plus,
+  ShieldCheck,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+
+type VerificationRequest = {
+  id: string;
+  trainerId: string;
+  status: string;
+  message: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  trainer: { id: string; name: string; avatarUrl: string; mainSkill: string } | null;
+};
 
 function VendorDashboard({ vendorId }: { vendorId: string }) {
   const { data: stats, isLoading: statsLoading } = useGetVendorStats();
@@ -280,6 +292,34 @@ function AdminDashboard() {
   const { data: trainers, isLoading: trainersLoading } = useListFeaturedTrainers();
   const { data: inquiries, isLoading: inqLoading, refetch: refetchInquiries } = useListHireInquiries();
   const updateStatus = useUpdateHireInquiryStatus();
+  const { toast } = useToast();
+
+  const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
+  const [vreqLoading, setVreqLoading] = useState(true);
+
+  const fetchVerificationRequests = async () => {
+    setVreqLoading(true);
+    try {
+      const res = await fetch("/api/verification-requests");
+      if (res.ok) setVerificationRequests(await res.json());
+    } finally {
+      setVreqLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchVerificationRequests(); }, []);
+
+  const handleVerificationAction = async (id: string, status: "approved" | "rejected", adminNote?: string) => {
+    const res = await fetch(`/api/verification-requests/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, adminNote }),
+    });
+    if (res.ok) {
+      toast({ title: status === "approved" ? "Trainer verified!" : "Request rejected", description: status === "approved" ? "The trainer now has a verified badge." : "The request has been declined." });
+      fetchVerificationRequests();
+    }
+  };
 
   if (statsLoading) return <DashboardSkeleton />;
 
@@ -465,6 +505,62 @@ function AdminDashboard() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Verification Requests */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" /> Verification Requests
+            </CardTitle>
+            <CardDescription>Trainers applying for a verified badge</CardDescription>
+          </div>
+          <Badge variant="outline" className="text-xs">
+            {verificationRequests.filter(r => r.status === "pending").length} pending
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {vreqLoading ? (
+            <Skeleton className="h-[120px] w-full" />
+          ) : !verificationRequests.length ? (
+            <p className="text-muted-foreground text-sm text-center py-8">No verification requests yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {verificationRequests.map((req) => (
+                <div key={req.id} className="flex items-center justify-between p-3 rounded-lg border gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar className="h-9 w-9 shrink-0">
+                      <AvatarImage src={req.trainer?.avatarUrl} />
+                      <AvatarFallback>{req.trainer?.name?.charAt(0) ?? "T"}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{req.trainer?.name ?? req.trainerId}</p>
+                      <p className="text-xs text-muted-foreground truncate">{req.trainer?.mainSkill}</p>
+                      {req.message && <p className="text-xs text-muted-foreground italic mt-0.5 truncate">"{req.message}"</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {req.status === "pending" ? (
+                      <>
+                        <Button size="sm" variant="outline" className="text-xs text-green-700 border-green-200 hover:bg-green-50" onClick={() => handleVerificationAction(req.id, "approved")}>
+                          Approve
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-xs text-red-700 border-red-200 hover:bg-red-50" onClick={() => handleVerificationAction(req.id, "rejected")}>
+                          Reject
+                        </Button>
+                      </>
+                    ) : (
+                      <Badge variant={req.status === "approved" ? "secondary" : "outline"} className={req.status === "approved" ? "bg-green-100 text-green-800" : "text-red-600 border-red-200"}>
+                        {req.status === "approved" ? "Approved" : "Rejected"}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
