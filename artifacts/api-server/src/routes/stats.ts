@@ -33,8 +33,8 @@ function trendBuckets(rows: { createdAt: Date }[]) {
   return result;
 }
 
-router.get("/stats/vendor", async (_req, res) => {
-  const activeId = await getActiveUserId();
+router.get("/stats/vendor", async (req, res) => {
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)
@@ -84,8 +84,8 @@ router.get("/stats/vendor", async (_req, res) => {
   });
 });
 
-router.get("/stats/trainer", async (_req, res) => {
-  const activeId = await getActiveUserId();
+router.get("/stats/trainer", async (req, res) => {
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)

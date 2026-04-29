@@ -1,17 +1,38 @@
-import { db, sessionStateTable } from "@workspace/db";
+import type { Request } from "express";
+import { db, sessionStateTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { verifyIdToken } from "./firebase";
 
 const SESSION_KEY = "default";
 
-export async function getActiveUserId(): Promise<string> {
+export async function getActiveUserId(req?: Request): Promise<string> {
+  if (req) {
+    const authHeader = req.headers.authorization;
+    if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.slice(7);
+      try {
+        const decoded = await verifyIdToken(token);
+        const email = decoded.email;
+        if (email) {
+          const [user] = await db
+            .select()
+            .from(usersTable)
+            .where(eq(usersTable.email, email))
+            .limit(1);
+          if (user) return user.id;
+        }
+      } catch {
+        // Invalid/expired token — fall through to shared session
+      }
+    }
+  }
+
   const rows = await db
     .select()
     .from(sessionStateTable)
     .where(eq(sessionStateTable.id, SESSION_KEY))
     .limit(1);
-  if (rows.length === 0) {
-    return "user-vendor";
-  }
+  if (rows.length === 0) return "user-vendor";
   return rows[0]!.activeUserId;
 }
 

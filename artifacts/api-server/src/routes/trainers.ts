@@ -159,7 +159,7 @@ router.delete("/trainers/:id", async (req, res) => {
     res.status(400).json({ error: "invalid params" });
     return;
   }
-  const activeId = await getActiveUserId();
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)
@@ -238,7 +238,7 @@ router.post("/trainers/:id/reviews", async (req, res) => {
 
   const { getActiveUserId } = await import("../lib/session");
   const { usersTable } = await import("@workspace/db");
-  const activeId = await getActiveUserId();
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)

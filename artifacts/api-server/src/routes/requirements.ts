@@ -137,7 +137,7 @@ router.post("/requirements", async (req, res) => {
     res.status(400).json({ error: "invalid body", details: parsed.error.issues });
     return;
   }
-  const activeId = await getActiveUserId();
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)
@@ -296,7 +296,7 @@ router.delete("/requirements/:id", async (req, res) => {
     res.status(400).json({ error: "invalid params" });
     return;
   }
-  const activeId = await getActiveUserId();
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)
@@ -340,7 +340,7 @@ router.post("/requirements/:id/apply", async (req, res) => {
     res.status(400).json({ error: "invalid body", details: body.error.issues });
     return;
   }
-  const activeId = await getActiveUserId();
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)
