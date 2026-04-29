@@ -70,7 +70,7 @@ export default function Trainers() {
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 flex flex-col md:flex-row gap-8">
       {/* Sidebar Filters */}
-      <aside className="w-full md:w-64 lg:w-72 shrink-0 space-y-6">
+      <aside className="w-full md:w-64 lg:w-72 shrink-0 self-start sticky top-24 space-y-6">
         <div className="flex items-center justify-between pb-4 border-b">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Filter className="h-5 w-5" /> Filters
