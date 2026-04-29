@@ -48,7 +48,14 @@ export default function AuthCallback() {
       clearPendingAuth();
 
       switchUser.mutate(
-        { data: { role: getRoleSessionKey(pending.role as UserRole) } },
+        {
+          data: {
+            role: getRoleSessionKey(pending.role as UserRole),
+            name: pending.name || pending.email.split("@")[0]!,
+            email: pending.email,
+            orgName: pending.orgName,
+          },
+        },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });

@@ -32,6 +32,9 @@ export const GetCurrentUserResponse = zod.object({
  */
 export const SwitchUserBody = zod.object({
   role: zod.enum(["vendor", "trainer", "admin"]),
+  name: zod.string().optional(),
+  email: zod.string().optional(),
+  orgName: zod.string().optional(),
 });
 
 export const SwitchUserResponse = zod.object({

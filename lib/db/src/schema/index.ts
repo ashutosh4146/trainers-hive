@@ -7,3 +7,4 @@ export * from "./applications";
 export * from "./reviews";
 export * from "./activity";
 export * from "./hire-inquiries";
+export * from "./verification-requests";

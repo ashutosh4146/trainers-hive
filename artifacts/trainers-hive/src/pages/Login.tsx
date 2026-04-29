@@ -98,7 +98,13 @@ export default function Login() {
     try {
       const user = await signInWithGoogle();
       switchUser.mutate(
-        { data: { role: getRoleSessionKey(selectedRole) } },
+        {
+          data: {
+            role: getRoleSessionKey(selectedRole),
+            name: user.displayName || user.email?.split("@")[0] || "User",
+            email: user.email || "",
+          },
+        },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
