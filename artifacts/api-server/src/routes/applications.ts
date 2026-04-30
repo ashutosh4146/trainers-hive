@@ -7,12 +7,16 @@ import {
   usersTable,
   activityTable,
   trainersTable,
+  messagesTable,
 } from "@workspace/db";
 
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, asc } from "drizzle-orm";
 import {
   UpdateApplicationStatusParams,
   UpdateApplicationStatusBody,
+  ListApplicationMessagesParams,
+  SendApplicationMessageParams,
+  SendApplicationMessageBody,
 } from "@workspace/api-zod";
 import { getActiveUserId } from "../lib/session";
 import { newId } from "../lib/ids";
@@ -157,6 +161,127 @@ router.patch("/applications/:id", async (req, res) => {
     message: a.message,
     proposedRate: a.proposedRate,
     createdAt: a.createdAt.toISOString(),
+  });
+});
+
+router.get("/applications/:id/messages", async (req, res) => {
+  const params = ListApplicationMessagesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active) {
+    res.status(401).json({ error: "unauthenticated" });
+    return;
+  }
+  const [app] = await db
+    .select()
+    .from(applicationsTable)
+    .where(eq(applicationsTable.id, params.data.id))
+    .limit(1);
+  if (!app) {
+    res.status(404).json({ error: "application not found" });
+    return;
+  }
+  const isTrainerOwner = active.role === "trainer" && active.trainerId === app.trainerId;
+  let isVendorOwner = false;
+  if (active.role === "vendor" && active.vendorId) {
+    const [req2] = await db
+      .select()
+      .from(requirementsTable)
+      .where(eq(requirementsTable.id, app.requirementId))
+      .limit(1);
+    isVendorOwner = req2?.vendorId === active.vendorId;
+  }
+  if (!isTrainerOwner && !isVendorOwner) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const messages = await db
+    .select()
+    .from(messagesTable)
+    .where(eq(messagesTable.applicationId, params.data.id))
+    .orderBy(asc(messagesTable.createdAt));
+  res.json(
+    messages.map((m) => ({
+      id: m.id,
+      applicationId: m.applicationId,
+      senderUserId: m.senderUserId,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+    })),
+  );
+});
+
+router.post("/applications/:id/messages", async (req, res) => {
+  const params = SendApplicationMessageParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const body = SendApplicationMessageBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "invalid body", details: body.error.issues });
+    return;
+  }
+  if (!body.data.body.trim()) {
+    res.status(400).json({ error: "message body cannot be empty" });
+    return;
+  }
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active) {
+    res.status(401).json({ error: "unauthenticated" });
+    return;
+  }
+  const [app] = await db
+    .select()
+    .from(applicationsTable)
+    .where(eq(applicationsTable.id, params.data.id))
+    .limit(1);
+  if (!app) {
+    res.status(404).json({ error: "application not found" });
+    return;
+  }
+  const isTrainerOwner = active.role === "trainer" && active.trainerId === app.trainerId;
+  let isVendorOwner = false;
+  if (active.role === "vendor" && active.vendorId) {
+    const [req2] = await db
+      .select()
+      .from(requirementsTable)
+      .where(eq(requirementsTable.id, app.requirementId))
+      .limit(1);
+    isVendorOwner = req2?.vendorId === active.vendorId;
+  }
+  if (!isTrainerOwner && !isVendorOwner) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const [msg] = await db
+    .insert(messagesTable)
+    .values({
+      id: newId("msg"),
+      applicationId: params.data.id,
+      senderUserId: active.id,
+      body: body.data.body.trim(),
+    })
+    .returning();
+  res.status(201).json({
+    id: msg!.id,
+    applicationId: msg!.applicationId,
+    senderUserId: msg!.senderUserId,
+    body: msg!.body,
+    createdAt: msg!.createdAt.toISOString(),
   });
 });
 
