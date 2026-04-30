@@ -33,6 +33,7 @@ function serializeTrainer(t: typeof trainersTable.$inferSelect) {
     verified: t.verified,
     avatarUrl: t.avatarUrl,
     availability: t.availability ?? undefined,
+    engagedDates: t.engagedDates ?? [],
   };
 }
 

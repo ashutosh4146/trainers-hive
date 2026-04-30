@@ -23,8 +23,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2, CalendarDays } from "lucide-react";
+import { formatDistanceToNow, format } from "date-fns";
+
+type EngagedRange = { startDate: string; endDate: string; note?: string };
 
 export default function TrainerDetail() {
   const params = useParams<{ id: string }>();
@@ -437,6 +439,47 @@ export default function TrainerDetail() {
                   <p className="text-xs text-muted-foreground">{trainer.availability || "Contact for availability"}</p>
                 </div>
               </div>
+              {(() => {
+                const engaged = ((trainer as { engagedDates?: EngagedRange[] }).engagedDates ?? [])
+                  .filter((r) => r?.endDate && r.endDate >= new Date().toISOString().slice(0, 10))
+                  .sort((a, b) => a.startDate.localeCompare(b.startDate));
+                return (
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <CalendarDays className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">Engaged Dates</p>
+                      {engaged.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No upcoming engagements</p>
+                      ) : (
+                        <ul className="mt-1 space-y-1">
+                          {engaged.slice(0, 5).map((r, idx) => {
+                            let label = `${r.startDate} – ${r.endDate}`;
+                            try {
+                              label = `${format(new Date(r.startDate + "T00:00:00"), "MMM d")} – ${format(
+                                new Date(r.endDate + "T00:00:00"),
+                                "MMM d, yyyy",
+                              )}`;
+                            } catch {
+                              // keep iso fallback
+                            }
+                            return (
+                              <li key={`${r.startDate}-${r.endDate}-${idx}`} className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground">{label}</span>
+                                {r.note ? <span className="ml-1">· {r.note}</span> : null}
+                              </li>
+                            );
+                          })}
+                          {engaged.length > 5 && (
+                            <li className="text-xs text-muted-foreground">+{engaged.length - 5} more</li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
           

@@ -37,6 +37,14 @@ export interface SkillCategory {
   skills: string[];
 }
 
+export interface EngagedDateRange {
+  /** ISO date YYYY-MM-DD (inclusive) */
+  startDate: string;
+  /** ISO date YYYY-MM-DD (inclusive) */
+  endDate: string;
+  note?: string;
+}
+
 export interface Trainer {
   id: string;
   name: string;
@@ -52,6 +60,7 @@ export interface Trainer {
   verified: boolean;
   avatarUrl: string;
   availability?: string;
+  engagedDates: EngagedDateRange[];
 }
 
 export type TrainerDetail = Trainer & {
@@ -73,6 +82,7 @@ export interface UpdateTrainerBody {
   hourlyRate?: number;
   bio?: string;
   availability?: string;
+  engagedDates?: EngagedDateRange[];
 }
 
 export interface Vendor {

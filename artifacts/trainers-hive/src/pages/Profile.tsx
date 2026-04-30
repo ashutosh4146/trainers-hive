@@ -26,7 +26,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, ShieldAlert } from "lucide-react";
+import { CheckCircle2, ShieldAlert, CalendarPlus, Trash2, CalendarDays } from "lucide-react";
+import { format } from "date-fns";
 
 // --- Vendor Form ---
 
@@ -343,6 +344,186 @@ function TrainerProfile({ trainerId }: { trainerId: string }) {
   );
 }
 
+// --- Trainer Availability (Engaged Dates) ---
+
+type EngagedRange = { startDate: string; endDate: string; note?: string };
+
+function TrainerAvailability({ trainerId }: { trainerId: string }) {
+  const { data: trainer, isLoading } = useGetTrainer(trainerId, {
+    query: { enabled: !!trainerId, queryKey: getGetTrainerQueryKey(trainerId) },
+  });
+  const updateTrainer = useUpdateTrainer();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [start, setStart] = React.useState("");
+  const [end, setEnd] = React.useState("");
+  const [note, setNote] = React.useState("");
+
+  const engaged: EngagedRange[] = React.useMemo(() => {
+    const raw = (trainer as { engagedDates?: EngagedRange[] } | undefined)?.engagedDates;
+    return Array.isArray(raw) ? raw : [];
+  }, [trainer]);
+
+  const sorted = React.useMemo(
+    () => [...engaged].sort((a, b) => a.startDate.localeCompare(b.startDate)),
+    [engaged],
+  );
+
+  const persist = (next: EngagedRange[]) => {
+    updateTrainer.mutate(
+      { id: trainerId, data: { engagedDates: next } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetTrainerQueryKey(trainerId) });
+          queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Could not save your availability", variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  const handleAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!start || !end) {
+      toast({ title: "Pick both dates", description: "Start and end dates are required.", variant: "destructive" });
+      return;
+    }
+    if (end < start) {
+      toast({ title: "Invalid range", description: "End date must be on or after start date.", variant: "destructive" });
+      return;
+    }
+    const next: EngagedRange[] = [
+      ...engaged,
+      { startDate: start, endDate: end, ...(note.trim() ? { note: note.trim() } : {}) },
+    ];
+    persist(next);
+    setStart("");
+    setEnd("");
+    setNote("");
+  };
+
+  const handleRemove = (idx: number) => {
+    const next = engaged.filter((_, i) => i !== idx);
+    persist(next);
+  };
+
+  if (isLoading) {
+    return (
+      <Card className="mt-6">
+        <CardHeader>
+          <Skeleton className="h-6 w-48" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-primary" />
+          <div>
+            <CardTitle>Engaged Dates</CardTitle>
+            <CardDescription>
+              Mark the dates you're already booked. Vendors will see these, and you won't be able to apply to
+              requirements that overlap with these dates.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div className="space-y-1">
+            <Label htmlFor="engaged-start">Start date</Label>
+            <Input
+              id="engaged-start"
+              type="date"
+              value={start}
+              min={todayIso}
+              onChange={(e) => setStart(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="engaged-end">End date</Label>
+            <Input
+              id="engaged-end"
+              type="date"
+              value={end}
+              min={start || todayIso}
+              onChange={(e) => setEnd(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1 md:col-span-1">
+            <Label htmlFor="engaged-note">Note (optional)</Label>
+            <Input
+              id="engaged-note"
+              placeholder="e.g. Acme Corp training"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={120}
+            />
+          </div>
+          <Button type="submit" disabled={updateTrainer.isPending} className="md:w-auto">
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Add
+          </Button>
+        </form>
+
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Your booked periods</div>
+          {sorted.length === 0 ? (
+            <div className="text-sm text-muted-foreground border rounded-md p-4 bg-muted/30">
+              No engaged dates yet. You're shown as available for all upcoming requirements.
+            </div>
+          ) : (
+            <ul className="divide-y rounded-md border">
+              {sorted.map((r, idx) => {
+                const realIdx = engaged.indexOf(r);
+                let label = `${r.startDate} → ${r.endDate}`;
+                try {
+                  label = `${format(new Date(r.startDate + "T00:00:00"), "MMM d, yyyy")} → ${format(
+                    new Date(r.endDate + "T00:00:00"),
+                    "MMM d, yyyy",
+                  )}`;
+                } catch {
+                  // keep iso fallback
+                }
+                return (
+                  <li key={`${r.startDate}-${r.endDate}-${idx}`} className="flex items-center justify-between p-3">
+                    <div>
+                      <div className="font-medium text-sm">{label}</div>
+                      {r.note && <div className="text-xs text-muted-foreground">{r.note}</div>}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemove(realIdx)}
+                      disabled={updateTrainer.isPending}
+                      aria-label="Remove engaged dates"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Common Components ---
 
 function ProfileSkeleton() {
@@ -379,7 +560,12 @@ export default function Profile() {
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
         {user.role === 'vendor' && user.vendorId && <VendorProfile vendorId={user.vendorId} />}
-        {user.role === 'trainer' && user.trainerId && <TrainerProfile trainerId={user.trainerId} />}
+        {user.role === 'trainer' && user.trainerId && (
+          <>
+            <TrainerProfile trainerId={user.trainerId} />
+            <TrainerAvailability trainerId={user.trainerId} />
+          </>
+        )}
         {user.role === 'admin' && (
           <Card className="bg-muted/50 border-dashed">
             <CardContent className="py-12 flex flex-col items-center justify-center text-center">
