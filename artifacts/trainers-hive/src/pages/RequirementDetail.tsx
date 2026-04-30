@@ -14,11 +14,13 @@ import {
   useFlagRequirement,
   useUnflagRequirement,
   useListMyApplications,
+  useGetSuggestedTrainers,
   getListMyApplicationsQueryKey,
   getGetRequirementQueryKey,
   getGetTrainerQueryKey,
   getListRequirementApplicationsQueryKey,
-  getListRequirementsQueryKey
+  getListRequirementsQueryKey,
+  getGetSuggestedTrainersQueryKey,
 } from "@workspace/api-client-react";
 import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { MessageThread } from "@/components/MessageThread";
@@ -93,6 +95,11 @@ export default function RequirementDetail() {
     query: { enabled: !!trainerId, queryKey: getListMyApplicationsQueryKey() },
   });
   const myApplication = myApplications?.find((a) => a.requirementId === id);
+
+  const isVendorOrAdmin = user?.role === "vendor" || user?.role === "admin";
+  const { data: suggestedTrainers, isLoading: suggestedLoading } = useGetSuggestedTrainers(id, {
+    query: { enabled: !!id && isVendorOrAdmin, queryKey: getGetSuggestedTrainersQueryKey(id) },
+  });
 
   const applyMutation = useApplyToRequirement();
   const updateAppMutation = useUpdateApplicationStatus();
@@ -579,6 +586,49 @@ export default function RequirementDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {isVendorOrAdmin && (suggestedLoading || (suggestedTrainers && suggestedTrainers.length > 0)) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Suggested Trainers</CardTitle>
+                <CardDescription>Trainers whose skills match this requirement</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {suggestedLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-3.5 w-28" />
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  suggestedTrainers?.map((trainer) => (
+                    <div key={trainer.id} className="flex items-center gap-3 group">
+                      <Avatar className="h-9 w-9 shrink-0">
+                        <AvatarImage src={trainer.avatarUrl} />
+                        <AvatarFallback>{trainer.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{trainer.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{trainer.mainSkill}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-xs font-medium text-amber-600">★ {trainer.rating.toFixed(1)}</span>
+                        <Link href={`/trainers/${trainer.id}`}>
+                          <span className="text-xs text-primary hover:underline flex items-center gap-0.5">
+                            View <ArrowRight className="h-3 w-3" />
+                          </span>
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
