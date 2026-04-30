@@ -15,7 +15,10 @@ import {
   useUpdateHireInquiryStatus,
   useDeleteRequirement,
   useUnflagRequirement,
+  useListSavedTrainers,
+  useUnsaveTrainer,
   getListRequirementsQueryKey,
+  getListSavedTrainersQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +54,7 @@ import {
   Flag,
   Trash2,
   MessageSquare,
+  Bookmark,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +73,25 @@ type VerificationRequest = {
 function VendorDashboard({ vendorId }: { vendorId: string }) {
   const { data: stats, isLoading: statsLoading } = useGetVendorStats();
   const { data: requirements, isLoading: reqsLoading } = useListRequirements({ vendorId });
+  const { data: savedTrainers, isLoading: savedLoading } = useListSavedTrainers(vendorId, {
+    query: { queryKey: getListSavedTrainersQueryKey(vendorId) },
+  });
+  const unsaveTrainer = useUnsaveTrainer();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleUnsave = (trainerId: string, trainerName: string) => {
+    unsaveTrainer.mutate(
+      { id: vendorId, trainerId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListSavedTrainersQueryKey(vendorId) });
+          toast({ title: `Removed ${trainerName} from saved trainers` });
+        },
+        onError: () => toast({ title: "Error", description: "Could not remove bookmark.", variant: "destructive" }),
+      },
+    );
+  };
 
   if (statsLoading) return <DashboardSkeleton />;
 
@@ -170,6 +193,70 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
               <Link href="/requirements/new">
                 <Button>Post Requirement</Button>
               </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Saved Trainers */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Bookmark className="h-5 w-5 text-primary" /> Saved Trainers
+            </CardTitle>
+            <CardDescription>Trainers you've bookmarked for future engagements</CardDescription>
+          </div>
+          <Badge variant="outline" className="text-xs">
+            {savedTrainers?.length ?? 0} saved
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {savedLoading ? (
+            <Skeleton className="h-[120px] w-full" />
+          ) : !savedTrainers?.length ? (
+            <div className="text-center py-10 border border-dashed rounded-lg">
+              <Bookmark className="mx-auto h-8 w-8 text-muted-foreground mb-3 opacity-40" />
+              <p className="font-medium text-muted-foreground">No saved trainers yet</p>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">Browse trainers and click "Save Trainer" to keep track of them here.</p>
+              <Link href="/trainers"><Button variant="outline" size="sm">Browse Trainers</Button></Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {savedTrainers.map((s) => (
+                <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border gap-4 hover:border-primary/30 transition-colors">
+                  <Link href={`/trainers/${s.trainer.id}`} className="flex items-center gap-3 min-w-0 flex-1">
+                    <img
+                      src={s.trainer.avatarUrl}
+                      alt={s.trainer.name}
+                      className="h-10 w-10 rounded-full object-cover shrink-0 bg-muted"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{s.trainer.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{s.trainer.mainSkill}</p>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        <span>{s.trainer.rating.toFixed(1)}</span>
+                        <span className="ml-2">{s.trainer.location}</span>
+                      </div>
+                    </div>
+                  </Link>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link href={`/trainers/${s.trainer.id}`}>
+                      <Button size="sm" variant="outline" className="text-xs">View</Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      disabled={unsaveTrainer.isPending}
+                      onClick={() => handleUnsave(s.trainer.id, s.trainer.name)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
