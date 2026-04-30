@@ -15,12 +15,14 @@ import {
   useUnflagRequirement,
   useListMyApplications,
   useGetSuggestedTrainers,
+  useCreateTrainerReview,
   getListMyApplicationsQueryKey,
   getGetRequirementQueryKey,
   getGetTrainerQueryKey,
   getListRequirementApplicationsQueryKey,
   getListRequirementsQueryKey,
   getGetSuggestedTrainersQueryKey,
+  getListTrainerReviewsQueryKey,
 } from "@workspace/api-client-react";
 import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { MessageThread } from "@/components/MessageThread";
@@ -34,7 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX, Flag, AlertTriangle, MessageSquare } from "lucide-react";
+import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX, Flag, AlertTriangle, MessageSquare, Star } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
 type EngagedRange = { startDate: string; endDate: string; note?: string };
@@ -106,6 +108,7 @@ export default function RequirementDetail() {
   const updateReqMutation = useUpdateRequirement();
   const flagMutation = useFlagRequirement();
   const unflagMutation = useUnflagRequirement();
+  const createReview = useCreateTrainerReview();
 
   const [message, setMessage] = useState("");
   const [proposedRate, setProposedRate] = useState<string>("");
@@ -115,6 +118,49 @@ export default function RequirementDetail() {
   const [customFlagReason, setCustomFlagReason] = useState("");
   const [messageAppId, setMessageAppId] = useState<string | null>(null);
   const [messageAppName, setMessageAppName] = useState<string>("");
+
+  const [reviewTrainerId, setReviewTrainerId] = useState<string | null>(null);
+  const [reviewTrainerName, setReviewTrainerName] = useState<string>("");
+  const [reviewContent, setReviewContent] = useState(5);
+  const [reviewDelivery, setReviewDelivery] = useState(5);
+  const [reviewPunctuality, setReviewPunctuality] = useState(5);
+  const [reviewCommunication, setReviewCommunication] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewTitle, setReviewTitle] = useState("");
+
+  const handleSubmitReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewTrainerId || !reviewComment.trim()) return;
+    createReview.mutate(
+      {
+        id: reviewTrainerId,
+        data: {
+          ratingContent: reviewContent,
+          ratingDelivery: reviewDelivery,
+          ratingPunctuality: reviewPunctuality,
+          ratingCommunication: reviewCommunication,
+          comment: reviewComment,
+          engagementTitle: reviewTitle || requirement?.title,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Review submitted", description: "Thank you for your feedback!" });
+          queryClient.invalidateQueries({ queryKey: getListTrainerReviewsQueryKey(reviewTrainerId) });
+          setReviewTrainerId(null);
+          setReviewComment("");
+          setReviewTitle("");
+          setReviewContent(5);
+          setReviewDelivery(5);
+          setReviewPunctuality(5);
+          setReviewCommunication(5);
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Could not submit review.", variant: "destructive" });
+        },
+      },
+    );
+  };
 
   const resolvedFlagReason = flagReason === "Other" ? customFlagReason.trim() : flagReason;
 
@@ -543,6 +589,20 @@ export default function RequirementDetail() {
                                 Message
                               </Button>
                             )}
+                            {app.status === 'hired' && isVendorOwner && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5"
+                                onClick={() => {
+                                  setReviewTrainerId(app.trainer.id);
+                                  setReviewTrainerName(app.trainer.name);
+                                }}
+                              >
+                                <Star className="h-3.5 w-3.5" />
+                                Review
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -641,6 +701,70 @@ export default function RequirementDetail() {
           title={`Message — ${messageAppName}`}
         />
       )}
+
+      <Dialog open={!!reviewTrainerId} onOpenChange={(open) => { if (!open) setReviewTrainerId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review {reviewTrainerName}</DialogTitle>
+            <DialogDescription>Rate this trainer across 4 dimensions. Your review helps other vendors make informed decisions.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmitReview} className="space-y-4 pt-2">
+            <div className="space-y-3">
+              <Label>Ratings</Label>
+              {(
+                [
+                  { label: "Content Quality", value: reviewContent, set: setReviewContent },
+                  { label: "Delivery", value: reviewDelivery, set: setReviewDelivery },
+                  { label: "Punctuality", value: reviewPunctuality, set: setReviewPunctuality },
+                  { label: "Communication", value: reviewCommunication, set: setReviewCommunication },
+                ] as const
+              ).map(({ label, value, set }) => (
+                <div key={label} className="flex items-center justify-between gap-3">
+                  <span className="text-sm w-36 shrink-0">{label}</span>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => set(star)}
+                        className="focus:outline-none transition-transform hover:scale-110 active:scale-95"
+                      >
+                        <Star className={`h-5 w-5 ${value >= star ? 'fill-amber-500 text-amber-500' : 'text-muted'}`} />
+                      </button>
+                    ))}
+                    <span className="text-xs text-muted-foreground ml-1 w-4">{value}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="review-title">Engagement title (optional)</Label>
+              <Input
+                id="review-title"
+                placeholder={requirement?.title ?? "e.g. Advanced React Workshop"}
+                value={reviewTitle}
+                onChange={(e) => setReviewTitle(e.target.value)}
+                disabled={createReview.isPending}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="review-comment">Comment</Label>
+              <Textarea
+                id="review-comment"
+                placeholder="How was the training? What did they do well?"
+                rows={4}
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                disabled={createReview.isPending}
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={createReview.isPending || !reviewComment.trim()}>
+              {createReview.isPending ? "Submitting..." : "Submit Review"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
