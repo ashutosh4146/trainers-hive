@@ -2,7 +2,7 @@ import React from "react";
 
 const AUTH_KEY = "th_auth";
 
-export type UserRole = "trainer" | "vendor" | "college";
+export type UserRole = "trainer" | "vendor" | "college" | "admin";
 
 export interface AuthState {
   signedIn: boolean;
@@ -67,6 +67,7 @@ export function roleRequiresBusinessEmail(role: UserRole): boolean {
 
 export function getRoleSessionKey(role: UserRole): "vendor" | "trainer" | "admin" {
   if (role === "college") return "vendor";
+  if (role === "admin") return "admin";
   return role;
 }
 
@@ -75,5 +76,6 @@ export function getRoleLabel(role: UserRole): string {
     case "trainer": return "Trainer";
     case "vendor": return "Vendor";
     case "college": return "College / Company";
+    case "admin": return "Admin";
   }
 }

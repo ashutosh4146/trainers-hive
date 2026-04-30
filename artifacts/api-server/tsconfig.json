@@ -3,7 +3,11 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "drizzle-orm": ["../../lib/db/node_modules/drizzle-orm/index.d.ts"],
+      "drizzle-orm/*": ["../../lib/db/node_modules/drizzle-orm/*"]
+    }
   },
   "include": ["src"],
   "references": [

@@ -183,6 +183,10 @@ router.patch("/admin/users/:id/role", async (req, res) => {
     res.status(404).json({ error: "user not found" });
     return;
   }
+  if (existing.role === "admin") {
+    res.status(400).json({ error: "cannot change role of an admin account" });
+    return;
+  }
 
   const [updated] = await db
     .update(usersTable)

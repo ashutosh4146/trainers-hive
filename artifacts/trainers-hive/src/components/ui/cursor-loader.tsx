@@ -41,10 +41,10 @@ export function CursorLoader() {
   useEffect(() => {
     if (isLoading) {
       setVisible(true);
-    } else {
-      const t = setTimeout(() => setVisible(false), 300);
-      return () => clearTimeout(t);
+      return;
     }
+    const t = setTimeout(() => setVisible(false), 300);
+    return () => clearTimeout(t);
   }, [isLoading]);
 
   if (!visible) return null;
