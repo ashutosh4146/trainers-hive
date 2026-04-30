@@ -144,6 +144,11 @@ router.post("/auth/password/login", async (req, res) => {
     return;
   }
 
+  if (user.deactivatedAt) {
+    res.status(403).json({ error: "account_deactivated", message: "Your account has been deactivated. Please contact support." });
+    return;
+  }
+
   // Always set the server-side session so login works even if Firebase is misconfigured
   const { setActiveUserId } = await import("../lib/session.js");
   await setActiveUserId(user.id);
