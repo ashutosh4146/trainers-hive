@@ -300,13 +300,49 @@ export const ListTrainerReviewsParams = zod.object({
   id: zod.coerce.string(),
 });
 
+export const listTrainerReviewsResponseRatingContentMax = 5;
+
+export const listTrainerReviewsResponseRatingDeliveryMax = 5;
+
+export const listTrainerReviewsResponseRatingPunctualityMax = 5;
+
+export const listTrainerReviewsResponseRatingCommunicationMax = 5;
+
 export const ListTrainerReviewsResponseItem = zod.object({
   id: zod.string(),
   trainerId: zod.string(),
   vendorId: zod.string(),
   vendorName: zod.string(),
   vendorLogoUrl: zod.string().optional(),
-  rating: zod.number(),
+  rating: zod
+    .number()
+    .describe(
+      "Aggregate star rating (1–5); equals average of dimension scores for new reviews",
+    ),
+  ratingContent: zod
+    .number()
+    .min(1)
+    .max(listTrainerReviewsResponseRatingContentMax)
+    .optional()
+    .describe("Content Quality score"),
+  ratingDelivery: zod
+    .number()
+    .min(1)
+    .max(listTrainerReviewsResponseRatingDeliveryMax)
+    .optional()
+    .describe("Delivery score"),
+  ratingPunctuality: zod
+    .number()
+    .min(1)
+    .max(listTrainerReviewsResponseRatingPunctualityMax)
+    .optional()
+    .describe("Punctuality score"),
+  ratingCommunication: zod
+    .number()
+    .min(1)
+    .max(listTrainerReviewsResponseRatingCommunicationMax)
+    .optional()
+    .describe("Communication score"),
   comment: zod.string(),
   engagementTitle: zod.string().optional(),
   createdAt: zod.coerce.date(),
@@ -319,10 +355,35 @@ export const CreateTrainerReviewParams = zod.object({
   id: zod.coerce.string(),
 });
 
-export const createTrainerReviewBodyRatingMax = 5;
+export const createTrainerReviewBodyRatingContentMax = 5;
+
+export const createTrainerReviewBodyRatingDeliveryMax = 5;
+
+export const createTrainerReviewBodyRatingPunctualityMax = 5;
+
+export const createTrainerReviewBodyRatingCommunicationMax = 5;
 
 export const CreateTrainerReviewBody = zod.object({
-  rating: zod.number().min(1).max(createTrainerReviewBodyRatingMax),
+  ratingContent: zod
+    .number()
+    .min(1)
+    .max(createTrainerReviewBodyRatingContentMax)
+    .describe("Content Quality score"),
+  ratingDelivery: zod
+    .number()
+    .min(1)
+    .max(createTrainerReviewBodyRatingDeliveryMax)
+    .describe("Delivery score"),
+  ratingPunctuality: zod
+    .number()
+    .min(1)
+    .max(createTrainerReviewBodyRatingPunctualityMax)
+    .describe("Punctuality score"),
+  ratingCommunication: zod
+    .number()
+    .min(1)
+    .max(createTrainerReviewBodyRatingCommunicationMax)
+    .describe("Communication score"),
   comment: zod.string(),
   engagementTitle: zod.string().optional(),
 });
@@ -371,6 +432,72 @@ export const UpdateVendorResponse = zod.object({
   logoUrl: zod.string(),
   verified: zod.boolean(),
   websiteUrl: zod.string().optional(),
+});
+
+/**
+ * @summary Get all trainers bookmarked by a vendor
+ */
+export const ListSavedTrainersParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ListSavedTrainersResponseItem = zod.object({
+  id: zod.string(),
+  trainerId: zod.string(),
+  vendorId: zod.string(),
+  savedAt: zod.string(),
+  trainer: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    headline: zod.string(),
+    mainSkill: zod.string(),
+    subSkills: zod.array(zod.string()),
+    experienceYears: zod.number().describe("Years of experience as a trainer"),
+    developmentExperienceYears: zod
+      .number()
+      .describe("Years of hands-on development experience"),
+    location: zod.string(),
+    remote: zod.boolean(),
+    rating: zod.number(),
+    reviewCount: zod.number(),
+    hourlyRate: zod.number(),
+    verified: zod.boolean(),
+    avatarUrl: zod.string(),
+    availability: zod.string().optional(),
+    trainerType: zod
+      .enum(["trainer", "developer", "both"])
+      .optional()
+      .describe("Whether the user is a full-time trainer, developer, or both"),
+    engagedDates: zod.array(
+      zod.object({
+        startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        endDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        note: zod.string().optional(),
+      }),
+    ),
+  }),
+});
+export const ListSavedTrainersResponse = zod.array(
+  ListSavedTrainersResponseItem,
+);
+
+/**
+ * @summary Bookmark a trainer for a vendor
+ */
+export const SaveTrainerParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SaveTrainerBody = zod.object({
+  trainerId: zod.string(),
+});
+
+/**
+ * @summary Remove a trainer bookmark for a vendor
+ */
+export const UnsaveTrainerParams = zod.object({
+  id: zod.coerce.string(),
+  trainerId: zod.coerce.string(),
 });
 
 /**
