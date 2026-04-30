@@ -11,6 +11,8 @@ import {
   useUpdateApplicationStatus,
   useUpdateRequirement,
   useDeleteRequirement,
+  useFlagRequirement,
+  useUnflagRequirement,
   getGetRequirementQueryKey,
   getGetTrainerQueryKey,
   getListRequirementApplicationsQueryKey,
@@ -27,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX } from "lucide-react";
+import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX, Flag, AlertTriangle } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
 type EngagedRange = { startDate: string; endDate: string; note?: string };
@@ -88,10 +90,37 @@ export default function RequirementDetail() {
   const applyMutation = useApplyToRequirement();
   const updateAppMutation = useUpdateApplicationStatus();
   const updateReqMutation = useUpdateRequirement();
+  const flagMutation = useFlagRequirement();
+  const unflagMutation = useUnflagRequirement();
 
   const [message, setMessage] = useState("");
   const [proposedRate, setProposedRate] = useState<string>("");
   const [isApplyOpen, setIsApplyOpen] = useState(false);
+  const [isFlagOpen, setIsFlagOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
+  const [customFlagReason, setCustomFlagReason] = useState("");
+
+  const resolvedFlagReason = flagReason === "Other" ? customFlagReason.trim() : flagReason;
+
+  const handleFlag = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resolvedFlagReason) return;
+    flagMutation.mutate(
+      { id, data: { reason: resolvedFlagReason } },
+      {
+        onSuccess: () => {
+          toast({ title: "Requirement flagged", description: "The admin team has been notified." });
+          setIsFlagOpen(false);
+          setFlagReason("");
+          setCustomFlagReason("");
+          queryClient.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to flag requirement.", variant: "destructive" });
+        },
+      }
+    );
+  };
 
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,10 +229,16 @@ export default function RequirementDetail() {
         <CardContent className="p-8 sm:p-10">
           <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
             <div className="flex-1 space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <Badge variant={requirement.status === 'open' ? 'default' : requirement.status === 'vacant' ? 'destructive' : 'secondary'} className="capitalize">
                   {requirement.status}
                 </Badge>
+                {(requirement as any).flagged && (
+                  <Badge variant="destructive" className="flex items-center gap-1">
+                    <Flag className="h-3 w-3" />
+                    Flagged
+                  </Badge>
+                )}
                 <span className="text-sm text-muted-foreground">
                   Posted {formatDistanceToNow(new Date(requirement.createdAt), { addSuffix: true })}
                 </span>
@@ -335,6 +370,78 @@ export default function RequirementDetail() {
                       navigate("/requirements");
                     }}
                   />
+                </div>
+              )}
+              {isTrainer && !(requirement as any).flagged && (
+                <Dialog open={isFlagOpen} onOpenChange={setIsFlagOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="mt-2 gap-1.5 text-muted-foreground border-muted-foreground/30 hover:border-destructive/50 hover:text-destructive">
+                      <Flag className="h-3.5 w-3.5" />
+                      Flag this Requirement
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                        Flag Requirement
+                      </DialogTitle>
+                      <DialogDescription>
+                        Report a concern about this requirement to the admin team. Only use this for genuine issues.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleFlag} className="space-y-4 pt-2">
+                      <div className="space-y-2">
+                        <Label>Reason</Label>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {[
+                            "Misleading or inaccurate information",
+                            "Spam or duplicate listing",
+                            "Inappropriate or offensive content",
+                            "Unrealistic expectations or pay",
+                            "Suspected fraud",
+                            "Other",
+                          ].map((r) => (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => setFlagReason(r)}
+                              className={`text-left rounded-md border px-3 py-2 text-sm transition-colors ${
+                                flagReason === r
+                                  ? "border-destructive bg-destructive/10 text-destructive"
+                                  : "border-input hover:border-muted-foreground/50"
+                              }`}
+                            >
+                              {r}
+                            </button>
+                          ))}
+                        </div>
+                        {flagReason === "Other" && (
+                          <Textarea
+                            placeholder="Describe the issue…"
+                            className="mt-2 min-h-[80px]"
+                            value={customFlagReason}
+                            onChange={(e) => setCustomFlagReason(e.target.value)}
+                          />
+                        )}
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="destructive"
+                        className="w-full gap-2"
+                        disabled={!resolvedFlagReason || flagMutation.isPending}
+                      >
+                        <Flag className="h-4 w-4" />
+                        {flagMutation.isPending ? "Flagging…" : "Submit Flag"}
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              )}
+              {isTrainer && (requirement as any).flagged && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
+                  <Flag className="h-3.5 w-3.5" />
+                  You have flagged this requirement
                 </div>
               )}
             </div>
