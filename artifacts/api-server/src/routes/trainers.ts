@@ -148,9 +148,19 @@ router.patch("/trainers/:id", async (req, res) => {
   // so direct API callers cannot poison conflict detection.
   if (body.data.engagedDates) {
     const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+    const isRealDate = (s: string) => {
+      if (!isoRe.test(s)) return false;
+      const [y, m, d] = s.split("-").map(Number);
+      const dt = new Date(Date.UTC(y!, m! - 1, d!));
+      return (
+        dt.getUTCFullYear() === y &&
+        dt.getUTCMonth() === m! - 1 &&
+        dt.getUTCDate() === d
+      );
+    };
     for (const r of body.data.engagedDates) {
-      if (!isoRe.test(r.startDate) || !isoRe.test(r.endDate)) {
-        res.status(400).json({ error: "engagedDates must use YYYY-MM-DD" });
+      if (!isRealDate(r.startDate) || !isRealDate(r.endDate)) {
+        res.status(400).json({ error: "engagedDates must be valid YYYY-MM-DD calendar dates" });
         return;
       }
       if (r.endDate < r.startDate) {
