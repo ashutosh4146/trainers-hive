@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
   useGetCurrentUser,
@@ -50,9 +50,11 @@ import {
   ShieldCheck,
   Flag,
   Trash2,
+  MessageSquare,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { MessageThread } from "@/components/MessageThread";
 
 type VerificationRequest = {
   id: string;
@@ -176,9 +178,13 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
   );
 }
 
-function TrainerDashboard({ trainerId }: { trainerId: string }) {
+function TrainerDashboard({ trainerId: _trainerId }: { trainerId: string }) {
+  const { data: user } = useGetCurrentUser();
   const { data: stats, isLoading: statsLoading } = useGetTrainerStats();
   const { data: applications, isLoading: appsLoading } = useListMyApplications();
+  const [messageAppId, setMessageAppId] = useState<string | null>(null);
+  const [messageAppTitle, setMessageAppTitle] = useState<string>("");
+  const [, navigate] = useLocation();
 
   if (statsLoading) return <DashboardSkeleton />;
 
@@ -240,29 +246,51 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
             <Skeleton className="h-[200px] w-full" />
           ) : applications && applications.length > 0 ? (
             <div className="space-y-4">
-              {applications.map(app => (
-                <Link key={app.id} href={`/requirements/${app.requirementId}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors bg-card gap-4 hover:shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-10 w-10 rounded-md border">
-                      <AvatarImage src={app.requirement.vendorLogoUrl} />
-                      <AvatarFallback className="rounded-md">V</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h4 className="font-semibold">{app.requirement.title}</h4>
-                      <p className="text-sm text-muted-foreground">{app.requirement.vendorName}</p>
+              {applications.map(app => {
+                const canMessage = app.status === 'shortlisted' || app.status === 'hired';
+                return (
+                  <div
+                    key={app.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors bg-card gap-4 hover:shadow-sm cursor-pointer"
+                    onClick={() => navigate(`/requirements/${app.requirementId}`)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <Avatar className="h-10 w-10 rounded-md border">
+                        <AvatarImage src={app.requirement.vendorLogoUrl} />
+                        <AvatarFallback className="rounded-md">V</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h4 className="font-semibold">{app.requirement.title}</h4>
+                        <p className="text-sm text-muted-foreground">{app.requirement.vendorName}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 sm:justify-end flex-wrap">
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Proposed: </span>
+                        <span className="font-medium">${app.proposedRate}</span>
+                      </div>
+                      <Badge variant={app.status === 'hired' ? 'default' : app.status === 'shortlisted' ? 'secondary' : app.status === 'rejected' ? 'destructive' : 'outline'} className="capitalize w-24 justify-center">
+                        {app.status}
+                      </Badge>
+                      {canMessage && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMessageAppId(app.id);
+                            setMessageAppTitle(app.requirement.title);
+                          }}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          Message
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-6 sm:justify-end">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Proposed: </span>
-                      <span className="font-medium">${app.proposedRate}</span>
-                    </div>
-                    <Badge variant={app.status === 'hired' ? 'default' : app.status === 'shortlisted' ? 'secondary' : app.status === 'rejected' ? 'destructive' : 'outline'} className="capitalize w-24 justify-center">
-                      {app.status}
-                    </Badge>
-                  </div>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12 border border-dashed rounded-lg">
@@ -276,6 +304,16 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
           )}
         </CardContent>
       </Card>
+
+      {messageAppId && user?.id && (
+        <MessageThread
+          applicationId={messageAppId}
+          currentUserId={user.id}
+          open={!!messageAppId}
+          onOpenChange={(open) => { if (!open) setMessageAppId(null); }}
+          title={`Message — ${messageAppTitle}`}
+        />
+      )}
     </div>
   );
 }
