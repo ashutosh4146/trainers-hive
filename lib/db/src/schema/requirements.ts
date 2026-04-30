@@ -34,6 +34,11 @@ export const requirementsTable = pgTable("requirements", {
   language: text("language"),               // specific language required (optional)
   trainerScope: text("trainer_scope"),      // "local" | "pan-india"
   startDate: text("start_date"),            // expected start date (ISO string)
+  // Flagging
+  flagged: boolean("flagged").notNull().default(false),
+  flagReason: text("flag_reason"),
+  flaggedBy: text("flagged_by"),            // trainer id
+  flaggedAt: timestamp("flagged_at", { withTimezone: true }),
 });
 
 export type Requirement = typeof requirementsTable.$inferSelect;
