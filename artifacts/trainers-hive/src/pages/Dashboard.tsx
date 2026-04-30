@@ -17,8 +17,10 @@ import {
   useUnflagRequirement,
   useListSavedTrainers,
   useUnsaveTrainer,
+  useGetTrainer,
   getListRequirementsQueryKey,
   getListSavedTrainersQueryKey,
+  getGetTrainerQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -269,12 +271,15 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
   const { data: user } = useGetCurrentUser();
   const { data: stats, isLoading: statsLoading } = useGetTrainerStats();
   const { data: applications, isLoading: appsLoading } = useListMyApplications();
+  const { data: trainerProfile } = useGetTrainer(trainerId, {
+    query: { enabled: !!trainerId, queryKey: getGetTrainerQueryKey(trainerId) },
+  });
   const { data: matchingReqs, isLoading: matchLoading } = useListRequirements(
     { status: "open" },
     { query: { queryKey: [...getListRequirementsQueryKey({ status: "open" }), "trainer", trainerId] } },
   );
   const top5 = matchingReqs?.slice(0, 5) ?? [];
-  const hasNoSkills = !user || (user as typeof user & { mainSkill?: string }).mainSkill === "";
+  const hasNoSkills = !!trainerProfile && !trainerProfile.mainSkill;
   const [messageAppId, setMessageAppId] = useState<string | null>(null);
   const [messageAppTitle, setMessageAppTitle] = useState<string>("");
   const [, navigate] = useLocation();
@@ -373,7 +378,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                 <Link
                   key={req.id}
                   href={`/requirements/${req.id}`}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:border-primary/50 hover:shadow-sm transition-all bg-card gap-3"
+                  className="flex items-center justify-between p-3 rounded-lg border hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm transition-all bg-card gap-3 group"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm truncate">{req.title}</p>
@@ -387,7 +392,9 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                       <Clock className="h-3 w-3" />
                       {format(new Date(req.deadline), "MMM d")}
                     </span>
-                    <Button size="sm" variant="outline" className="text-xs h-7 px-2.5">Apply</Button>
+                    <span className="text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      Apply →
+                    </span>
                   </div>
                 </Link>
               ))}
