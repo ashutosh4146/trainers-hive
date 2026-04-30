@@ -806,6 +806,35 @@ export const UpdateApplicationStatusResponse = zod.object({
 });
 
 /**
+ * @summary Get message thread for an application
+ */
+export const ListApplicationMessagesParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ListApplicationMessagesResponseItem = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  senderUserId: zod.string(),
+  body: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListApplicationMessagesResponse = zod.array(
+  ListApplicationMessagesResponseItem,
+);
+
+/**
+ * @summary Send a message in an application thread
+ */
+export const SendApplicationMessageParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SendApplicationMessageBody = zod.object({
+  body: zod.string(),
+});
+
+/**
  * @summary Dashboard stats for the active vendor
  */
 export const GetVendorStatsResponse = zod.object({
