@@ -147,6 +147,7 @@ export default function RequirementDetail() {
         onSuccess: () => {
           toast({ title: "Review submitted", description: "Thank you for your feedback!" });
           queryClient.invalidateQueries({ queryKey: getListTrainerReviewsQueryKey(reviewTrainerId) });
+          queryClient.invalidateQueries({ queryKey: getGetTrainerQueryKey(reviewTrainerId) });
           setReviewTrainerId(null);
           setReviewComment("");
           setReviewTitle("");
