@@ -43,6 +43,10 @@ router.post("/session/switch", async (req, res) => {
 
     if (existing.length > 0) {
       const u = existing[0]!;
+      if (u.deactivatedAt) {
+        res.status(403).json({ error: "account_deactivated", message: "This account has been deactivated." });
+        return;
+      }
       await setActiveUserId(u.id);
       res.json({
         id: u.id,
@@ -132,6 +136,10 @@ router.post("/session/switch", async (req, res) => {
     return;
   }
   const u = rows[0]!;
+  if (u.deactivatedAt) {
+    res.status(403).json({ error: "account_deactivated", message: "This account has been deactivated." });
+    return;
+  }
   await setActiveUserId(u.id);
   res.json({
     id: u.id,
