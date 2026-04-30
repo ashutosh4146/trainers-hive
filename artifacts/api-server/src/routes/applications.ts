@@ -211,7 +211,7 @@ router.get("/applications/:id/messages", async (req, res) => {
     .select()
     .from(messagesTable)
     .where(eq(messagesTable.applicationId, params.data.id))
-    .orderBy(asc(messagesTable.createdAt));
+    .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id));
   res.json(
     messages.map((m) => ({
       id: m.id,
