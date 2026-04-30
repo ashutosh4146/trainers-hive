@@ -670,6 +670,25 @@ export const UnflagRequirementResponse = zod.object({
   flaggedAt: zod.coerce.date().optional(),
 });
 
+/**
+ * @summary Trainers whose skills match a requirement (up to 5, ranked)
+ */
+export const GetSuggestedTrainersParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetSuggestedTrainersResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  mainSkill: zod.string(),
+  rating: zod.number(),
+  avatarUrl: zod.string(),
+  reviewCount: zod.number().optional(),
+});
+export const GetSuggestedTrainersResponse = zod.array(
+  GetSuggestedTrainersResponseItem,
+);
+
 export const ApplyToRequirementParams = zod.object({
   id: zod.coerce.string(),
 });
