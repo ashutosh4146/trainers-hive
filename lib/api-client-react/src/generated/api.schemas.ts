@@ -526,6 +526,36 @@ export interface ChangeUserRoleBody {
   role: ChangeUserRoleBodyRole;
 }
 
+export interface ResumeDownloadUrlResponse {
+  /** Presigned S3 GET URL (valid for 1 hour) */
+  url: string;
+}
+
+export interface ResumeUploadRequest {
+  /**
+   * Original filename (e.g. resume.pdf)
+   * @minLength 1
+   */
+  name: string;
+  /**
+   * File size in bytes (must be <= 10 MB)
+   * @minimum 1
+   */
+  size: number;
+  /**
+   * MIME type — must be application/pdf, application/msword, or application/vnd.openxmlformats-officedocument.wordprocessingml.document
+   * @minLength 1
+   */
+  contentType: string;
+}
+
+export interface ResumeUploadResponse {
+  /** Presigned S3 PUT URL (valid for 15 minutes) */
+  uploadUrl: string;
+  /** S3 object key to persist in trainers.resume_url (e.g. resumes/<uuid>) */
+  objectPath: string;
+}
+
 export type ListTrainersParams = {
   q?: string;
   skill?: string;
