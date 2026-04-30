@@ -265,10 +265,16 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
   );
 }
 
-function TrainerDashboard({ trainerId: _trainerId }: { trainerId: string }) {
+function TrainerDashboard({ trainerId }: { trainerId: string }) {
   const { data: user } = useGetCurrentUser();
   const { data: stats, isLoading: statsLoading } = useGetTrainerStats();
   const { data: applications, isLoading: appsLoading } = useListMyApplications();
+  const { data: matchingReqs, isLoading: matchLoading } = useListRequirements(
+    { status: "open" },
+    { query: { queryKey: [...getListRequirementsQueryKey({ status: "open" }), "trainer", trainerId] } },
+  );
+  const top5 = matchingReqs?.slice(0, 5) ?? [];
+  const hasNoSkills = !user || (user as typeof user & { mainSkill?: string }).mainSkill === "";
   const [messageAppId, setMessageAppId] = useState<string | null>(null);
   const [messageAppTitle, setMessageAppTitle] = useState<string>("");
   const [, navigate] = useLocation();
@@ -323,6 +329,72 @@ function TrainerDashboard({ trainerId: _trainerId }: { trainerId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Matching Requirements */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" /> Matching Requirements
+            </CardTitle>
+            <CardDescription>Open requirements that match your skills, ranked by relevance</CardDescription>
+          </div>
+          <Link href="/requirements">
+            <Button variant="outline" size="sm" className="text-xs shrink-0">See all</Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {matchLoading ? (
+            <Skeleton className="h-[180px] w-full" />
+          ) : top5.length === 0 ? (
+            <div className="text-center py-10 border border-dashed rounded-lg">
+              <Briefcase className="mx-auto h-8 w-8 text-muted-foreground mb-3 opacity-40" />
+              {hasNoSkills ? (
+                <>
+                  <p className="font-medium text-muted-foreground">No skills set yet</p>
+                  <p className="text-sm text-muted-foreground mt-1 mb-4">
+                    Add your primary skill to your profile so we can surface the most relevant requirements for you.
+                  </p>
+                  <Link href="/profile"><Button variant="outline" size="sm">Complete your profile</Button></Link>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-muted-foreground">No matching requirements right now</p>
+                  <p className="text-sm text-muted-foreground mt-1 mb-4">
+                    Check back soon — new requirements are posted regularly. You can also browse all open requirements.
+                  </p>
+                  <Link href="/requirements"><Button variant="outline" size="sm">Browse all requirements</Button></Link>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {top5.map((req) => (
+                <Link
+                  key={req.id}
+                  href={`/requirements/${req.id}`}
+                  className="flex items-center justify-between p-3 rounded-lg border hover:border-primary/50 hover:shadow-sm transition-all bg-card gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{req.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{req.vendorName}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20 font-normal">
+                      {req.skill}
+                    </Badge>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+                      <Clock className="h-3 w-3" />
+                      {format(new Date(req.deadline), "MMM d")}
+                    </span>
+                    <Button size="sm" variant="outline" className="text-xs h-7 px-2.5">Apply</Button>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
