@@ -163,12 +163,14 @@ export default function Login() {
       }
 
       const { customToken, user } = await res.json() as {
-        customToken: string;
+        customToken: string | null;
         user: { name: string; email: string; role: string };
       };
 
-      const firebaseUser = await signInWithAdminToken(customToken);
-      setAuthTokenGetter(async () => await firebaseUser.getIdToken());
+      if (customToken) {
+        const firebaseUser = await signInWithAdminToken(customToken);
+        setAuthTokenGetter(async () => await firebaseUser.getIdToken());
+      }
 
       switchUser.mutate(
         { data: { role: getRoleSessionKey(selectedRole!), email: user.email, name: user.name } },
