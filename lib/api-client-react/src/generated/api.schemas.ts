@@ -37,6 +37,18 @@ export interface SkillCategory {
   skills: string[];
 }
 
+/**
+ * Whether the user is a full-time trainer, developer, or both
+ */
+export type TrainerTrainerType =
+  (typeof TrainerTrainerType)[keyof typeof TrainerTrainerType];
+
+export const TrainerTrainerType = {
+  trainer: "trainer",
+  developer: "developer",
+  both: "both",
+} as const;
+
 export interface EngagedDateRange {
   /** ISO date YYYY-MM-DD (inclusive) */
   startDate: string;
@@ -51,7 +63,10 @@ export interface Trainer {
   headline: string;
   mainSkill: string;
   subSkills: string[];
+  /** Years of experience as a trainer */
   experienceYears: number;
+  /** Years of hands-on development experience */
+  developmentExperienceYears: number;
   location: string;
   remote: boolean;
   rating: number;
@@ -60,16 +75,35 @@ export interface Trainer {
   verified: boolean;
   avatarUrl: string;
   availability?: string;
+  /** Whether the user is a full-time trainer, developer, or both */
+  trainerType?: TrainerTrainerType;
   engagedDates: EngagedDateRange[];
+}
+
+export interface Certification {
+  name: string;
+  /** Verification URL or shareable link to the certificate file */
+  url?: string;
 }
 
 export type TrainerDetail = Trainer & {
   bio: string;
-  certifications: string[];
+  certifications: Certification[];
   languages: string[];
   completedTrainings: number;
   portfolioUrl?: string;
+  /** Shareable link to the trainer's resume */
+  resumeUrl?: string;
 };
+
+export type UpdateTrainerBodyTrainerType =
+  (typeof UpdateTrainerBodyTrainerType)[keyof typeof UpdateTrainerBodyTrainerType];
+
+export const UpdateTrainerBodyTrainerType = {
+  trainer: "trainer",
+  developer: "developer",
+  both: "both",
+} as const;
 
 export interface UpdateTrainerBody {
   name?: string;
@@ -77,11 +111,16 @@ export interface UpdateTrainerBody {
   mainSkill?: string;
   subSkills?: string[];
   experienceYears?: number;
+  developmentExperienceYears?: number;
   location?: string;
   remote?: boolean;
   hourlyRate?: number;
   bio?: string;
   availability?: string;
+  trainerType?: UpdateTrainerBodyTrainerType;
+  languages?: string[];
+  certifications?: Certification[];
+  resumeUrl?: string;
   engagedDates?: EngagedDateRange[];
 }
 

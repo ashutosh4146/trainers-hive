@@ -17,6 +17,26 @@ import { newId } from "../lib/ids";
 
 const router: IRouter = Router();
 
+function normalizeCertifications(
+  raw: unknown,
+): Array<{ name: string; url?: string }> {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") return { name: item };
+      if (item && typeof item === "object" && "name" in item) {
+        const o = item as { name?: unknown; url?: unknown };
+        if (typeof o.name === "string") {
+          return typeof o.url === "string" && o.url.length > 0
+            ? { name: o.name, url: o.url }
+            : { name: o.name };
+        }
+      }
+      return null;
+    })
+    .filter((x): x is { name: string; url?: string } => x !== null);
+}
+
 function serializeTrainer(t: typeof trainersTable.$inferSelect) {
   return {
     id: t.id,
@@ -25,6 +45,7 @@ function serializeTrainer(t: typeof trainersTable.$inferSelect) {
     mainSkill: t.mainSkill,
     subSkills: t.subSkills ?? [],
     experienceYears: t.experienceYears,
+    developmentExperienceYears: t.developmentExperienceYears ?? 0,
     location: t.location,
     remote: t.remote,
     rating: Number(t.rating),
@@ -33,6 +54,7 @@ function serializeTrainer(t: typeof trainersTable.$inferSelect) {
     verified: t.verified,
     avatarUrl: t.avatarUrl,
     availability: t.availability ?? undefined,
+    trainerType: t.trainerType ?? undefined,
     engagedDates: t.engagedDates ?? [],
   };
 }
@@ -106,10 +128,11 @@ router.get("/trainers/:id", async (req, res) => {
   res.json({
     ...serializeTrainer(t),
     bio: t.bio,
-    certifications: t.certifications ?? [],
+    certifications: normalizeCertifications(t.certifications),
     languages: t.languages ?? [],
     completedTrainings: t.completedTrainings,
     portfolioUrl: t.portfolioUrl ?? undefined,
+    resumeUrl: t.resumeUrl ?? undefined,
   });
 });
 
@@ -170,6 +193,64 @@ router.patch("/trainers/:id", async (req, res) => {
     }
   }
 
+  // Validate trainerType enum
+  if (body.data.trainerType !== undefined && body.data.trainerType !== null) {
+    const allowed = new Set(["trainer", "developer", "both"]);
+    if (!allowed.has(body.data.trainerType)) {
+      res.status(400).json({ error: "trainerType must be one of trainer, developer, both" });
+      return;
+    }
+  }
+
+  // Validate certifications
+  if (body.data.certifications) {
+    for (const c of body.data.certifications) {
+      if (!c || typeof c.name !== "string" || c.name.trim().length === 0) {
+        res.status(400).json({ error: "certifications: each item must have a non-empty name" });
+        return;
+      }
+      if (c.name.length > 200) {
+        res.status(400).json({ error: "certifications: name must be 200 chars or less" });
+        return;
+      }
+      if (c.url !== undefined && c.url !== null && c.url !== "") {
+        try {
+          new URL(c.url);
+        } catch {
+          res.status(400).json({ error: `certifications: "${c.name}" url is not a valid URL` });
+          return;
+        }
+      }
+    }
+  }
+
+  // Validate resumeUrl looks like a URL when provided
+  if (body.data.resumeUrl !== undefined && body.data.resumeUrl !== null && body.data.resumeUrl !== "") {
+    try {
+      new URL(body.data.resumeUrl);
+    } catch {
+      res.status(400).json({ error: "resumeUrl must be a valid URL" });
+      return;
+    }
+  }
+
+  // Validate non-negative experience years
+  if (
+    body.data.experienceYears !== undefined &&
+    (body.data.experienceYears < 0 || body.data.experienceYears > 80)
+  ) {
+    res.status(400).json({ error: "experienceYears out of range" });
+    return;
+  }
+  if (
+    body.data.developmentExperienceYears !== undefined &&
+    (body.data.developmentExperienceYears < 0 ||
+      body.data.developmentExperienceYears > 80)
+  ) {
+    res.status(400).json({ error: "developmentExperienceYears out of range" });
+    return;
+  }
+
   const update: Partial<typeof trainersTable.$inferInsert> = {};
   for (const [k, v] of Object.entries(body.data)) {
     if (v !== undefined) (update as Record<string, unknown>)[k] = v;
@@ -193,10 +274,11 @@ router.patch("/trainers/:id", async (req, res) => {
   res.json({
     ...serializeTrainer(t),
     bio: t.bio,
-    certifications: t.certifications ?? [],
+    certifications: normalizeCertifications(t.certifications),
     languages: t.languages ?? [],
     completedTrainings: t.completedTrainings,
     portfolioUrl: t.portfolioUrl ?? undefined,
+    resumeUrl: t.resumeUrl ?? undefined,
   });
 });
 

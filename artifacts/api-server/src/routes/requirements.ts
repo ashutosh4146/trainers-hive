@@ -531,6 +531,9 @@ router.get("/requirements/:id/applications", async (req, res) => {
             verified: r.trainer.verified,
             avatarUrl: r.trainer.avatarUrl,
             availability: r.trainer.availability ?? undefined,
+            developmentExperienceYears:
+              r.trainer.developmentExperienceYears ?? 0,
+            trainerType: r.trainer.trainerType ?? undefined,
             engagedDates: r.trainer.engagedDates ?? [],
           }
         : null,
