@@ -1,8 +1,11 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { applicationsTable } from "./applications";
 
 export const messagesTable = pgTable("messages", {
   id: text("id").primaryKey(),
-  applicationId: text("application_id").notNull(),
+  applicationId: text("application_id")
+    .notNull()
+    .references(() => applicationsTable.id, { onDelete: "cascade" }),
   senderUserId: text("sender_user_id").notNull(),
   body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
