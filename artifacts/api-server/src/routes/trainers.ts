@@ -421,10 +421,19 @@ router.post("/trainers/:id/reviews", async (req, res) => {
     comment,
     engagementTitle,
   });
-  // Recompute trainer aggregate rating from all reviews
+  // Recompute trainer aggregate: use exact dimension averages for new reviews,
+  // fall back to stored integer rating for legacy reviews (no dimension columns).
   const stats = await db
     .select({
-      avg: sql<string>`COALESCE(AVG(${reviewsTable.rating}), 0)`,
+      avg: sql<string>`COALESCE(AVG(
+        CASE WHEN ${reviewsTable.ratingContent} IS NOT NULL
+          THEN (${reviewsTable.ratingContent}::float +
+                ${reviewsTable.ratingDelivery}::float +
+                ${reviewsTable.ratingPunctuality}::float +
+                ${reviewsTable.ratingCommunication}::float) / 4.0
+          ELSE ${reviewsTable.rating}::float
+        END
+      ), 0)`,
       count: sql<number>`COUNT(*)::int`,
     })
     .from(reviewsTable)
