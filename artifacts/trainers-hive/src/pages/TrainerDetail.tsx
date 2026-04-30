@@ -27,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2, CalendarDays, Bookmark } from "lucide-react";
+import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2, CalendarDays, Bookmark, Code2, UserCog, FileText } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
 type EngagedRange = { startDate: string; endDate: string; note?: string };
@@ -208,8 +208,15 @@ export default function TrainerDetail() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Briefcase className="h-4 w-4" />
-                  <span>{trainer.experienceYears}y Experience</span>
+                  <span>{trainer.experienceYears}y Training</span>
                 </div>
+                {(trainer as typeof trainer & { developmentExperienceYears?: number }).developmentExperienceYears != null &&
+                  (trainer as typeof trainer & { developmentExperienceYears?: number }).developmentExperienceYears! > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Code2 className="h-4 w-4" />
+                    <span>{(trainer as typeof trainer & { developmentExperienceYears?: number }).developmentExperienceYears}y Development</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-amber-500 font-medium">
                   <Star className="h-4 w-4 fill-amber-500" />
                   <span>{trainer.rating.toFixed(1)} ({trainer.reviewCount} reviews)</span>
@@ -547,6 +554,26 @@ export default function TrainerDetail() {
                 </div>
               </div>
               {(() => {
+                const trainerType = (trainer as typeof trainer & { trainerType?: string }).trainerType;
+                if (!trainerType) return null;
+                const labels: Record<string, string> = {
+                  trainer: "Full-time Trainer",
+                  developer: "Full-time Developer",
+                  both: "Trainer & Developer",
+                };
+                return (
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <UserCog className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{labels[trainerType] ?? trainerType}</p>
+                      <p className="text-xs text-muted-foreground">Primary engagement type</p>
+                    </div>
+                  </div>
+                );
+              })()}
+              {(() => {
                 const engaged = ((trainer as { engagedDates?: EngagedRange[] }).engagedDates ?? [])
                   .filter((r) => r?.endDate && r.endDate >= new Date().toISOString().slice(0, 10))
                   .sort((a, b) => a.startDate.localeCompare(b.startDate));
@@ -596,6 +623,34 @@ export default function TrainerDetail() {
                 <a href={trainer.portfolioUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 text-primary hover:underline font-medium">
                   View Portfolio
                 </a>
+              </CardContent>
+            </Card>
+          )}
+          {(trainer as typeof trainer & { resumeUrl?: string }).resumeUrl && (
+            <Card>
+              <CardContent className="p-6">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const resumeUrl = (trainer as typeof trainer & { resumeUrl?: string }).resumeUrl!;
+                    const isS3Key = /^resumes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resumeUrl);
+                    try {
+                      if (isS3Key) {
+                        const res = await fetch(`/api/trainers/${id}/resume/url`);
+                        if (!res.ok) throw new Error();
+                        const data = await res.json() as { url: string };
+                        window.open(data.url, "_blank", "noopener,noreferrer");
+                      } else {
+                        window.open(resumeUrl, "_blank", "noopener,noreferrer");
+                      }
+                    } catch {
+                      toast({ title: "Could not open resume", variant: "destructive" });
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 text-primary hover:underline font-medium w-full"
+                >
+                  <FileText className="h-4 w-4" /> View Resume
+                </button>
               </CardContent>
             </Card>
           )}
