@@ -305,6 +305,10 @@ paths:
           schema:
             type: string
             enum: [recent, deadline, budget]
+        - in: query
+          name: flagged
+          schema:
+            type: boolean
       responses:
         "200":
           description: Requirements
@@ -397,6 +401,48 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /requirements/{id}/flag:
+    post:
+      operationId: flagRequirement
+      tags: [requirements]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagRequirementBody"
+      responses:
+        "200":
+          description: Flagged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
+
+  /requirements/{id}/unflag:
+    post:
+      operationId: unflagRequirement
+      tags: [requirements]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unflagged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
 
   /requirements/{id}/apply:
     post:
@@ -931,6 +977,15 @@ components:
           type: integer
         feeType:
           $ref: "#/components/schemas/FeeType"
+        flagged:
+          type: boolean
+        flagReason:
+          type: string
+        flaggedBy:
+          type: string
+        flaggedAt:
+          type: string
+          format: date-time
 
     RequirementDetail:
       allOf:
@@ -1038,6 +1093,14 @@ components:
         trainerScope:
           type: string
         startDate:
+          type: string
+
+    FlagRequirementBody:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
           type: string
 
     ApplicationStatus:
