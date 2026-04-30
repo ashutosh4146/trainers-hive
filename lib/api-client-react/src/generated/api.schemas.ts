@@ -190,6 +190,10 @@ export interface Requirement {
   startDate?: string;
   budget?: number;
   feeType?: FeeType;
+  flagged?: boolean;
+  flagReason?: string;
+  flaggedBy?: string;
+  flaggedAt?: string;
 }
 
 export type RequirementDetail = Requirement & {
@@ -236,6 +240,10 @@ export interface UpdateRequirementBody {
   language?: string;
   trainerScope?: string;
   startDate?: string;
+}
+
+export interface FlagRequirementBody {
+  reason: string;
 }
 
 export type ApplicationStatus =
@@ -431,6 +439,7 @@ export type ListRequirementsParams = {
   status?: ListRequirementsStatus;
   vendorId?: string;
   sort?: ListRequirementsSort;
+  flagged?: boolean;
 };
 
 export type ListRequirementsStatus =
