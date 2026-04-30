@@ -299,6 +299,55 @@ export const DeleteTrainerParams = zod.object({
   id: zod.coerce.string(),
 });
 
+/**
+ * Authenticated — only the trainer themselves or an admin may call this.
+Validates file metadata (contentType must be PDF/DOC/DOCX, size <= 10 MB).
+Returns a presigned S3 PUT URL for the client to upload directly, plus
+the objectPath (S3 key) to pass to PATCH /trainers/{id} to persist the resume URL.
+
+ * @summary Request a presigned upload URL for the trainer's resume
+ */
+export const RequestTrainerResumeUploadUrlParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RequestTrainerResumeUploadUrlBody = zod.object({
+  name: zod.string().min(1).describe("Original filename (e.g. resume.pdf)"),
+  size: zod.number().min(1).describe("File size in bytes (must be <= 10 MB)"),
+  contentType: zod
+    .string()
+    .min(1)
+    .describe(
+      "MIME type — must be application\/pdf, application\/msword, or application\/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
+});
+
+export const RequestTrainerResumeUploadUrlResponse = zod.object({
+  uploadUrl: zod
+    .string()
+    .url()
+    .describe("Presigned S3 PUT URL (valid for 15 minutes)"),
+  objectPath: zod
+    .string()
+    .describe(
+      "S3 object key to persist in trainers.resume_url (e.g. resumes\/<uuid>)",
+    ),
+});
+
+/**
+ * Returns a short-lived presigned S3 GET URL for the trainer's resume.
+Fails with 404 if the trainer has no resume on file.
+
+ * @summary Get a presigned S3 download URL for the trainer's resume
+ */
+export const GetTrainerResumeUrlParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetTrainerResumeUrlResponse = zod.object({
+  url: zod.string().url().describe("Presigned S3 GET URL (valid for 1 hour)"),
+});
+
 export const ListTrainerReviewsParams = zod.object({
   id: zod.coerce.string(),
 });
