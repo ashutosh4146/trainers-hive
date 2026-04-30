@@ -14,6 +14,7 @@ import {
   useFlagRequirement,
   useUnflagRequirement,
   useListMyApplications,
+  getListMyApplicationsQueryKey,
   getGetRequirementQueryKey,
   getGetTrainerQueryKey,
   getListRequirementApplicationsQueryKey,
@@ -89,7 +90,7 @@ export default function RequirementDetail() {
     query: { enabled: !!trainerId, queryKey: getGetTrainerQueryKey(trainerId ?? "") },
   });
   const { data: myApplications } = useListMyApplications({
-    query: { enabled: !!trainerId },
+    query: { enabled: !!trainerId, queryKey: getListMyApplicationsQueryKey() },
   });
   const myApplication = myApplications?.find((a) => a.requirementId === id);
 
