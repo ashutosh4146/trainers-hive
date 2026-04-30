@@ -619,7 +619,7 @@ export default function RequirementDetail() {
                         <span className="text-xs font-medium text-amber-600">★ {trainer.rating.toFixed(1)}</span>
                         <Link href={`/trainers/${trainer.id}`}>
                           <span className="text-xs text-primary hover:underline flex items-center gap-0.5">
-                            View <ArrowRight className="h-3 w-3" />
+                            View Profile <ArrowRight className="h-3 w-3" />
                           </span>
                         </Link>
                       </div>
