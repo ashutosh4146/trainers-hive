@@ -19,6 +19,7 @@ import {
   getListRequirementsQueryKey
 } from "@workspace/api-client-react";
 import { AdminRemoveButton } from "@/components/AdminRemoveButton";
+import { MessageThread } from "@/components/MessageThread";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX, Flag, AlertTriangle } from "lucide-react";
+import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX, Flag, AlertTriangle, MessageSquare } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
 type EngagedRange = { startDate: string; endDate: string; note?: string };
@@ -99,6 +100,8 @@ export default function RequirementDetail() {
   const [isFlagOpen, setIsFlagOpen] = useState(false);
   const [flagReason, setFlagReason] = useState("");
   const [customFlagReason, setCustomFlagReason] = useState("");
+  const [messageAppId, setMessageAppId] = useState<string | null>(null);
+  const [messageAppName, setMessageAppName] = useState<string>("");
 
   const resolvedFlagReason = flagReason === "Other" ? customFlagReason.trim() : flagReason;
 
@@ -489,7 +492,7 @@ export default function RequirementDetail() {
                           <p className="text-sm font-medium">Proposed Rate: ${app.proposedRate}</p>
                           <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md italic">"{app.message}"</p>
                           
-                          <div className="flex gap-2 pt-2">
+                          <div className="flex gap-2 pt-2 flex-wrap">
                             {app.status === 'submitted' && (
                               <>
                                 <Button size="sm" onClick={() => handleUpdateStatus(app.id, 'shortlisted')}>Shortlist</Button>
@@ -498,6 +501,20 @@ export default function RequirementDetail() {
                             )}
                             {app.status === 'shortlisted' && (
                               <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleUpdateStatus(app.id, 'hired')}>Hire</Button>
+                            )}
+                            {(app.status === 'shortlisted' || app.status === 'hired') && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5"
+                                onClick={() => {
+                                  setMessageAppId(app.id);
+                                  setMessageAppName(app.trainer.name);
+                                }}
+                              >
+                                <MessageSquare className="h-3.5 w-3.5" />
+                                Message
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -544,6 +561,16 @@ export default function RequirementDetail() {
           </Card>
         </div>
       </div>
+
+      {messageAppId && user?.id && (
+        <MessageThread
+          applicationId={messageAppId}
+          currentUserId={user.id}
+          open={!!messageAppId}
+          onOpenChange={(open) => { if (!open) setMessageAppId(null); }}
+          title={`Message — ${messageAppName}`}
+        />
+      )}
     </div>
   );
 }
