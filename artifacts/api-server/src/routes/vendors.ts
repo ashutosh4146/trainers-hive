@@ -218,8 +218,15 @@ router.post("/vendors/:id/saved-trainers", async (req, res) => {
       vendorId: params.data.id,
       trainerId: body.data.trainerId,
     });
-  } catch {
-    res.status(409).json({ error: "already saved" });
+  } catch (err: unknown) {
+    // 23505 = unique_violation (vendorId + trainerId already exists)
+    const pgCode = (err as { code?: string })?.code;
+    if (pgCode === "23505") {
+      res.status(409).json({ error: "already saved" });
+    } else {
+      req.log.error({ err }, "failed to insert saved trainer");
+      res.status(500).json({ error: "could not save trainer" });
+    }
     return;
   }
 
