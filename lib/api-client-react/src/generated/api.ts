@@ -26,6 +26,7 @@ import type {
   CreateRequirementBody,
   CreateReviewBody,
   CurrentUser,
+  FlagRequirementBody,
   HealthStatus,
   HireInquiry,
   ListRequirementsParams,
@@ -1586,6 +1587,165 @@ export const useDeleteRequirement = <
   TContext
 > => {
   return useMutation(getDeleteRequirementMutationOptions(options));
+};
+
+export const getFlagRequirementUrl = (id: string) => {
+  return `/api/requirements/${id}/flag`;
+};
+
+export const flagRequirement = async (
+  id: string,
+  flagRequirementBody: FlagRequirementBody,
+  options?: RequestInit,
+): Promise<Requirement> => {
+  return customFetch<Requirement>(getFlagRequirementUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(flagRequirementBody),
+  });
+};
+
+export const getFlagRequirementMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof flagRequirement>>,
+    TError,
+    { id: string; data: BodyType<FlagRequirementBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof flagRequirement>>,
+  TError,
+  { id: string; data: BodyType<FlagRequirementBody> },
+  TContext
+> => {
+  const mutationKey = ["flagRequirement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof flagRequirement>>,
+    { id: string; data: BodyType<FlagRequirementBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return flagRequirement(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FlagRequirementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof flagRequirement>>
+>;
+export type FlagRequirementMutationBody = BodyType<FlagRequirementBody>;
+export type FlagRequirementMutationError = ErrorType<unknown>;
+
+export const useFlagRequirement = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof flagRequirement>>,
+    TError,
+    { id: string; data: BodyType<FlagRequirementBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof flagRequirement>>,
+  TError,
+  { id: string; data: BodyType<FlagRequirementBody> },
+  TContext
+> => {
+  return useMutation(getFlagRequirementMutationOptions(options));
+};
+
+export const getUnflagRequirementUrl = (id: string) => {
+  return `/api/requirements/${id}/unflag`;
+};
+
+export const unflagRequirement = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Requirement> => {
+  return customFetch<Requirement>(getUnflagRequirementUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getUnflagRequirementMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unflagRequirement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unflagRequirement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["unflagRequirement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unflagRequirement>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return unflagRequirement(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnflagRequirementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unflagRequirement>>
+>;
+
+export type UnflagRequirementMutationError = ErrorType<unknown>;
+
+export const useUnflagRequirement = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unflagRequirement>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unflagRequirement>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getUnflagRequirementMutationOptions(options));
 };
 
 export const getApplyToRequirementUrl = (id: string) => {
