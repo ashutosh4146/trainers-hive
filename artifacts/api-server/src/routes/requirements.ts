@@ -19,6 +19,9 @@ import {
   ApplyToRequirementBody,
   ListRequirementApplicationsParams,
   DeleteRequirementParams,
+  FlagRequirementParams,
+  FlagRequirementBody,
+  UnflagRequirementParams,
 } from "@workspace/api-zod";
 import { newId } from "../lib/ids";
 import { getActiveUserId } from "../lib/session";
@@ -57,6 +60,10 @@ async function buildRequirementCard(
     language: r.language ?? undefined,
     trainerScope: r.trainerScope ?? undefined,
     startDate: r.startDate ?? undefined,
+    flagged: r.flagged ?? false,
+    flagReason: r.flagReason ?? undefined,
+    flaggedBy: r.flaggedBy ?? undefined,
+    flaggedAt: r.flaggedAt?.toISOString() ?? undefined,
   };
 }
 
@@ -91,7 +98,7 @@ router.get("/requirements", async (req, res) => {
     res.status(400).json({ error: "invalid query", details: parsed.error.issues });
     return;
   }
-  const { q, skill, location, remote, status, vendorId, sort } = parsed.data;
+  const { q, skill, location, remote, status, vendorId, sort, flagged } = parsed.data;
   const conds: SQL[] = [];
   if (q) {
     const like = `%${q}%`;
@@ -108,6 +115,7 @@ router.get("/requirements", async (req, res) => {
   if (remote !== undefined) conds.push(eq(requirementsTable.remote, remote));
   if (status) conds.push(eq(requirementsTable.status, status));
   if (vendorId) conds.push(eq(requirementsTable.vendorId, vendorId));
+  if (flagged !== undefined) conds.push(eq(requirementsTable.flagged, flagged));
   const where = conds.length > 0 ? and(...conds) : undefined;
   const orderBy =
     sort === "deadline"
@@ -539,6 +547,77 @@ router.get("/requirements/:id/applications", async (req, res) => {
         : null,
     })),
   );
+});
+
+// POST /requirements/:id/flag  — trainer only
+router.post("/requirements/:id/flag", async (req, res) => {
+  const params = FlagRequirementParams.safeParse(req.params);
+  const body = FlagRequirementBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "invalid request" });
+    return;
+  }
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "trainer") {
+    res.status(403).json({ error: "only trainers can flag requirements" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "requirement not found" });
+    return;
+  }
+  const [updated] = await db
+    .update(requirementsTable)
+    .set({ flagged: true, flagReason: body.data.reason, flaggedBy: active.trainerId ?? activeId, flaggedAt: new Date() })
+    .where(eq(requirementsTable.id, params.data.id))
+    .returning();
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, updated.vendorId)).limit(1);
+  const [countRow] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(applicationsTable)
+    .where(eq(applicationsTable.requirementId, updated.id));
+  res.json(await buildRequirementCard(updated, vendor ?? null, countRow?.count ?? 0));
+});
+
+// POST /requirements/:id/unflag  — admin only
+router.post("/requirements/:id/unflag", async (req, res) => {
+  const params = UnflagRequirementParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "admin") {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "requirement not found" });
+    return;
+  }
+  const [updated] = await db
+    .update(requirementsTable)
+    .set({ flagged: false, flagReason: null, flaggedBy: null, flaggedAt: null })
+    .where(eq(requirementsTable.id, params.data.id))
+    .returning();
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, updated.vendorId)).limit(1);
+  const [countRow] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(applicationsTable)
+    .where(eq(applicationsTable.requirementId, updated.id));
+  res.json(await buildRequirementCard(updated, vendor ?? null, countRow?.count ?? 0));
 });
 
 export default router;
