@@ -27,6 +27,9 @@ const Login = React.lazy(() => import("./pages/Login"));
 const AdminLogin = React.lazy(() => import("./pages/AdminLogin"));
 const AuthCallback = React.lazy(() => import("./pages/AuthCallback"));
 const HireUs = React.lazy(() => import("./pages/HireUs"));
+const Support = React.lazy(() => import("./pages/Support"));
+const AboutUs = React.lazy(() => import("./pages/AboutUs"));
+const TermsAndConditions = React.lazy(() => import("./pages/TermsAndConditions"));
 
 function PrivateRoute({ component: Component }: { component: React.ComponentType }) {
   const { isSignedIn } = useAuth();
@@ -68,6 +71,9 @@ function Router() {
                 <PrivateRoute component={Settings} />
               </Route>
               <Route path="/hire-us" component={HireUs} />
+              <Route path="/support" component={Support} />
+              <Route path="/about" component={AboutUs} />
+              <Route path="/terms" component={TermsAndConditions} />
               <Route component={NotFound} />
             </Switch>
           </AppLayout>
