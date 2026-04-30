@@ -444,6 +444,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/Requirement"
 
+  /requirements/{id}/suggested-trainers:
+    get:
+      operationId: getSuggestedTrainers
+      tags: [requirements]
+      summary: Trainers whose skills match a requirement (up to 5, ranked)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suggested trainers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SuggestedTrainer"
+        "404":
+          description: Requirement not found
+
   /requirements/{id}/apply:
     post:
       operationId: applyToRequirement
@@ -795,6 +818,23 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EngagedDateRange"
+
+    SuggestedTrainer:
+      type: object
+      required: [id, name, mainSkill, rating, avatarUrl]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mainSkill:
+          type: string
+        rating:
+          type: number
+        avatarUrl:
+          type: string
+        reviewCount:
+          type: integer
 
     EngagedDateRange:
       type: object
