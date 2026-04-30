@@ -28,6 +28,10 @@ export const trainersTable = pgTable("trainers", {
   languages: jsonb("languages").$type<string[]>().notNull().default([]),
   completedTrainings: integer("completed_trainings").notNull().default(0),
   portfolioUrl: text("portfolio_url"),
+  engagedDates: jsonb("engaged_dates")
+    .$type<Array<{ startDate: string; endDate: string; note?: string }>>()
+    .notNull()
+    .default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

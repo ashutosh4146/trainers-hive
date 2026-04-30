@@ -32,9 +32,6 @@ export const GetCurrentUserResponse = zod.object({
  */
 export const SwitchUserBody = zod.object({
   role: zod.enum(["vendor", "trainer", "admin"]),
-  name: zod.string().optional(),
-  email: zod.string().optional(),
-  orgName: zod.string().optional(),
 });
 
 export const SwitchUserResponse = zod.object({
@@ -84,6 +81,13 @@ export const ListTrainersResponseItem = zod.object({
   verified: zod.boolean(),
   avatarUrl: zod.string(),
   availability: zod.string().optional(),
+  engagedDates: zod.array(
+    zod.object({
+      startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+      endDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+      note: zod.string().optional(),
+    }),
+  ),
 });
 export const ListTrainersResponse = zod.array(ListTrainersResponseItem);
 
@@ -105,6 +109,13 @@ export const ListFeaturedTrainersResponseItem = zod.object({
   verified: zod.boolean(),
   avatarUrl: zod.string(),
   availability: zod.string().optional(),
+  engagedDates: zod.array(
+    zod.object({
+      startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+      endDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+      note: zod.string().optional(),
+    }),
+  ),
 });
 export const ListFeaturedTrainersResponse = zod.array(
   ListFeaturedTrainersResponseItem,
@@ -130,6 +141,13 @@ export const GetTrainerResponse = zod
     verified: zod.boolean(),
     avatarUrl: zod.string(),
     availability: zod.string().optional(),
+    engagedDates: zod.array(
+      zod.object({
+        startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        endDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        note: zod.string().optional(),
+      }),
+    ),
   })
   .and(
     zod.object({
@@ -156,6 +174,15 @@ export const UpdateTrainerBody = zod.object({
   hourlyRate: zod.number().optional(),
   bio: zod.string().optional(),
   availability: zod.string().optional(),
+  engagedDates: zod
+    .array(
+      zod.object({
+        startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        endDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        note: zod.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const UpdateTrainerResponse = zod
@@ -174,6 +201,13 @@ export const UpdateTrainerResponse = zod
     verified: zod.boolean(),
     avatarUrl: zod.string(),
     availability: zod.string().optional(),
+    engagedDates: zod.array(
+      zod.object({
+        startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        endDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+        note: zod.string().optional(),
+      }),
+    ),
   })
   .and(
     zod.object({
@@ -510,6 +544,13 @@ export const ListRequirementApplicationsResponseItem = zod
         verified: zod.boolean(),
         avatarUrl: zod.string(),
         availability: zod.string().optional(),
+        engagedDates: zod.array(
+          zod.object({
+            startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+            endDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
+            note: zod.string().optional(),
+          }),
+        ),
       }),
     }),
   );

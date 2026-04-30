@@ -660,6 +660,7 @@ components:
         - hourlyRate
         - verified
         - avatarUrl
+        - engagedDates
       properties:
         id:
           type: string
@@ -690,6 +691,23 @@ components:
         avatarUrl:
           type: string
         availability:
+          type: string
+        engagedDates:
+          type: array
+          items:
+            $ref: "#/components/schemas/EngagedDateRange"
+
+    EngagedDateRange:
+      type: object
+      required: [startDate, endDate]
+      properties:
+        startDate:
+          type: string
+          description: ISO date YYYY-MM-DD (inclusive)
+        endDate:
+          type: string
+          description: ISO date YYYY-MM-DD (inclusive)
+        note:
           type: string
 
     TrainerDetail:
@@ -738,6 +756,10 @@ components:
           type: string
         availability:
           type: string
+        engagedDates:
+          type: array
+          items:
+            $ref: "#/components/schemas/EngagedDateRange"
 
     Vendor:
       type: object

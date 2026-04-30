@@ -6,11 +6,13 @@ import {
   useGetRequirement,
   useListRequirementApplications,
   useGetCurrentUser,
+  useGetTrainer,
   useApplyToRequirement,
   useUpdateApplicationStatus,
   useUpdateRequirement,
   useDeleteRequirement,
   getGetRequirementQueryKey,
+  getGetTrainerQueryKey,
   getListRequirementApplicationsQueryKey,
   getListRequirementsQueryKey
 } from "@workspace/api-client-react";
@@ -25,8 +27,38 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
+import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
+
+type EngagedRange = { startDate: string; endDate: string; note?: string };
+
+function rangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string) {
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
+function addDaysIso(iso: string, days: number) {
+  const d = new Date(iso + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function findScheduleConflict(
+  requirementStart: string | null | undefined,
+  durationDays: number,
+  engagedDates: EngagedRange[] | undefined,
+): EngagedRange | null {
+  if (!requirementStart || !engagedDates || engagedDates.length === 0) return null;
+  const reqStart = requirementStart.slice(0, 10);
+  const reqEnd = addDaysIso(reqStart, Math.max(0, (durationDays ?? 1) - 1));
+  for (const r of engagedDates) {
+    if (!r?.startDate || !r?.endDate) continue;
+    const s = r.startDate.slice(0, 10);
+    const e = r.endDate.slice(0, 10);
+    if (rangesOverlap(reqStart, reqEnd, s, e)) return r;
+  }
+  return null;
+}
 
 export default function RequirementDetail() {
   const params = useParams<{ id: string }>();
@@ -46,6 +78,11 @@ export default function RequirementDetail() {
 
   const { data: applications, isLoading: appsLoading } = useListRequirementApplications(id, {
     query: { enabled: !!id && isVendorOwner, queryKey: getListRequirementApplicationsQueryKey(id) },
+  });
+
+  const trainerId = user?.role === "trainer" ? user.trainerId : undefined;
+  const { data: currentTrainer } = useGetTrainer(trainerId ?? "", {
+    query: { enabled: !!trainerId, queryKey: getGetTrainerQueryKey(trainerId ?? "") },
   });
 
   const applyMutation = useApplyToRequirement();
@@ -131,6 +168,21 @@ export default function RequirementDetail() {
 
   const isTrainer = user?.role === "trainer";
 
+  const engagedDates = (currentTrainer as { engagedDates?: EngagedRange[] } | undefined)?.engagedDates;
+  const conflict = isTrainer
+    ? findScheduleConflict(requirement.startDate, requirement.durationDays, engagedDates)
+    : null;
+  const formatRangeLabel = (r: EngagedRange) => {
+    try {
+      return `${format(new Date(r.startDate + "T00:00:00"), "MMM d, yyyy")} – ${format(
+        new Date(r.endDate + "T00:00:00"),
+        "MMM d, yyyy",
+      )}`;
+    } catch {
+      return `${r.startDate} – ${r.endDate}`;
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 max-w-5xl">
       <Card className="overflow-hidden border-none shadow-md mb-8 bg-gradient-to-br from-card to-muted/20">
@@ -182,7 +234,24 @@ export default function RequirementDetail() {
               <p className="text-sm text-muted-foreground font-semibold uppercase tracking-wider mb-1">Deadline</p>
               <p className="text-xl font-bold">{format(new Date(requirement.deadline), 'MMM d, yyyy')}</p>
               
-              {isTrainer && requirement.status === 'open' && (
+              {isTrainer && requirement.status === 'open' && conflict && (
+                <div className="w-full mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                  <div className="flex items-start gap-2 text-destructive">
+                    <CalendarX className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium">You're already engaged on these dates.</p>
+                      <p className="text-destructive/80 mt-1">
+                        Conflicts with your booked period {formatRangeLabel(conflict)}
+                        {conflict.note ? ` (${conflict.note})` : ""}. Update your availability in your profile to apply.
+                      </p>
+                    </div>
+                  </div>
+                  <Button size="lg" className="w-full mt-3" disabled aria-disabled="true">
+                    Apply Now
+                  </Button>
+                </div>
+              )}
+              {isTrainer && requirement.status === 'open' && !conflict && (
                 <Dialog open={isApplyOpen} onOpenChange={setIsApplyOpen}>
                   <DialogTrigger asChild>
                     <Button size="lg" className="w-full mt-2">Apply Now</Button>
