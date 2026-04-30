@@ -144,16 +144,22 @@ router.post("/auth/password/login", async (req, res) => {
     return;
   }
 
+  // Always set the server-side session so login works even if Firebase is misconfigured
+  const { setActiveUserId } = await import("../lib/session.js");
+  await setActiveUserId(user.id);
+
+  let customToken: string | null = null;
   try {
     const uid = user.email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-    const customToken = await createCustomToken(uid, { email: user.email });
-    res.json({
-      customToken,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, trainerId: user.trainerId, vendorId: user.vendorId },
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to create session." });
+    customToken = await createCustomToken(uid, { email: user.email });
+  } catch (_err) {
+    // Firebase token generation failed — session cookie auth will still work
   }
+
+  res.json({
+    customToken,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, trainerId: user.trainerId, vendorId: user.vendorId },
+  });
 });
 
 export default router;
