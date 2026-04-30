@@ -228,11 +228,11 @@ export default function TrainerDetail() {
                     ) : null
                   )}
                 </>
-              ) : (
+              ) : user?.role === "vendor" ? (
                 <Link href="/requirements" className="w-full md:w-auto">
                   <Button className="w-full md:w-auto">Invite to Requirement</Button>
                 </Link>
-              )}
+              ) : null}
               {isAdmin && (
                 <AdminRemoveButton
                   variant="full"
@@ -278,13 +278,28 @@ export default function TrainerDetail() {
                     <h3 className="text-xl font-semibold flex items-center gap-2">
                       <Award className="h-5 w-5 text-muted-foreground" /> Certifications
                     </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {trainer.certifications.map((cert, i) => (
-                        <Badge key={i} variant="secondary" className="bg-muted text-muted-foreground font-normal px-3 py-1">
-                          {cert}
-                        </Badge>
-                      ))}
-                    </div>
+                    <ul className="space-y-2">
+                      {trainer.certifications.map((cert, i) => {
+                        const c = cert as { name: string; url?: string };
+                        return (
+                          <li key={i} className="flex items-start gap-2">
+                            <Badge variant="secondary" className="bg-muted text-muted-foreground font-normal px-3 py-1 shrink-0">
+                              {c.name}
+                            </Badge>
+                            {c.url && (
+                              <a
+                                href={c.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-1.5 truncate"
+                              >
+                                Verify
+                              </a>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </section>
                 )}
 

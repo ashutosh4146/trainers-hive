@@ -653,6 +653,7 @@ components:
         - mainSkill
         - subSkills
         - experienceYears
+        - developmentExperienceYears
         - location
         - remote
         - rating
@@ -676,6 +677,10 @@ components:
             type: string
         experienceYears:
           type: integer
+          description: Years of experience as a trainer
+        developmentExperienceYears:
+          type: integer
+          description: Years of hands-on development experience
         location:
           type: string
         remote:
@@ -692,6 +697,10 @@ components:
           type: string
         availability:
           type: string
+        trainerType:
+          type: string
+          enum: [trainer, developer, both]
+          description: Whether the user is a full-time trainer, developer, or both
         engagedDates:
           type: array
           items:
@@ -710,6 +719,16 @@ components:
         note:
           type: string
 
+    Certification:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+          description: Verification URL or shareable link to the certificate file
+
     TrainerDetail:
       allOf:
         - $ref: "#/components/schemas/Trainer"
@@ -721,7 +740,7 @@ components:
             certifications:
               type: array
               items:
-                type: string
+                $ref: "#/components/schemas/Certification"
             languages:
               type: array
               items:
@@ -730,6 +749,9 @@ components:
               type: integer
             portfolioUrl:
               type: string
+            resumeUrl:
+              type: string
+              description: Shareable link to the trainer's resume
 
     UpdateTrainerBody:
       type: object
@@ -746,6 +768,8 @@ components:
             type: string
         experienceYears:
           type: integer
+        developmentExperienceYears:
+          type: integer
         location:
           type: string
         remote:
@@ -755,6 +779,19 @@ components:
         bio:
           type: string
         availability:
+          type: string
+        trainerType:
+          type: string
+          enum: [trainer, developer, both]
+        languages:
+          type: array
+          items:
+            type: string
+        certifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Certification"
+        resumeUrl:
           type: string
         engagedDates:
           type: array

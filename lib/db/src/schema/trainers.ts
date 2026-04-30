@@ -24,10 +24,18 @@ export const trainersTable = pgTable("trainers", {
   avatarUrl: text("avatar_url").notNull(),
   availability: text("availability"),
   bio: text("bio").notNull(),
-  certifications: jsonb("certifications").$type<string[]>().notNull().default([]),
+  certifications: jsonb("certifications")
+    .$type<Array<{ name: string; url?: string }>>()
+    .notNull()
+    .default([]),
   languages: jsonb("languages").$type<string[]>().notNull().default([]),
   completedTrainings: integer("completed_trainings").notNull().default(0),
   portfolioUrl: text("portfolio_url"),
+  developmentExperienceYears: integer("development_experience_years")
+    .notNull()
+    .default(0),
+  trainerType: text("trainer_type"), // 'trainer' | 'developer' | 'both' | null
+  resumeUrl: text("resume_url"),
   engagedDates: jsonb("engaged_dates")
     .$type<Array<{ startDate: string; endDate: string; note?: string }>>()
     .notNull()

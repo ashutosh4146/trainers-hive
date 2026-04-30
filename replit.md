@@ -59,7 +59,11 @@ Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAu
 ## Conventions
 
 - Trainer rating stored as `numeric`; always serialize with `Number()` before returning.
-- `subSkills`, `certifications`, `languages` stored as `jsonb` arrays.
+- `subSkills`, `languages` stored as `jsonb` string arrays.
+- `certifications` stored as `jsonb` array of `{name: string, url?: string}` (legacy plain-string entries are normalized server-side via `normalizeCertifications`).
+- Trainer profile additional fields: `developmentExperienceYears` (int, default 0, separate from `experienceYears` which now means training years), `trainerType` ("trainer" | "developer" | "both", nullable), `resumeUrl` (text, nullable — plain shareable URL until object storage is wired).
+- **Profile edit form (Profile.tsx)** uses an 11-field spec for trainers: full name, registered email (read-only from `currentUser.email`), primary skill (cmdk Combobox with custom-add), sub-skills (chip TagInput), training years + development years (separate inputs), location, languages (chip TagInput), certifications (name + verification URL editor), optional resume URL, bio, trainerType (Select). Headline / hourlyRate / remote toggle were removed from this form (the columns remain in DB and existing values are preserved).
+- **Invite gating**: TrainerDetail's "Invite to Requirement" button only renders when `user?.role === "vendor"`. Trainers, admins, and guests do not see it.
 - **api-zod entry point**: `lib/api-zod/src/validators.ts` (NOT index.ts). Package exports point here. `index.ts` is orval-managed and excluded from tsconfig to avoid duplicate-export collisions.
 - **Requirements schema extended fields**: `trainingType`, `trainingMode` ("remote"|"in-person"|"hybrid"), `trainerCount`, `trainerType` ("part-time"|"full-time"|"mentor"), `benefits` ("ta-da"|"stay-only"|"none"), `certifications`, `language`, `trainerScope` ("local"|"pan-india"), `startDate`. All nullable, backward-compatible.
 - Budget/feeType are kept in DB for legacy data but NOT shown in the UI — payout is discussed directly between vendor and trainer.

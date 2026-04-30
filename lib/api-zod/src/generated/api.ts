@@ -72,7 +72,10 @@ export const ListTrainersResponseItem = zod.object({
   headline: zod.string(),
   mainSkill: zod.string(),
   subSkills: zod.array(zod.string()),
-  experienceYears: zod.number(),
+  experienceYears: zod.number().describe("Years of experience as a trainer"),
+  developmentExperienceYears: zod
+    .number()
+    .describe("Years of hands-on development experience"),
   location: zod.string(),
   remote: zod.boolean(),
   rating: zod.number(),
@@ -81,6 +84,10 @@ export const ListTrainersResponseItem = zod.object({
   verified: zod.boolean(),
   avatarUrl: zod.string(),
   availability: zod.string().optional(),
+  trainerType: zod
+    .enum(["trainer", "developer", "both"])
+    .optional()
+    .describe("Whether the user is a full-time trainer, developer, or both"),
   engagedDates: zod.array(
     zod.object({
       startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -100,7 +107,10 @@ export const ListFeaturedTrainersResponseItem = zod.object({
   headline: zod.string(),
   mainSkill: zod.string(),
   subSkills: zod.array(zod.string()),
-  experienceYears: zod.number(),
+  experienceYears: zod.number().describe("Years of experience as a trainer"),
+  developmentExperienceYears: zod
+    .number()
+    .describe("Years of hands-on development experience"),
   location: zod.string(),
   remote: zod.boolean(),
   rating: zod.number(),
@@ -109,6 +119,10 @@ export const ListFeaturedTrainersResponseItem = zod.object({
   verified: zod.boolean(),
   avatarUrl: zod.string(),
   availability: zod.string().optional(),
+  trainerType: zod
+    .enum(["trainer", "developer", "both"])
+    .optional()
+    .describe("Whether the user is a full-time trainer, developer, or both"),
   engagedDates: zod.array(
     zod.object({
       startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -132,7 +146,10 @@ export const GetTrainerResponse = zod
     headline: zod.string(),
     mainSkill: zod.string(),
     subSkills: zod.array(zod.string()),
-    experienceYears: zod.number(),
+    experienceYears: zod.number().describe("Years of experience as a trainer"),
+    developmentExperienceYears: zod
+      .number()
+      .describe("Years of hands-on development experience"),
     location: zod.string(),
     remote: zod.boolean(),
     rating: zod.number(),
@@ -141,6 +158,10 @@ export const GetTrainerResponse = zod
     verified: zod.boolean(),
     avatarUrl: zod.string(),
     availability: zod.string().optional(),
+    trainerType: zod
+      .enum(["trainer", "developer", "both"])
+      .optional()
+      .describe("Whether the user is a full-time trainer, developer, or both"),
     engagedDates: zod.array(
       zod.object({
         startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -152,10 +173,24 @@ export const GetTrainerResponse = zod
   .and(
     zod.object({
       bio: zod.string(),
-      certifications: zod.array(zod.string()),
+      certifications: zod.array(
+        zod.object({
+          name: zod.string(),
+          url: zod
+            .string()
+            .optional()
+            .describe(
+              "Verification URL or shareable link to the certificate file",
+            ),
+        }),
+      ),
       languages: zod.array(zod.string()),
       completedTrainings: zod.number(),
       portfolioUrl: zod.string().optional(),
+      resumeUrl: zod
+        .string()
+        .optional()
+        .describe("Shareable link to the trainer's resume"),
     }),
   );
 
@@ -169,11 +204,28 @@ export const UpdateTrainerBody = zod.object({
   mainSkill: zod.string().optional(),
   subSkills: zod.array(zod.string()).optional(),
   experienceYears: zod.number().optional(),
+  developmentExperienceYears: zod.number().optional(),
   location: zod.string().optional(),
   remote: zod.boolean().optional(),
   hourlyRate: zod.number().optional(),
   bio: zod.string().optional(),
   availability: zod.string().optional(),
+  trainerType: zod.enum(["trainer", "developer", "both"]).optional(),
+  languages: zod.array(zod.string()).optional(),
+  certifications: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        url: zod
+          .string()
+          .optional()
+          .describe(
+            "Verification URL or shareable link to the certificate file",
+          ),
+      }),
+    )
+    .optional(),
+  resumeUrl: zod.string().optional(),
   engagedDates: zod
     .array(
       zod.object({
@@ -192,7 +244,10 @@ export const UpdateTrainerResponse = zod
     headline: zod.string(),
     mainSkill: zod.string(),
     subSkills: zod.array(zod.string()),
-    experienceYears: zod.number(),
+    experienceYears: zod.number().describe("Years of experience as a trainer"),
+    developmentExperienceYears: zod
+      .number()
+      .describe("Years of hands-on development experience"),
     location: zod.string(),
     remote: zod.boolean(),
     rating: zod.number(),
@@ -201,6 +256,10 @@ export const UpdateTrainerResponse = zod
     verified: zod.boolean(),
     avatarUrl: zod.string(),
     availability: zod.string().optional(),
+    trainerType: zod
+      .enum(["trainer", "developer", "both"])
+      .optional()
+      .describe("Whether the user is a full-time trainer, developer, or both"),
     engagedDates: zod.array(
       zod.object({
         startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -212,10 +271,24 @@ export const UpdateTrainerResponse = zod
   .and(
     zod.object({
       bio: zod.string(),
-      certifications: zod.array(zod.string()),
+      certifications: zod.array(
+        zod.object({
+          name: zod.string(),
+          url: zod
+            .string()
+            .optional()
+            .describe(
+              "Verification URL or shareable link to the certificate file",
+            ),
+        }),
+      ),
       languages: zod.array(zod.string()),
       completedTrainings: zod.number(),
       portfolioUrl: zod.string().optional(),
+      resumeUrl: zod
+        .string()
+        .optional()
+        .describe("Shareable link to the trainer's resume"),
     }),
   );
 
@@ -535,7 +608,12 @@ export const ListRequirementApplicationsResponseItem = zod
         headline: zod.string(),
         mainSkill: zod.string(),
         subSkills: zod.array(zod.string()),
-        experienceYears: zod.number(),
+        experienceYears: zod
+          .number()
+          .describe("Years of experience as a trainer"),
+        developmentExperienceYears: zod
+          .number()
+          .describe("Years of hands-on development experience"),
         location: zod.string(),
         remote: zod.boolean(),
         rating: zod.number(),
@@ -544,6 +622,12 @@ export const ListRequirementApplicationsResponseItem = zod
         verified: zod.boolean(),
         avatarUrl: zod.string(),
         availability: zod.string().optional(),
+        trainerType: zod
+          .enum(["trainer", "developer", "both"])
+          .optional()
+          .describe(
+            "Whether the user is a full-time trainer, developer, or both",
+          ),
         engagedDates: zod.array(
           zod.object({
             startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
