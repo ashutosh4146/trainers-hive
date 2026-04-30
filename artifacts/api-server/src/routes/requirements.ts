@@ -467,6 +467,39 @@ router.get("/requirements/:id/applications", async (req, res) => {
     res.status(400).json({ error: "invalid params" });
     return;
   }
+
+  // Authorization: only the owning vendor or an admin may view the applicant
+  // list (which now includes engagedDates and applicant rates/messages).
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active) {
+    res.status(401).json({ error: "not authenticated" });
+    return;
+  }
+  if (active.role !== "admin") {
+    const [reqRow] = await db
+      .select()
+      .from(requirementsTable)
+      .where(eq(requirementsTable.id, params.data.id))
+      .limit(1);
+    if (!reqRow) {
+      res.status(404).json({ error: "requirement not found" });
+      return;
+    }
+    const isOwner =
+      active.role === "vendor" &&
+      !!active.vendorId &&
+      active.vendorId === reqRow.vendorId;
+    if (!isOwner) {
+      res.status(403).json({ error: "not allowed" });
+      return;
+    }
+  }
+
   const rows = await db
     .select({ app: applicationsTable, trainer: trainersTable })
     .from(applicationsTable)
