@@ -24,8 +24,8 @@ import { notifyTrainerStatusUpdate } from "../lib/mailer";
 
 const router: IRouter = Router();
 
-router.get("/applications", async (_req, res) => {
-  const activeId = await getActiveUserId();
+router.get("/applications", async (req, res) => {
+  const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
     .from(usersTable)
