@@ -31,10 +31,12 @@ import type {
   HireInquiry,
   ListRequirementsParams,
   ListTrainersParams,
+  Message,
   PlatformStats,
   Requirement,
   RequirementDetail,
   Review,
+  SendMessageBody,
   SkillCategory,
   SwitchUserBody,
   Trainer,
@@ -2069,6 +2071,182 @@ export const useUpdateApplicationStatus = <
   TContext
 > => {
   return useMutation(getUpdateApplicationStatusMutationOptions(options));
+};
+
+/**
+ * @summary Get message thread for an application
+ */
+export const getListApplicationMessagesUrl = (id: string) => {
+  return `/api/applications/${id}/messages`;
+};
+
+export const listApplicationMessages = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Message[]> => {
+  return customFetch<Message[]>(getListApplicationMessagesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListApplicationMessagesQueryKey = (id: string) => {
+  return [`/api/applications/${id}/messages`] as const;
+};
+
+export const getListApplicationMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listApplicationMessages>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listApplicationMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListApplicationMessagesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listApplicationMessages>>
+  > = ({ signal }) =>
+    listApplicationMessages(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listApplicationMessages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListApplicationMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listApplicationMessages>>
+>;
+export type ListApplicationMessagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get message thread for an application
+ */
+
+export function useListApplicationMessages<
+  TData = Awaited<ReturnType<typeof listApplicationMessages>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listApplicationMessages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListApplicationMessagesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Send a message in an application thread
+ */
+export const getSendApplicationMessageUrl = (id: string) => {
+  return `/api/applications/${id}/messages`;
+};
+
+export const sendApplicationMessage = async (
+  id: string,
+  sendMessageBody: SendMessageBody,
+  options?: RequestInit,
+): Promise<Message> => {
+  return customFetch<Message>(getSendApplicationMessageUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendMessageBody),
+  });
+};
+
+export const getSendApplicationMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendApplicationMessage>>,
+    TError,
+    { id: string; data: BodyType<SendMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendApplicationMessage>>,
+  TError,
+  { id: string; data: BodyType<SendMessageBody> },
+  TContext
+> => {
+  const mutationKey = ["sendApplicationMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendApplicationMessage>>,
+    { id: string; data: BodyType<SendMessageBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return sendApplicationMessage(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendApplicationMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendApplicationMessage>>
+>;
+export type SendApplicationMessageMutationBody = BodyType<SendMessageBody>;
+export type SendApplicationMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a message in an application thread
+ */
+export const useSendApplicationMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendApplicationMessage>>,
+    TError,
+    { id: string; data: BodyType<SendMessageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendApplicationMessage>>,
+  TError,
+  { id: string; data: BodyType<SendMessageBody> },
+  TContext
+> => {
+  return useMutation(getSendApplicationMessageMutationOptions(options));
 };
 
 /**
