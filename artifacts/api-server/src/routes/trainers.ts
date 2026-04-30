@@ -366,6 +366,10 @@ router.get("/trainers/:id/reviews", async (req, res) => {
       vendorName: r.vendor?.companyName ?? "Unknown",
       vendorLogoUrl: r.vendor?.logoUrl ?? undefined,
       rating: r.review.rating,
+      ratingContent: r.review.ratingContent ?? undefined,
+      ratingDelivery: r.review.ratingDelivery ?? undefined,
+      ratingPunctuality: r.review.ratingPunctuality ?? undefined,
+      ratingCommunication: r.review.ratingCommunication ?? undefined,
       comment: r.review.comment,
       engagementTitle: r.review.engagementTitle ?? undefined,
       createdAt: r.review.createdAt.toISOString(),
@@ -399,16 +403,25 @@ router.post("/trainers/:id/reviews", async (req, res) => {
     return;
   }
 
+  const { ratingContent, ratingDelivery, ratingPunctuality, ratingCommunication, comment, engagementTitle } = body.data;
+  const aggregateRating = Math.round(
+    (ratingContent + ratingDelivery + ratingPunctuality + ratingCommunication) / 4,
+  );
+
   const id = newId("rev");
   await db.insert(reviewsTable).values({
     id,
     trainerId: params.data.id,
     vendorId: active.vendorId,
-    rating: body.data.rating,
-    comment: body.data.comment,
-    engagementTitle: body.data.engagementTitle,
+    rating: aggregateRating,
+    ratingContent,
+    ratingDelivery,
+    ratingPunctuality,
+    ratingCommunication,
+    comment,
+    engagementTitle,
   });
-  // Recompute trainer aggregate
+  // Recompute trainer aggregate rating from all reviews
   const stats = await db
     .select({
       avg: sql<string>`COALESCE(AVG(${reviewsTable.rating}), 0)`,
@@ -430,7 +443,7 @@ router.post("/trainers/:id/reviews", async (req, res) => {
     id: newId("act"),
     type: "review",
     title: `${active.name} left a review`,
-    subtitle: `${body.data.rating}/5 stars`,
+    subtitle: `${aggregateRating}/5 stars`,
     avatarUrl: active.avatarUrl,
   });
 
@@ -446,9 +459,13 @@ router.post("/trainers/:id/reviews", async (req, res) => {
     vendorId: active.vendorId,
     vendorName: vendor?.companyName ?? "Unknown",
     vendorLogoUrl: vendor?.logoUrl ?? undefined,
-    rating: body.data.rating,
-    comment: body.data.comment,
-    engagementTitle: body.data.engagementTitle ?? undefined,
+    rating: aggregateRating,
+    ratingContent,
+    ratingDelivery,
+    ratingPunctuality,
+    ratingCommunication,
+    comment,
+    engagementTitle: engagementTitle ?? undefined,
     createdAt: new Date().toISOString(),
   });
 });
