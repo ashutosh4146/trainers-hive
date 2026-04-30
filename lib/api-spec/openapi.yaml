@@ -269,6 +269,76 @@ paths:
               schema:
                 $ref: "#/components/schemas/Vendor"
 
+  /vendors/{id}/saved-trainers:
+    get:
+      operationId: listSavedTrainers
+      tags: [vendors]
+      summary: Get all trainers bookmarked by a vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saved trainers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedTrainer"
+        "403":
+          description: Not the owning vendor
+    post:
+      operationId: saveTrainer
+      tags: [vendors]
+      summary: Bookmark a trainer for a vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveTrainerBody"
+      responses:
+        "201":
+          description: Trainer saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedTrainer"
+        "409":
+          description: Already saved
+
+  /vendors/{id}/saved-trainers/{trainerId}:
+    delete:
+      operationId: unsaveTrainer
+      tags: [vendors]
+      summary: Remove a trainer bookmark for a vendor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: trainerId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Unsaved
+        "404":
+          description: Bookmark not found
+
   /requirements:
     get:
       operationId: listRequirements
@@ -819,6 +889,28 @@ components:
           items:
             $ref: "#/components/schemas/EngagedDateRange"
 
+    SavedTrainer:
+      type: object
+      required: [id, trainerId, vendorId, savedAt, trainer]
+      properties:
+        id:
+          type: string
+        trainerId:
+          type: string
+        vendorId:
+          type: string
+        savedAt:
+          type: string
+        trainer:
+          $ref: "#/components/schemas/Trainer"
+
+    SaveTrainerBody:
+      type: object
+      required: [trainerId]
+      properties:
+        trainerId:
+          type: string
+
     SuggestedTrainer:
       type: object
       required: [id, name, mainSkill, rating, avatarUrl]
@@ -1275,6 +1367,27 @@ components:
           type: string
         rating:
           type: integer
+          description: Aggregate star rating (1–5); equals average of dimension scores for new reviews
+        ratingContent:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Content Quality score
+        ratingDelivery:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Delivery score
+        ratingPunctuality:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Punctuality score
+        ratingCommunication:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Communication score
         comment:
           type: string
         engagementTitle:
@@ -1309,12 +1422,28 @@ components:
 
     CreateReviewBody:
       type: object
-      required: [rating, comment]
+      required: [ratingContent, ratingDelivery, ratingPunctuality, ratingCommunication, comment]
       properties:
-        rating:
+        ratingContent:
           type: integer
           minimum: 1
           maximum: 5
+          description: Content Quality score
+        ratingDelivery:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Delivery score
+        ratingPunctuality:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Punctuality score
+        ratingCommunication:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Communication score
         comment:
           type: string
         engagementTitle:
