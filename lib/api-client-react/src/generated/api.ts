@@ -36,6 +36,8 @@ import type {
   Requirement,
   RequirementDetail,
   Review,
+  SaveTrainerBody,
+  SavedTrainer,
   SendMessageBody,
   SkillCategory,
   SuggestedTrainer,
@@ -1098,6 +1100,265 @@ export const useUpdateVendor = <
   TContext
 > => {
   return useMutation(getUpdateVendorMutationOptions(options));
+};
+
+/**
+ * @summary Get all trainers bookmarked by a vendor
+ */
+export const getListSavedTrainersUrl = (id: string) => {
+  return `/api/vendors/${id}/saved-trainers`;
+};
+
+export const listSavedTrainers = async (
+  id: string,
+  options?: RequestInit,
+): Promise<SavedTrainer[]> => {
+  return customFetch<SavedTrainer[]>(getListSavedTrainersUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSavedTrainersQueryKey = (id: string) => {
+  return [`/api/vendors/${id}/saved-trainers`] as const;
+};
+
+export const getListSavedTrainersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSavedTrainers>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSavedTrainers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSavedTrainersQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSavedTrainers>>
+  > = ({ signal }) => listSavedTrainers(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSavedTrainers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSavedTrainersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSavedTrainers>>
+>;
+export type ListSavedTrainersQueryError = ErrorType<void>;
+
+/**
+ * @summary Get all trainers bookmarked by a vendor
+ */
+
+export function useListSavedTrainers<
+  TData = Awaited<ReturnType<typeof listSavedTrainers>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSavedTrainers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSavedTrainersQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Bookmark a trainer for a vendor
+ */
+export const getSaveTrainerUrl = (id: string) => {
+  return `/api/vendors/${id}/saved-trainers`;
+};
+
+export const saveTrainer = async (
+  id: string,
+  saveTrainerBody: SaveTrainerBody,
+  options?: RequestInit,
+): Promise<SavedTrainer> => {
+  return customFetch<SavedTrainer>(getSaveTrainerUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(saveTrainerBody),
+  });
+};
+
+export const getSaveTrainerMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveTrainer>>,
+    TError,
+    { id: string; data: BodyType<SaveTrainerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveTrainer>>,
+  TError,
+  { id: string; data: BodyType<SaveTrainerBody> },
+  TContext
+> => {
+  const mutationKey = ["saveTrainer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveTrainer>>,
+    { id: string; data: BodyType<SaveTrainerBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return saveTrainer(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveTrainerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveTrainer>>
+>;
+export type SaveTrainerMutationBody = BodyType<SaveTrainerBody>;
+export type SaveTrainerMutationError = ErrorType<void>;
+
+/**
+ * @summary Bookmark a trainer for a vendor
+ */
+export const useSaveTrainer = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveTrainer>>,
+    TError,
+    { id: string; data: BodyType<SaveTrainerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveTrainer>>,
+  TError,
+  { id: string; data: BodyType<SaveTrainerBody> },
+  TContext
+> => {
+  return useMutation(getSaveTrainerMutationOptions(options));
+};
+
+/**
+ * @summary Remove a trainer bookmark for a vendor
+ */
+export const getUnsaveTrainerUrl = (id: string, trainerId: string) => {
+  return `/api/vendors/${id}/saved-trainers/${trainerId}`;
+};
+
+export const unsaveTrainer = async (
+  id: string,
+  trainerId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getUnsaveTrainerUrl(id, trainerId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUnsaveTrainerMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsaveTrainer>>,
+    TError,
+    { id: string; trainerId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unsaveTrainer>>,
+  TError,
+  { id: string; trainerId: string },
+  TContext
+> => {
+  const mutationKey = ["unsaveTrainer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unsaveTrainer>>,
+    { id: string; trainerId: string }
+  > = (props) => {
+    const { id, trainerId } = props ?? {};
+
+    return unsaveTrainer(id, trainerId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnsaveTrainerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unsaveTrainer>>
+>;
+
+export type UnsaveTrainerMutationError = ErrorType<void>;
+
+/**
+ * @summary Remove a trainer bookmark for a vendor
+ */
+export const useUnsaveTrainer = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsaveTrainer>>,
+    TError,
+    { id: string; trainerId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unsaveTrainer>>,
+  TError,
+  { id: string; trainerId: string },
+  TContext
+> => {
+  return useMutation(getUnsaveTrainerMutationOptions(options));
 };
 
 /**
