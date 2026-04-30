@@ -9,3 +9,4 @@ export * from "./activity";
 export * from "./hire-inquiries";
 export * from "./verification-requests";
 export * from "./messages";
+export * from "./saved-trainers";
