@@ -830,8 +830,10 @@ export const SendApplicationMessageParams = zod.object({
   id: zod.coerce.string(),
 });
 
+export const sendApplicationMessageBodyBodyMax = 2000;
+
 export const SendApplicationMessageBody = zod.object({
-  body: zod.string(),
+  body: zod.string().max(sendApplicationMessageBodyBodyMax),
 });
 
 /**
