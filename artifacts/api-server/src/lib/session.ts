@@ -5,6 +5,18 @@ import { verifyIdToken } from "./firebase";
 
 const SESSION_KEY = "default";
 
+/**
+ * Thrown when the resolved user's account has been deactivated by an admin.
+ * Express 5 propagates unhandled async throws from route handlers to the
+ * global error middleware, so callers don't need to handle this explicitly.
+ */
+export class AccountDeactivatedError extends Error {
+  constructor() {
+    super("account_deactivated");
+    this.name = "AccountDeactivatedError";
+  }
+}
+
 export async function getActiveUserId(req?: Request): Promise<string> {
   if (req) {
     const authHeader = req.headers.authorization;
@@ -19,9 +31,13 @@ export async function getActiveUserId(req?: Request): Promise<string> {
             .from(usersTable)
             .where(eq(usersTable.email, email))
             .limit(1);
-          if (user) return user.id;
+          if (user) {
+            if (user.deactivatedAt) throw new AccountDeactivatedError();
+            return user.id;
+          }
         }
-      } catch {
+      } catch (e) {
+        if (e instanceof AccountDeactivatedError) throw e;
         // Invalid/expired token — fall through to shared session
       }
     }
@@ -32,8 +48,18 @@ export async function getActiveUserId(req?: Request): Promise<string> {
     .from(sessionStateTable)
     .where(eq(sessionStateTable.id, SESSION_KEY))
     .limit(1);
-  if (rows.length === 0) return "user-vendor";
-  return rows[0]!.activeUserId;
+  const userId = rows.length === 0 ? "user-vendor" : rows[0]!.activeUserId;
+
+  // Also check deactivation for session-based users so that switching to a
+  // deactivated account via /session/switch still triggers the guard.
+  const [sessionUser] = await db
+    .select({ deactivatedAt: usersTable.deactivatedAt })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (sessionUser?.deactivatedAt) throw new AccountDeactivatedError();
+
+  return userId;
 }
 
 export async function setActiveUserId(userId: string): Promise<void> {

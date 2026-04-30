@@ -29,6 +29,9 @@ export interface CurrentUser {
 
 export interface SwitchUserBody {
   role: UserRole;
+  name?: string;
+  email?: string;
+  orgName?: string;
 }
 
 export interface SkillCategory {

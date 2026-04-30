@@ -927,6 +927,13 @@ components:
       properties:
         role:
           $ref: "#/components/schemas/UserRole"
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        orgName:
+          type: string
 
     SkillCategory:
       type: object

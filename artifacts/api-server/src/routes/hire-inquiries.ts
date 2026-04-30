@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, usersTable } from "@workspace/db";
 import { hireInquiriesTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { newId } from "../lib/ids";
@@ -7,6 +7,16 @@ import { getActiveUserId } from "../lib/session";
 import { notifyAdminNewInquiry } from "../lib/mailer";
 
 const router: IRouter = Router();
+
+async function requireAdminUser(req: Parameters<typeof getActiveUserId>[0]) {
+  const id = await getActiveUserId(req);
+  const [user] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, id))
+    .limit(1);
+  return user?.role === "admin" ? user : null;
+}
 
 router.post("/hire-inquiries", async (req, res) => {
   const { companyName, contactName, email, phone, trainingNeed, budget, timeline, headcount, location } = req.body;
@@ -19,7 +29,7 @@ router.post("/hire-inquiries", async (req, res) => {
   const inquiry = await db
     .insert(hireInquiriesTable)
     .values({
-      id: newId(),
+      id: newId("inq"),
       companyName,
       contactName,
       email,
@@ -48,8 +58,8 @@ router.post("/hire-inquiries", async (req, res) => {
 });
 
 router.get("/hire-inquiries", async (req, res) => {
-  const active = await getActiveUserId(req);
-  if (!active || active.role !== "admin") {
+  const admin = await requireAdminUser(req);
+  if (!admin) {
     res.status(403).json({ error: "admin only" });
     return;
   }
@@ -63,8 +73,8 @@ router.get("/hire-inquiries", async (req, res) => {
 });
 
 router.patch("/hire-inquiries/:id/status", async (req, res) => {
-  const active = await getActiveUserId(req);
-  if (!active || active.role !== "admin") {
+  const admin = await requireAdminUser(req);
+  if (!admin) {
     res.status(403).json({ error: "admin only" });
     return;
   }

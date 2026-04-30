@@ -166,7 +166,7 @@ export default function NewRequirement() {
   const vendorId = user?.vendorId ?? undefined;
   const { data: previousRequirements } = useListRequirements(
     { vendorId },
-    { query: { enabled: !!vendorId } },
+    { query: { enabled: !!vendorId, queryKey: getListRequirementsQueryKey({ vendorId }) } },
   );
 
   const allSkillSuggestions: string[] = skillsData
