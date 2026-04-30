@@ -80,6 +80,27 @@ export interface Trainer {
   engagedDates: EngagedDateRange[];
 }
 
+export interface SavedTrainer {
+  id: string;
+  trainerId: string;
+  vendorId: string;
+  savedAt: string;
+  trainer: Trainer;
+}
+
+export interface SaveTrainerBody {
+  trainerId: string;
+}
+
+export interface SuggestedTrainer {
+  id: string;
+  name: string;
+  mainSkill: string;
+  rating: number;
+  avatarUrl: string;
+  reviewCount?: number;
+}
+
 export interface Certification {
   name: string;
   /** Verification URL or shareable link to the certificate file */
@@ -289,7 +310,32 @@ export interface Review {
   vendorId: string;
   vendorName: string;
   vendorLogoUrl?: string;
+  /** Aggregate star rating (1–5); equals average of dimension scores for new reviews */
   rating: number;
+  /**
+   * Content Quality score
+   * @minimum 1
+   * @maximum 5
+   */
+  ratingContent?: number;
+  /**
+   * Delivery score
+   * @minimum 1
+   * @maximum 5
+   */
+  ratingDelivery?: number;
+  /**
+   * Punctuality score
+   * @minimum 1
+   * @maximum 5
+   */
+  ratingPunctuality?: number;
+  /**
+   * Communication score
+   * @minimum 1
+   * @maximum 5
+   */
+  ratingCommunication?: number;
   comment: string;
   engagementTitle?: string;
   createdAt: string;
@@ -310,10 +356,29 @@ export interface SendMessageBody {
 
 export interface CreateReviewBody {
   /**
+   * Content Quality score
    * @minimum 1
    * @maximum 5
    */
-  rating: number;
+  ratingContent: number;
+  /**
+   * Delivery score
+   * @minimum 1
+   * @maximum 5
+   */
+  ratingDelivery: number;
+  /**
+   * Punctuality score
+   * @minimum 1
+   * @maximum 5
+   */
+  ratingPunctuality: number;
+  /**
+   * Communication score
+   * @minimum 1
+   * @maximum 5
+   */
+  ratingCommunication: number;
   comment: string;
   engagementTitle?: string;
 }
@@ -426,6 +491,38 @@ export interface UpdateHireInquiryStatusBody {
   status: UpdateHireInquiryStatusBodyStatus;
 }
 
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatarUrl?: string;
+  vendorId?: string;
+  trainerId?: string;
+  createdAt: string;
+  /** ISO timestamp; present when the account is deactivated */
+  deactivatedAt?: string;
+}
+
+export interface AdminUsersPage {
+  users: AdminUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type ChangeUserRoleBodyRole =
+  (typeof ChangeUserRoleBodyRole)[keyof typeof ChangeUserRoleBodyRole];
+
+export const ChangeUserRoleBodyRole = {
+  trainer: "trainer",
+  vendor: "vendor",
+} as const;
+
+export interface ChangeUserRoleBody {
+  role: ChangeUserRoleBodyRole;
+}
+
 export type ListTrainersParams = {
   q?: string;
   skill?: string;
@@ -471,4 +568,29 @@ export const ListRequirementsSort = {
   recent: "recent",
   deadline: "deadline",
   budget: "budget",
+} as const;
+
+export type ListAdminUsersParams = {
+  q?: string;
+  role?: ListAdminUsersRole;
+  status?: ListAdminUsersStatus;
+  page?: number;
+  pageSize?: number;
+};
+
+export type ListAdminUsersRole =
+  (typeof ListAdminUsersRole)[keyof typeof ListAdminUsersRole];
+
+export const ListAdminUsersRole = {
+  trainer: "trainer",
+  vendor: "vendor",
+  admin: "admin",
+} as const;
+
+export type ListAdminUsersStatus =
+  (typeof ListAdminUsersStatus)[keyof typeof ListAdminUsersStatus];
+
+export const ListAdminUsersStatus = {
+  active: "active",
+  deactivated: "deactivated",
 } as const;

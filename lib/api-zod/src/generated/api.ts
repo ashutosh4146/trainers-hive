@@ -1113,3 +1113,106 @@ export const UpdateHireInquiryStatusResponse = zod.object({
   status: zod.enum(["new", "contacted", "in_progress", "closed"]),
   createdAt: zod.coerce.date(),
 });
+
+/**
+ * @summary List all users (admin only)
+ */
+export const ListAdminUsersQueryParams = zod.object({
+  q: zod.coerce.string().optional(),
+  role: zod.enum(["trainer", "vendor", "admin"]).optional(),
+  status: zod.enum(["active", "deactivated"]).optional(),
+  page: zod.coerce.number().optional(),
+  pageSize: zod.coerce.number().optional(),
+});
+
+export const ListAdminUsersResponse = zod.object({
+  users: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      email: zod.string(),
+      role: zod.string(),
+      avatarUrl: zod.string().optional(),
+      vendorId: zod.string().optional(),
+      trainerId: zod.string().optional(),
+      createdAt: zod.string(),
+      deactivatedAt: zod
+        .string()
+        .optional()
+        .describe("ISO timestamp; present when the account is deactivated"),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
+});
+
+/**
+ * @summary Deactivate a user account (admin only)
+ */
+export const DeactivateUserParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DeactivateUserResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.string(),
+  avatarUrl: zod.string().optional(),
+  vendorId: zod.string().optional(),
+  trainerId: zod.string().optional(),
+  createdAt: zod.string(),
+  deactivatedAt: zod
+    .string()
+    .optional()
+    .describe("ISO timestamp; present when the account is deactivated"),
+});
+
+/**
+ * @summary Reactivate a deactivated user account (admin only)
+ */
+export const ReactivateUserParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ReactivateUserResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.string(),
+  avatarUrl: zod.string().optional(),
+  vendorId: zod.string().optional(),
+  trainerId: zod.string().optional(),
+  createdAt: zod.string(),
+  deactivatedAt: zod
+    .string()
+    .optional()
+    .describe("ISO timestamp; present when the account is deactivated"),
+});
+
+/**
+ * @summary Change a user's role (admin only)
+ */
+export const ChangeUserRoleParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ChangeUserRoleBody = zod.object({
+  role: zod.enum(["trainer", "vendor"]),
+});
+
+export const ChangeUserRoleResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.string(),
+  avatarUrl: zod.string().optional(),
+  vendorId: zod.string().optional(),
+  trainerId: zod.string().optional(),
+  createdAt: zod.string(),
+  deactivatedAt: zod
+    .string()
+    .optional()
+    .describe("ISO timestamp; present when the account is deactivated"),
+});
