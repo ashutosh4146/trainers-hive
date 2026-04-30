@@ -8,8 +8,13 @@ import {
   getListSkillsQueryKey,
   useGetCurrentUser,
   useDeleteTrainer,
+  useListSavedTrainers,
+  useSaveTrainer,
+  useUnsaveTrainer,
+  getListSavedTrainersQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Star, MapPin, Briefcase, Filter, X, Users } from "lucide-react";
+import { Search, Star, MapPin, Briefcase, Filter, X, Users, Bookmark } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Trainers() {
@@ -51,8 +56,47 @@ export default function Trainers() {
 
   const { data: currentUser } = useGetCurrentUser();
   const isAdmin = currentUser?.role === "admin";
+  const isVendor = currentUser?.role === "vendor";
+  const vendorId = currentUser?.role === "vendor" ? currentUser.vendorId : undefined;
   const deleteTrainer = useDeleteTrainer();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: savedTrainers } = useListSavedTrainers(vendorId ?? "", {
+    query: { enabled: !!vendorId, queryKey: getListSavedTrainersQueryKey(vendorId ?? "") },
+  });
+  const savedIds = React.useMemo(() => new Set(savedTrainers?.map((s) => s.trainerId) ?? []), [savedTrainers]);
+  const saveTrainer = useSaveTrainer();
+  const unsaveTrainer = useUnsaveTrainer();
+
+  const handleToggleSave = (e: React.MouseEvent, trainerId: string, trainerName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!vendorId) return;
+    if (savedIds.has(trainerId)) {
+      unsaveTrainer.mutate(
+        { id: vendorId, trainerId },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListSavedTrainersQueryKey(vendorId) });
+            toast({ title: `Removed ${trainerName} from saved trainers` });
+          },
+          onError: () => toast({ title: "Error", description: "Could not remove bookmark.", variant: "destructive" }),
+        },
+      );
+    } else {
+      saveTrainer.mutate(
+        { id: vendorId, data: { trainerId } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListSavedTrainersQueryKey(vendorId) });
+            toast({ title: "Trainer saved!" });
+          },
+          onError: () => toast({ title: "Error", description: "Could not save trainer.", variant: "destructive" }),
+        },
+      );
+    }
+  };
 
   const allSkills = skillsData?.flatMap(cat => cat.skills) || [];
 
@@ -210,6 +254,20 @@ export default function Trainers() {
                       }}
                     />
                   </div>
+                )}
+                {isVendor && (
+                  <button
+                    title={savedIds.has(trainer.id) ? "Remove from saved" : "Save trainer"}
+                    onClick={(e) => handleToggleSave(e, trainer.id, trainer.name)}
+                    disabled={saveTrainer.isPending || unsaveTrainer.isPending}
+                    className={`absolute top-3 right-3 z-10 p-1.5 rounded-md border transition-colors ${
+                      savedIds.has(trainer.id)
+                        ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                        : "border-border bg-background text-muted-foreground hover:text-primary hover:border-primary/40"
+                    }`}
+                  >
+                    <Bookmark className={`h-4 w-4 ${savedIds.has(trainer.id) ? "fill-primary" : ""}`} />
+                  </button>
                 )}
                 <Link href={`/trainers/${trainer.id}`}>
                 <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
