@@ -39,6 +39,9 @@ import type {
   PlatformStats,
   Requirement,
   RequirementDetail,
+  ResumeDownloadUrlResponse,
+  ResumeUploadRequest,
+  ResumeUploadResponse,
   Review,
   SaveTrainerBody,
   SavedTrainer,
@@ -785,6 +788,192 @@ export const useDeleteTrainer = <
 > => {
   return useMutation(getDeleteTrainerMutationOptions(options));
 };
+
+/**
+ * Authenticated — only the trainer themselves or an admin may call this.
+Validates file metadata (contentType must be PDF/DOC/DOCX, size <= 10 MB).
+Returns a presigned S3 PUT URL for the client to upload directly, plus
+the objectPath (S3 key) to pass to PATCH /trainers/{id} to persist the resume URL.
+
+ * @summary Request a presigned upload URL for the trainer's resume
+ */
+export const getRequestTrainerResumeUploadUrlUrl = (id: string) => {
+  return `/api/trainers/${id}/resume`;
+};
+
+export const requestTrainerResumeUploadUrl = async (
+  id: string,
+  resumeUploadRequest: ResumeUploadRequest,
+  options?: RequestInit,
+): Promise<ResumeUploadResponse> => {
+  return customFetch<ResumeUploadResponse>(
+    getRequestTrainerResumeUploadUrlUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(resumeUploadRequest),
+    },
+  );
+};
+
+export const getRequestTrainerResumeUploadUrlMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestTrainerResumeUploadUrl>>,
+    TError,
+    { id: string; data: BodyType<ResumeUploadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestTrainerResumeUploadUrl>>,
+  TError,
+  { id: string; data: BodyType<ResumeUploadRequest> },
+  TContext
+> => {
+  const mutationKey = ["requestTrainerResumeUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestTrainerResumeUploadUrl>>,
+    { id: string; data: BodyType<ResumeUploadRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return requestTrainerResumeUploadUrl(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestTrainerResumeUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestTrainerResumeUploadUrl>>
+>;
+export type RequestTrainerResumeUploadUrlMutationBody =
+  BodyType<ResumeUploadRequest>;
+export type RequestTrainerResumeUploadUrlMutationError = ErrorType<void>;
+
+/**
+ * @summary Request a presigned upload URL for the trainer's resume
+ */
+export const useRequestTrainerResumeUploadUrl = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestTrainerResumeUploadUrl>>,
+    TError,
+    { id: string; data: BodyType<ResumeUploadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestTrainerResumeUploadUrl>>,
+  TError,
+  { id: string; data: BodyType<ResumeUploadRequest> },
+  TContext
+> => {
+  return useMutation(getRequestTrainerResumeUploadUrlMutationOptions(options));
+};
+
+/**
+ * Returns a short-lived presigned S3 GET URL for the trainer's resume.
+Fails with 404 if the trainer has no resume on file.
+
+ * @summary Get a presigned S3 download URL for the trainer's resume
+ */
+export const getGetTrainerResumeUrlUrl = (id: string) => {
+  return `/api/trainers/${id}/resume/url`;
+};
+
+export const getTrainerResumeUrl = async (
+  id: string,
+  options?: RequestInit,
+): Promise<ResumeDownloadUrlResponse> => {
+  return customFetch<ResumeDownloadUrlResponse>(getGetTrainerResumeUrlUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTrainerResumeUrlQueryKey = (id: string) => {
+  return [`/api/trainers/${id}/resume/url`] as const;
+};
+
+export const getGetTrainerResumeUrlQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTrainerResumeUrl>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTrainerResumeUrl>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTrainerResumeUrlQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTrainerResumeUrl>>
+  > = ({ signal }) => getTrainerResumeUrl(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTrainerResumeUrl>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTrainerResumeUrlQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTrainerResumeUrl>>
+>;
+export type GetTrainerResumeUrlQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a presigned S3 download URL for the trainer's resume
+ */
+
+export function useGetTrainerResumeUrl<
+  TData = Awaited<ReturnType<typeof getTrainerResumeUrl>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTrainerResumeUrl>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTrainerResumeUrlQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getListTrainerReviewsUrl = (id: string) => {
   return `/api/trainers/${id}/reviews`;
