@@ -18,10 +18,13 @@ import type {
 
 import type {
   ActivityItem,
+  AdminUser,
+  AdminUsersPage,
   Application,
   ApplicationWithRequirement,
   ApplicationWithTrainer,
   ApplyBody,
+  ChangeUserRoleBody,
   CreateHireInquiryBody,
   CreateRequirementBody,
   CreateReviewBody,
@@ -29,6 +32,7 @@ import type {
   FlagRequirementBody,
   HealthStatus,
   HireInquiry,
+  ListAdminUsersParams,
   ListRequirementsParams,
   ListTrainersParams,
   Message,
@@ -3146,4 +3150,353 @@ export const useUpdateHireInquiryStatus = <
   TContext
 > => {
   return useMutation(getUpdateHireInquiryStatusMutationOptions(options));
+};
+
+/**
+ * @summary List all users (admin only)
+ */
+export const getListAdminUsersUrl = (params?: ListAdminUsersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/users?${stringifiedParams}`
+    : `/api/admin/users`;
+};
+
+export const listAdminUsers = async (
+  params?: ListAdminUsersParams,
+  options?: RequestInit,
+): Promise<AdminUsersPage> => {
+  return customFetch<AdminUsersPage>(getListAdminUsersUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminUsersQueryKey = (params?: ListAdminUsersParams) => {
+  return [`/api/admin/users`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminUsers>>,
+  TError = ErrorType<void>,
+>(
+  params?: ListAdminUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminUsersQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminUsers>>> = ({
+    signal,
+  }) => listAdminUsers(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminUsers>>
+>;
+export type ListAdminUsersQueryError = ErrorType<void>;
+
+/**
+ * @summary List all users (admin only)
+ */
+
+export function useListAdminUsers<
+  TData = Awaited<ReturnType<typeof listAdminUsers>>,
+  TError = ErrorType<void>,
+>(
+  params?: ListAdminUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminUsersQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Deactivate a user account (admin only)
+ */
+export const getDeactivateUserUrl = (id: string) => {
+  return `/api/admin/users/${id}/deactivate`;
+};
+
+export const deactivateUser = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AdminUser> => {
+  return customFetch<AdminUser>(getDeactivateUserUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getDeactivateUserMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deactivateUser>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deactivateUser>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deactivateUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deactivateUser>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deactivateUser(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeactivateUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deactivateUser>>
+>;
+
+export type DeactivateUserMutationError = ErrorType<void>;
+
+/**
+ * @summary Deactivate a user account (admin only)
+ */
+export const useDeactivateUser = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deactivateUser>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deactivateUser>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeactivateUserMutationOptions(options));
+};
+
+/**
+ * @summary Reactivate a deactivated user account (admin only)
+ */
+export const getReactivateUserUrl = (id: string) => {
+  return `/api/admin/users/${id}/reactivate`;
+};
+
+export const reactivateUser = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AdminUser> => {
+  return customFetch<AdminUser>(getReactivateUserUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getReactivateUserMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactivateUser>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reactivateUser>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["reactivateUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reactivateUser>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return reactivateUser(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReactivateUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reactivateUser>>
+>;
+
+export type ReactivateUserMutationError = ErrorType<void>;
+
+/**
+ * @summary Reactivate a deactivated user account (admin only)
+ */
+export const useReactivateUser = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactivateUser>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reactivateUser>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getReactivateUserMutationOptions(options));
+};
+
+/**
+ * @summary Change a user's role (admin only)
+ */
+export const getChangeUserRoleUrl = (id: string) => {
+  return `/api/admin/users/${id}/role`;
+};
+
+export const changeUserRole = async (
+  id: string,
+  changeUserRoleBody: ChangeUserRoleBody,
+  options?: RequestInit,
+): Promise<AdminUser> => {
+  return customFetch<AdminUser>(getChangeUserRoleUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(changeUserRoleBody),
+  });
+};
+
+export const getChangeUserRoleMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changeUserRole>>,
+    TError,
+    { id: string; data: BodyType<ChangeUserRoleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof changeUserRole>>,
+  TError,
+  { id: string; data: BodyType<ChangeUserRoleBody> },
+  TContext
+> => {
+  const mutationKey = ["changeUserRole"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof changeUserRole>>,
+    { id: string; data: BodyType<ChangeUserRoleBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return changeUserRole(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ChangeUserRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof changeUserRole>>
+>;
+export type ChangeUserRoleMutationBody = BodyType<ChangeUserRoleBody>;
+export type ChangeUserRoleMutationError = ErrorType<void>;
+
+/**
+ * @summary Change a user's role (admin only)
+ */
+export const useChangeUserRole = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changeUserRole>>,
+    TError,
+    { id: string; data: BodyType<ChangeUserRoleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof changeUserRole>>,
+  TError,
+  { id: string; data: BodyType<ChangeUserRoleBody> },
+  TContext
+> => {
+  return useMutation(getChangeUserRoleMutationOptions(options));
 };

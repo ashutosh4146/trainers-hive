@@ -17,6 +17,7 @@ tags:
   - name: applications
   - name: reviews
   - name: stats
+  - name: admin
 
 paths:
   /healthz:
@@ -774,6 +775,119 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HireInquiry"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users (admin only)
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [trainer, vendor, admin]
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, deactivated]
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersPage"
+        "403":
+          description: Not admin
+
+  /admin/users/{id}/deactivate:
+    patch:
+      operationId: deactivateUser
+      tags: [admin]
+      summary: Deactivate a user account (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deactivated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "403":
+          description: Not admin
+        "404":
+          description: User not found
+
+  /admin/users/{id}/reactivate:
+    patch:
+      operationId: reactivateUser
+      tags: [admin]
+      summary: Reactivate a deactivated user account (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reactivated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "403":
+          description: Not admin
+        "404":
+          description: User not found
+
+  /admin/users/{id}/role:
+    patch:
+      operationId: changeUserRole
+      tags: [admin]
+      summary: Change a user's role (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeUserRoleBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "403":
+          description: Not admin
+        "404":
+          description: User not found
 
 components:
   schemas:
@@ -1627,3 +1741,50 @@ components:
         status:
           type: string
           enum: [new, contacted, in_progress, closed]
+
+    AdminUser:
+      type: object
+      required: [id, name, email, role, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        avatarUrl:
+          type: string
+        vendorId:
+          type: string
+        trainerId:
+          type: string
+        createdAt:
+          type: string
+        deactivatedAt:
+          type: string
+          description: ISO timestamp; present when the account is deactivated
+
+    AdminUsersPage:
+      type: object
+      required: [users, total, page, pageSize]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    ChangeUserRoleBody:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [trainer, vendor]

@@ -10,6 +10,7 @@ import statsRouter from "./stats";
 import authRouter from "./auth";
 import hireInquiriesRouter from "./hire-inquiries";
 import verificationRequestsRouter from "./verification-requests";
+import adminUsersRouter from "./admin-users";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(applicationsRouter);
 router.use(statsRouter);
 router.use(hireInquiriesRouter);
 router.use(verificationRequestsRouter);
+router.use(adminUsersRouter);
 
 export default router;
