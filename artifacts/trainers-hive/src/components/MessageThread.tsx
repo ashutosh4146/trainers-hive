@@ -47,10 +47,9 @@ export function MessageThread({
     }
   }, [messages]);
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
+  const sendMessage = () => {
     const trimmed = body.trim();
-    if (!trimmed) return;
+    if (!trimmed || sendMutation.isPending) return;
     sendMutation.mutate(
       { id: applicationId, data: { body: trimmed } },
       {
@@ -62,6 +61,11 @@ export function MessageThread({
         },
       },
     );
+  };
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage();
   };
 
   return (
@@ -122,7 +126,7 @@ export function MessageThread({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend(e as unknown as React.FormEvent);
+                sendMessage();
               }
             }}
             className="resize-none flex-1"
