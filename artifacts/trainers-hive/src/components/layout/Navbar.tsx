@@ -46,7 +46,9 @@ export function Navbar() {
             <Link href="/" className="text-muted-foreground hover:text-primary transition-colors">Marketplace</Link>
             <Link href="/trainers" className="text-muted-foreground hover:text-primary transition-colors">Trainers</Link>
             <Link href="/requirements" className="text-muted-foreground hover:text-primary transition-colors">Requirements</Link>
-            <Link href="/hire-us" className="font-semibold text-primary hover:text-primary/80 transition-colors border border-primary/30 rounded-full px-3 py-0.5 text-xs bg-primary/5">Hire Us</Link>
+            {isSignedIn && (auth?.role === "vendor" || auth?.role === "college") && (
+              <Link href="/hire-us" className="font-semibold text-primary hover:text-primary/80 transition-colors border border-primary/30 rounded-full px-3 py-0.5 text-xs bg-primary/5">Hire Us</Link>
+            )}
             {isSignedIn && (
               <Link href="/dashboard" className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
                 <LayoutDashboard className="h-4 w-4" />

@@ -3,9 +3,12 @@ import { Navbar } from "./Navbar";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { isSignedIn, auth } = useAuth();
+  const isVendorOrCollege = isSignedIn && (auth?.role === "vendor" || auth?.role === "college");
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
@@ -32,7 +35,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </p>
             <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
               <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors">About Us</Link>
-              <Link href="/hire-us" className="text-muted-foreground hover:text-primary transition-colors">Hire Us</Link>
+              {isVendorOrCollege && (
+                <Link href="/hire-us" className="text-muted-foreground hover:text-primary transition-colors">Hire Us</Link>
+              )}
               <Link href="/support" className="text-muted-foreground hover:text-primary transition-colors">Support</Link>
               <Link href="/terms" className="text-muted-foreground hover:text-primary transition-colors">Terms &amp; Conditions</Link>
             </nav>

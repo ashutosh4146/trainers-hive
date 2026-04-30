@@ -37,6 +37,13 @@ function PrivateRoute({ component: Component }: { component: React.ComponentType
   return <Component />;
 }
 
+function VendorRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isSignedIn, auth } = useAuth();
+  if (!isSignedIn) return <Redirect to="/login" />;
+  if (auth?.role !== "vendor" && auth?.role !== "college") return <Redirect to="/" />;
+  return <Component />;
+}
+
 function Router() {
   const { isSignedIn } = useAuth();
 
@@ -70,7 +77,9 @@ function Router() {
               <Route path="/settings">
                 <PrivateRoute component={Settings} />
               </Route>
-              <Route path="/hire-us" component={HireUs} />
+              <Route path="/hire-us">
+                <VendorRoute component={HireUs} />
+              </Route>
               <Route path="/support" component={Support} />
               <Route path="/about" component={AboutUs} />
               <Route path="/terms" component={TermsAndConditions} />
