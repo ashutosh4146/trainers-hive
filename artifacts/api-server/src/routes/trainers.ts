@@ -124,6 +124,42 @@ router.patch("/trainers/:id", async (req, res) => {
     res.status(400).json({ error: "invalid body", details: body.error.issues });
     return;
   }
+
+  // Authorization: only the trainer themselves or an admin may update.
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active) {
+    res.status(401).json({ error: "not authenticated" });
+    return;
+  }
+  const isOwner =
+    active.role === "trainer" && active.trainerId === params.data.id;
+  const isAdmin = active.role === "admin";
+  if (!isOwner && !isAdmin) {
+    res.status(403).json({ error: "not allowed to edit this trainer" });
+    return;
+  }
+
+  // Validate engagedDates ranges (date format + end >= start). Server-side guard
+  // so direct API callers cannot poison conflict detection.
+  if (body.data.engagedDates) {
+    const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+    for (const r of body.data.engagedDates) {
+      if (!isoRe.test(r.startDate) || !isoRe.test(r.endDate)) {
+        res.status(400).json({ error: "engagedDates must use YYYY-MM-DD" });
+        return;
+      }
+      if (r.endDate < r.startDate) {
+        res.status(400).json({ error: "engagedDates: endDate must be on or after startDate" });
+        return;
+      }
+    }
+  }
+
   const update: Partial<typeof trainersTable.$inferInsert> = {};
   for (const [k, v] of Object.entries(body.data)) {
     if (v !== undefined) (update as Record<string, unknown>)[k] = v;

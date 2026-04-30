@@ -366,6 +366,47 @@ router.post("/requirements/:id/apply", async (req, res) => {
     res.status(403).json({ error: "only trainers can apply" });
     return;
   }
+
+  // Block apply if the trainer's engaged dates overlap the requirement window.
+  const [requirementRow] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (requirementRow?.startDate) {
+    const [trainerRow] = await db
+      .select()
+      .from(trainersTable)
+      .where(eq(trainersTable.id, active.trainerId))
+      .limit(1);
+    const engaged = (trainerRow?.engagedDates ?? []) as Array<{
+      startDate: string;
+      endDate: string;
+      note?: string;
+    }>;
+    if (engaged.length > 0) {
+      const reqStart = requirementRow.startDate.slice(0, 10);
+      const days = Math.max(0, (requirementRow.durationDays ?? 1) - 1);
+      const reqEndDate = new Date(reqStart + "T00:00:00Z");
+      reqEndDate.setUTCDate(reqEndDate.getUTCDate() + days);
+      const reqEnd = reqEndDate.toISOString().slice(0, 10);
+      const conflict = engaged.find((r) => {
+        if (!r?.startDate || !r?.endDate) return false;
+        const s = r.startDate.slice(0, 10);
+        const e = r.endDate.slice(0, 10);
+        return s <= reqEnd && reqStart <= e;
+      });
+      if (conflict) {
+        res.status(409).json({
+          error: "engaged_dates_conflict",
+          message: `You're already engaged from ${conflict.startDate} to ${conflict.endDate}. Update your availability to apply.`,
+          conflict,
+        });
+        return;
+      }
+    }
+  }
+
   const id = newId("app");
   try {
     await db.insert(applicationsTable).values({
@@ -457,6 +498,7 @@ router.get("/requirements/:id/applications", async (req, res) => {
             verified: r.trainer.verified,
             avatarUrl: r.trainer.avatarUrl,
             availability: r.trainer.availability ?? undefined,
+            engagedDates: r.trainer.engagedDates ?? [],
           }
         : null,
     })),

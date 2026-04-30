@@ -81,7 +81,7 @@ export default function RequirementDetail() {
   });
 
   const trainerId = user?.role === "trainer" ? user.trainerId : undefined;
-  const { data: currentTrainer } = useGetTrainer(trainerId ?? "", {
+  const { data: currentTrainer, isLoading: trainerLoading } = useGetTrainer(trainerId ?? "", {
     query: { enabled: !!trainerId, queryKey: getGetTrainerQueryKey(trainerId ?? "") },
   });
 
@@ -105,7 +105,18 @@ export default function RequirementDetail() {
           setIsApplyOpen(false);
           queryClient.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
         },
-        onError: () => {
+        onError: (err) => {
+          const anyErr = err as { response?: { status?: number; data?: { message?: string; error?: string } }; message?: string };
+          if (anyErr?.response?.status === 409 && anyErr.response.data?.error === "engaged_dates_conflict") {
+            toast({
+              title: "Schedule conflict",
+              description: anyErr.response.data?.message ?? "You're already engaged on these dates.",
+              variant: "destructive",
+            });
+            setIsApplyOpen(false);
+            queryClient.invalidateQueries({ queryKey: getGetTrainerQueryKey(trainerId ?? "") });
+            return;
+          }
           toast({ title: "Error", description: "Failed to apply. You may have already applied.", variant: "destructive" });
         }
       }
@@ -234,7 +245,12 @@ export default function RequirementDetail() {
               <p className="text-sm text-muted-foreground font-semibold uppercase tracking-wider mb-1">Deadline</p>
               <p className="text-xl font-bold">{format(new Date(requirement.deadline), 'MMM d, yyyy')}</p>
               
-              {isTrainer && requirement.status === 'open' && conflict && (
+              {isTrainer && requirement.status === 'open' && trainerLoading && (
+                <Button size="lg" className="w-full mt-2" disabled aria-disabled="true">
+                  Checking availability...
+                </Button>
+              )}
+              {isTrainer && requirement.status === 'open' && !trainerLoading && conflict && (
                 <div className="w-full mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                   <div className="flex items-start gap-2 text-destructive">
                     <CalendarX className="h-4 w-4 mt-0.5 shrink-0" />
@@ -251,7 +267,7 @@ export default function RequirementDetail() {
                   </Button>
                 </div>
               )}
-              {isTrainer && requirement.status === 'open' && !conflict && (
+              {isTrainer && requirement.status === 'open' && !trainerLoading && !conflict && (
                 <Dialog open={isApplyOpen} onOpenChange={setIsApplyOpen}>
                   <DialogTrigger asChild>
                     <Button size="lg" className="w-full mt-2">Apply Now</Button>
