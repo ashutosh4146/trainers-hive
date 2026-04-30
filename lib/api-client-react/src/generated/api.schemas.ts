@@ -295,6 +295,18 @@ export interface Review {
   createdAt: string;
 }
 
+export interface Message {
+  id: string;
+  applicationId: string;
+  senderUserId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface SendMessageBody {
+  body: string;
+}
+
 export interface CreateReviewBody {
   /**
    * @minimum 1
