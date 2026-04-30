@@ -18,9 +18,14 @@ import {
   useListSavedTrainers,
   useUnsaveTrainer,
   useGetTrainer,
+  useListAdminUsers,
+  useDeactivateUser,
+  useReactivateUser,
+  useChangeUserRole,
   getListRequirementsQueryKey,
   getListSavedTrainersQueryKey,
   getGetTrainerQueryKey,
+  getListAdminUsersQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +33,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   LineChart,
   Line,
@@ -57,6 +74,10 @@ import {
   Trash2,
   MessageSquare,
   Bookmark,
+  UserX,
+  UserCheck,
+  Search,
+  RefreshCw,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -490,6 +511,277 @@ const STATUS_NEXT: Record<string, string> = {
   new: "contacted", contacted: "in_progress", in_progress: "closed", closed: "new",
 };
 
+type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  deactivatedAt?: string;
+};
+
+type ConfirmAction =
+  | { type: "deactivate"; user: AdminUser }
+  | { type: "reactivate"; user: AdminUser }
+  | { type: "role"; user: AdminUser; newRole: "trainer" | "vendor" };
+
+function AdminUsersSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [q, setQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
+
+  const params = {
+    q: q || undefined,
+    role: (roleFilter !== "all" ? roleFilter : undefined) as "trainer" | "vendor" | "admin" | undefined,
+    status: (statusFilter !== "all" ? statusFilter : undefined) as "active" | "deactivated" | undefined,
+    page,
+    pageSize: 20,
+  };
+
+  const { data, isLoading, refetch } = useListAdminUsers(params, {
+    query: { queryKey: getListAdminUsersQueryKey(params) },
+  });
+
+  const deactivate = useDeactivateUser();
+  const reactivate = useReactivateUser();
+  const changeRole = useChangeUserRole();
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+  };
+
+  const handleConfirm = async () => {
+    if (!confirm) return;
+    try {
+      if (confirm.type === "deactivate") {
+        await deactivate.mutateAsync({ id: confirm.user.id });
+        toast({ title: "Account deactivated", description: `${confirm.user.name} can no longer sign in.` });
+      } else if (confirm.type === "reactivate") {
+        await reactivate.mutateAsync({ id: confirm.user.id });
+        toast({ title: "Account reactivated", description: `${confirm.user.name}'s account is now active.` });
+      } else if (confirm.type === "role") {
+        await changeRole.mutateAsync({ id: confirm.user.id, data: { role: confirm.newRole } });
+        toast({ title: "Role updated", description: `${confirm.user.name} is now a ${confirm.newRole}.` });
+      }
+      invalidate();
+    } catch {
+      toast({ title: "Error", description: "Action failed. Please try again.", variant: "destructive" });
+    } finally {
+      setConfirm(null);
+    }
+  };
+
+  const users: AdminUser[] = (data?.users as AdminUser[] | undefined) ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 20));
+
+  const ROLE_COLORS: Record<string, string> = {
+    admin: "bg-purple-100 text-purple-800 border-purple-200",
+    vendor: "bg-blue-100 text-blue-800 border-blue-200",
+    trainer: "bg-green-100 text-green-800 border-green-200",
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4 flex-wrap">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" /> User Management
+            </CardTitle>
+            <CardDescription>Manage all platform user accounts</CardDescription>
+          </div>
+          <Badge variant="outline" className="text-xs shrink-0">{total} total</Badge>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setPage(1); }}
+                className="pl-8"
+              />
+            </div>
+            <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue placeholder="Role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All roles</SelectItem>
+                <SelectItem value="trainer">Trainer</SelectItem>
+                <SelectItem value="vendor">Vendor</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="deactivated">Deactivated</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="icon" onClick={() => refetch()} title="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Table */}
+          {isLoading ? (
+            <Skeleton className="h-[200px] w-full" />
+          ) : users.length === 0 ? (
+            <p className="text-center text-muted-foreground text-sm py-8">No users found matching your filters.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="text-left px-4 py-3 font-medium">User</th>
+                    <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Email</th>
+                    <th className="text-left px-4 py-3 font-medium">Role</th>
+                    <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Joined</th>
+                    <th className="text-left px-4 py-3 font-medium">Status</th>
+                    <th className="text-right px-4 py-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {users.map((u) => {
+                    const isDeactivated = !!u.deactivatedAt;
+                    return (
+                      <tr key={u.id} className={`hover:bg-muted/30 transition-colors ${isDeactivated ? "opacity-60" : ""}`}>
+                        <td className="px-4 py-3">
+                          <div className="font-medium truncate max-w-[160px]">{u.name}</div>
+                          <div className="text-xs text-muted-foreground md:hidden truncate">{u.email}</div>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className="text-xs text-muted-foreground truncate max-w-[200px] block">{u.email}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[u.role] ?? "bg-muted text-muted-foreground"}`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <span className="text-xs text-muted-foreground">{format(new Date(u.createdAt), "MMM d, yyyy")}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {isDeactivated ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
+                              <UserX className="h-3 w-3" /> Deactivated
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
+                              <UserCheck className="h-3 w-3" /> Active
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            {u.role !== "admin" && (
+                              <>
+                                {isDeactivated ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs text-green-700 border-green-200 hover:bg-green-50 gap-1"
+                                    onClick={() => setConfirm({ type: "reactivate", user: u })}
+                                  >
+                                    <UserCheck className="h-3 w-3" /> Reactivate
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs text-red-600 border-red-200 hover:bg-red-50 gap-1"
+                                    onClick={() => setConfirm({ type: "deactivate", user: u })}
+                                  >
+                                    <UserX className="h-3 w-3" /> Deactivate
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-xs text-muted-foreground"
+                                  onClick={() =>
+                                    setConfirm({
+                                      type: "role",
+                                      user: u,
+                                      newRole: u.role === "trainer" ? "vendor" : "trainer",
+                                    })
+                                  }
+                                >
+                                  → {u.role === "trainer" ? "Vendor" : "Trainer"}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
+              <span>Page {page} of {totalPages} ({total} users)</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Confirm Dialog */}
+      <AlertDialog open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm?.type === "deactivate" && "Deactivate account?"}
+              {confirm?.type === "reactivate" && "Reactivate account?"}
+              {confirm?.type === "role" && "Change role?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm?.type === "deactivate" &&
+                `${confirm.user.name} (${confirm.user.email}) will no longer be able to sign in. You can reactivate at any time.`}
+              {confirm?.type === "reactivate" &&
+                `${confirm.user.name} (${confirm.user.email}) will regain full access to the platform.`}
+              {confirm?.type === "role" &&
+                `${confirm.user.name} will be changed from ${confirm.user.role} to ${confirm.newRole}. This affects what they can see and do in the platform.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirm}
+              className={confirm?.type === "deactivate" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            >
+              {confirm?.type === "deactivate" && "Deactivate"}
+              {confirm?.type === "reactivate" && "Reactivate"}
+              {confirm?.type === "role" && `Change to ${confirm?.newRole}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats();
   const { data: activity, isLoading: actLoading } = useListActivity();
@@ -800,6 +1092,9 @@ function AdminDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* User Management */}
+      <AdminUsersSection />
 
       {/* Verification Requests */}
       <Card>
