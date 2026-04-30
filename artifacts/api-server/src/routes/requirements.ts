@@ -615,6 +615,69 @@ router.get("/requirements/:id/applications", async (req, res) => {
   );
 });
 
+// GET /requirements/:id/suggested-trainers — public (vendors/admins use this)
+router.get("/requirements/:id/suggested-trainers", async (req, res) => {
+  const params = GetRequirementParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const [r] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (!r) {
+    res.status(404).json({ error: "requirement not found" });
+    return;
+  }
+
+  const reqSkill = r.skill;
+  const reqSubSkills = (r.subSkills as string[]) ?? [];
+  const allReqSkills = [reqSkill, ...reqSubSkills];
+  const skillJsonb = JSON.stringify(allReqSkills);
+
+  // Find trainers with any skill overlap; rank by match tier then rating
+  const rows = await db
+    .select({
+      id: trainersTable.id,
+      name: trainersTable.name,
+      mainSkill: trainersTable.mainSkill,
+      rating: trainersTable.rating,
+      avatarUrl: trainersTable.avatarUrl,
+      reviewCount: trainersTable.reviewCount,
+    })
+    .from(trainersTable)
+    .where(
+      sql`(
+        ${trainersTable.mainSkill} = ANY(ARRAY(SELECT jsonb_array_elements_text(${skillJsonb}::jsonb)))
+        OR ${trainersTable.subSkills} ?| ARRAY(SELECT jsonb_array_elements_text(${skillJsonb}::jsonb))
+      )`,
+    )
+    .orderBy(
+      sql`
+        CASE
+          WHEN ${trainersTable.mainSkill} = ${reqSkill} THEN 1
+          WHEN ${trainersTable.mainSkill} = ANY(ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(reqSubSkills)}::jsonb))) THEN 2
+          ELSE 3
+        END ASC
+      `,
+      desc(trainersTable.rating),
+    )
+    .limit(5);
+
+  res.json(
+    rows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      mainSkill: t.mainSkill,
+      rating: Number(t.rating),
+      avatarUrl: t.avatarUrl,
+      reviewCount: t.reviewCount,
+    })),
+  );
+});
+
 // POST /requirements/:id/flag  — trainer only
 router.post("/requirements/:id/flag", async (req, res) => {
   const params = FlagRequirementParams.safeParse(req.params);
