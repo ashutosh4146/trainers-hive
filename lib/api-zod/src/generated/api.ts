@@ -384,6 +384,7 @@ export const ListRequirementsQueryParams = zod.object({
   status: zod.enum(["open", "closed", "vacant"]).optional(),
   vendorId: zod.coerce.string().optional(),
   sort: zod.enum(["recent", "deadline", "budget"]).optional(),
+  flagged: zod.coerce.boolean().optional(),
 });
 
 export const ListRequirementsResponseItem = zod.object({
@@ -412,6 +413,10 @@ export const ListRequirementsResponseItem = zod.object({
   startDate: zod.string().optional(),
   budget: zod.number().optional(),
   feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
 });
 export const ListRequirementsResponse = zod.array(ListRequirementsResponseItem);
 
@@ -465,6 +470,10 @@ export const ListRecentRequirementsResponseItem = zod.object({
   startDate: zod.string().optional(),
   budget: zod.number().optional(),
   feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
 });
 export const ListRecentRequirementsResponse = zod.array(
   ListRecentRequirementsResponseItem,
@@ -501,6 +510,10 @@ export const GetRequirementResponse = zod
     startDate: zod.string().optional(),
     budget: zod.number().optional(),
     feeType: zod.enum(["fixed", "negotiable"]).optional(),
+    flagged: zod.boolean().optional(),
+    flagReason: zod.string().optional(),
+    flaggedBy: zod.string().optional(),
+    flaggedAt: zod.coerce.date().optional(),
   })
   .and(
     zod.object({
@@ -571,10 +584,90 @@ export const UpdateRequirementResponse = zod.object({
   startDate: zod.string().optional(),
   budget: zod.number().optional(),
   feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
 });
 
 export const DeleteRequirementParams = zod.object({
   id: zod.coerce.string(),
+});
+
+export const FlagRequirementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const FlagRequirementBody = zod.object({
+  reason: zod.string(),
+});
+
+export const FlagRequirementResponse = zod.object({
+  id: zod.string(),
+  vendorId: zod.string(),
+  vendorName: zod.string(),
+  vendorLogoUrl: zod.string(),
+  title: zod.string(),
+  skill: zod.string(),
+  subSkills: zod.array(zod.string()),
+  durationDays: zod.number(),
+  location: zod.string(),
+  remote: zod.boolean().optional(),
+  deadline: zod.coerce.date(),
+  status: zod.enum(["open", "closed", "vacant"]),
+  createdAt: zod.coerce.date(),
+  applicationCount: zod.number(),
+  trainingType: zod.string().optional(),
+  trainingMode: zod.string().optional(),
+  trainerCount: zod.number().optional(),
+  trainerType: zod.string().optional(),
+  benefits: zod.string().optional(),
+  certifications: zod.string().optional(),
+  language: zod.string().optional(),
+  trainerScope: zod.string().optional(),
+  startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
+});
+
+export const UnflagRequirementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UnflagRequirementResponse = zod.object({
+  id: zod.string(),
+  vendorId: zod.string(),
+  vendorName: zod.string(),
+  vendorLogoUrl: zod.string(),
+  title: zod.string(),
+  skill: zod.string(),
+  subSkills: zod.array(zod.string()),
+  durationDays: zod.number(),
+  location: zod.string(),
+  remote: zod.boolean().optional(),
+  deadline: zod.coerce.date(),
+  status: zod.enum(["open", "closed", "vacant"]),
+  createdAt: zod.coerce.date(),
+  applicationCount: zod.number(),
+  trainingType: zod.string().optional(),
+  trainingMode: zod.string().optional(),
+  trainerCount: zod.number().optional(),
+  trainerType: zod.string().optional(),
+  benefits: zod.string().optional(),
+  certifications: zod.string().optional(),
+  language: zod.string().optional(),
+  trainerScope: zod.string().optional(),
+  startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
 });
 
 export const ApplyToRequirementParams = zod.object({
@@ -683,6 +776,10 @@ export const ListMyApplicationsResponseItem = zod
         startDate: zod.string().optional(),
         budget: zod.number().optional(),
         feeType: zod.enum(["fixed", "negotiable"]).optional(),
+        flagged: zod.boolean().optional(),
+        flagReason: zod.string().optional(),
+        flaggedBy: zod.string().optional(),
+        flaggedAt: zod.coerce.date().optional(),
       }),
     }),
   );
