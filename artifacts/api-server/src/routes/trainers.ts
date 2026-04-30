@@ -234,26 +234,32 @@ router.patch("/trainers/:id", async (req, res) => {
     }
   }
 
-  // Validate non-negative experience years
-  if (
-    body.data.experienceYears !== undefined &&
-    (body.data.experienceYears < 0 || body.data.experienceYears > 80)
-  ) {
-    res.status(400).json({ error: "experienceYears out of range" });
-    return;
+  // Validate experience years: integers in 0..80
+  if (body.data.experienceYears !== undefined) {
+    const v = body.data.experienceYears;
+    if (!Number.isInteger(v) || v < 0 || v > 80) {
+      res.status(400).json({ error: "experienceYears must be an integer 0..80" });
+      return;
+    }
   }
-  if (
-    body.data.developmentExperienceYears !== undefined &&
-    (body.data.developmentExperienceYears < 0 ||
-      body.data.developmentExperienceYears > 80)
-  ) {
-    res.status(400).json({ error: "developmentExperienceYears out of range" });
-    return;
+  if (body.data.developmentExperienceYears !== undefined) {
+    const v = body.data.developmentExperienceYears;
+    if (!Number.isInteger(v) || v < 0 || v > 80) {
+      res.status(400).json({ error: "developmentExperienceYears must be an integer 0..80" });
+      return;
+    }
   }
 
   const update: Partial<typeof trainersTable.$inferInsert> = {};
+  // Fields that store NULL when the client sends "" (clearing intent).
+  const NULLABLE_ON_EMPTY = new Set(["resumeUrl", "trainerType", "portfolioUrl"]);
   for (const [k, v] of Object.entries(body.data)) {
-    if (v !== undefined) (update as Record<string, unknown>)[k] = v;
+    if (v === undefined) continue;
+    if (NULLABLE_ON_EMPTY.has(k) && v === "") {
+      (update as Record<string, unknown>)[k] = null;
+    } else {
+      (update as Record<string, unknown>)[k] = v;
+    }
   }
   if (Object.keys(update).length > 0) {
     await db
