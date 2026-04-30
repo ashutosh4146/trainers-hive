@@ -48,7 +48,10 @@ export default function TrainerDetail() {
 
   const createReview = useCreateTrainerReview();
 
-  const [rating, setRating] = useState(5);
+  const [ratingContent, setRatingContent] = useState(5);
+  const [ratingDelivery, setRatingDelivery] = useState(5);
+  const [ratingPunctuality, setRatingPunctuality] = useState(5);
+  const [ratingCommunication, setRatingCommunication] = useState(5);
   const [comment, setComment] = useState("");
   const [engagementTitle, setEngagementTitle] = useState("");
 
@@ -133,11 +136,14 @@ export default function TrainerDetail() {
     if (!comment.trim()) return;
 
     createReview.mutate(
-      { id, data: { rating, comment, engagementTitle } },
+      { id, data: { ratingContent, ratingDelivery, ratingPunctuality, ratingCommunication, comment, engagementTitle } },
       {
         onSuccess: () => {
           toast({ title: "Review submitted", description: "Thank you for your feedback!" });
-          setRating(5);
+          setRatingContent(5);
+          setRatingDelivery(5);
+          setRatingPunctuality(5);
+          setRatingCommunication(5);
           setComment("");
           setEngagementTitle("");
           queryClient.invalidateQueries({ queryKey: getListTrainerReviewsQueryKey(id) });
@@ -379,20 +385,33 @@ export default function TrainerDetail() {
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleSubmitReview} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Rating</Label>
-                        <div className="flex items-center gap-2">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                              key={star}
-                              type="button"
-                              onClick={() => setRating(star)}
-                              className="focus:outline-none transition-transform hover:scale-110 active:scale-95"
-                            >
-                              <Star className={`h-6 w-6 ${rating >= star ? 'fill-amber-500 text-amber-500' : 'text-muted'}`} />
-                            </button>
-                          ))}
-                        </div>
+                      <div className="space-y-3">
+                        <Label>Ratings</Label>
+                        {(
+                          [
+                            { label: "Content Quality", value: ratingContent, set: setRatingContent },
+                            { label: "Delivery", value: ratingDelivery, set: setRatingDelivery },
+                            { label: "Punctuality", value: ratingPunctuality, set: setRatingPunctuality },
+                            { label: "Communication", value: ratingCommunication, set: setRatingCommunication },
+                          ] as const
+                        ).map(({ label, value, set }) => (
+                          <div key={label} className="flex items-center justify-between gap-3">
+                            <span className="text-sm w-40 shrink-0">{label}</span>
+                            <div className="flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => set(star)}
+                                  className="focus:outline-none transition-transform hover:scale-110 active:scale-95"
+                                >
+                                  <Star className={`h-5 w-5 ${value >= star ? 'fill-amber-500 text-amber-500' : 'text-muted'}`} />
+                                </button>
+                              ))}
+                              <span className="text-xs text-muted-foreground ml-1 w-4">{value}</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="engagementTitle">Engagement Title (Optional)</Label>
@@ -458,11 +477,34 @@ export default function TrainerDetail() {
                           {review.engagementTitle && (
                             <p className="text-xs text-muted-foreground font-medium">{review.engagementTitle}</p>
                           )}
-                          <div className="flex items-center gap-0.5 pt-1">
-                            {Array.from({ length: 5 }).map((_, idx) => (
-                              <Star key={idx} className={`h-3 w-3 ${idx < review.rating ? 'fill-amber-500 text-amber-500' : 'text-muted'}`} />
-                            ))}
-                          </div>
+                          {review.ratingContent != null ? (
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2">
+                              {(
+                                [
+                                  { label: "Content Quality", val: review.ratingContent },
+                                  { label: "Delivery", val: review.ratingDelivery },
+                                  { label: "Punctuality", val: review.ratingPunctuality },
+                                  { label: "Communication", val: review.ratingCommunication },
+                                ] as Array<{ label: string; val: number | undefined }>
+                              ).map(({ label, val }) => (
+                                <div key={label} className="flex items-center gap-1.5">
+                                  <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
+                                  <div className="flex items-center gap-0.5">
+                                    {Array.from({ length: 5 }).map((_, idx) => (
+                                      <Star key={idx} className={`h-3 w-3 ${val != null && idx < val ? 'fill-amber-500 text-amber-500' : 'text-muted'}`} />
+                                    ))}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{val ?? "–"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-0.5 pt-1">
+                              {Array.from({ length: 5 }).map((_, idx) => (
+                                <Star key={idx} className={`h-3 w-3 ${idx < review.rating ? 'fill-amber-500 text-amber-500' : 'text-muted'}`} />
+                              ))}
+                            </div>
+                          )}
                           <p className="text-sm text-foreground mt-3 leading-relaxed">{review.comment}</p>
                         </div>
                       </div>
