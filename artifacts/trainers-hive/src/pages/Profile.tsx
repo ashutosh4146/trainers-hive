@@ -353,6 +353,9 @@ function TagInput({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKey}
+          onBlur={() => {
+            if (draft.trim()) addTag(draft);
+          }}
           placeholder={value.length === 0 ? placeholder : ""}
         />
       </div>
@@ -591,9 +594,8 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
       subSkills,
       languages,
       certifications,
-      // empty resumeUrl → omit (server treats "" as no-op due to validation
-      // skipping the URL check, but we send undefined to avoid storing "")
-      resumeUrl: data.resumeUrl ? data.resumeUrl : undefined,
+      // Send "" intentionally when cleared so the backend can null it out.
+      resumeUrl: data.resumeUrl ?? "",
     };
 
     updateTrainer.mutate(
