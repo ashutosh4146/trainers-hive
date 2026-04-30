@@ -10,10 +10,20 @@ import {
   CreateTrainerReviewBody,
   ListTrainerReviewsParams,
   DeleteTrainerParams,
+  RequestTrainerResumeUploadUrlParams,
+  RequestTrainerResumeUploadUrlBody,
 } from "@workspace/api-zod";
 import { applicationsTable, usersTable } from "@workspace/db";
 import { getActiveUserId } from "../lib/session";
 import { newId } from "../lib/ids";
+import { createResumeUploadUrl, getResumeDownloadUrl, isValidResumeKey } from "../lib/s3";
+
+const ALLOWED_RESUME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 
 const router: IRouter = Router();
 
@@ -224,12 +234,10 @@ router.patch("/trainers/:id", async (req, res) => {
     }
   }
 
-  // Validate resumeUrl looks like a URL when provided
+  // Validate resumeUrl: must be empty/null (clear) or a valid S3 resume key (resumes/<uuid>)
   if (body.data.resumeUrl !== undefined && body.data.resumeUrl !== null && body.data.resumeUrl !== "") {
-    try {
-      new URL(body.data.resumeUrl);
-    } catch {
-      res.status(400).json({ error: "resumeUrl must be a valid URL" });
+    if (!isValidResumeKey(body.data.resumeUrl)) {
+      res.status(400).json({ error: "resumeUrl must be a valid resume key" });
       return;
     }
   }
@@ -286,6 +294,92 @@ router.patch("/trainers/:id", async (req, res) => {
     portfolioUrl: t.portfolioUrl ?? undefined,
     resumeUrl: t.resumeUrl ?? undefined,
   });
+});
+
+router.post("/trainers/:id/resume", async (req, res) => {
+  const params = RequestTrainerResumeUploadUrlParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const body = RequestTrainerResumeUploadUrlBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "invalid body", details: body.error.issues });
+    return;
+  }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active) {
+    res.status(401).json({ error: "not authenticated" });
+    return;
+  }
+  const isOwner = active.role === "trainer" && active.trainerId === params.data.id;
+  const isAdmin = active.role === "admin";
+  if (!isOwner && !isAdmin) {
+    res.status(403).json({ error: "not allowed to upload resume for this trainer" });
+    return;
+  }
+
+  const { contentType, size } = body.data;
+  if (!ALLOWED_RESUME_TYPES.has(contentType)) {
+    res.status(400).json({ error: "Resume must be a PDF, DOC, or DOCX file" });
+    return;
+  }
+  if (size > MAX_RESUME_BYTES) {
+    res.status(400).json({ error: "Resume must be 10 MB or smaller" });
+    return;
+  }
+
+  const { uploadUrl, objectKey } = await createResumeUploadUrl(contentType);
+
+  res.json({ uploadUrl, objectPath: objectKey });
+});
+
+router.get("/trainers/:id/resume/url", async (req, res) => {
+  const params = GetTrainerParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const activeId = await getActiveUserId(req);
+  const [active] = activeId
+    ? await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1)
+    : [];
+  if (!active) {
+    res.status(401).json({ error: "not authenticated" });
+    return;
+  }
+  const isOwner = active.role === "trainer" && active.trainerId === params.data.id;
+  const isVendor = active.role === "vendor";
+  const isAdmin = active.role === "admin";
+  if (!isOwner && !isVendor && !isAdmin) {
+    res.status(403).json({ error: "not authorized" });
+    return;
+  }
+  const [trainer] = await db
+    .select({ resumeUrl: trainersTable.resumeUrl })
+    .from(trainersTable)
+    .where(eq(trainersTable.id, params.data.id))
+    .limit(1);
+  if (!trainer) {
+    res.status(404).json({ error: "trainer not found" });
+    return;
+  }
+  if (!trainer.resumeUrl) {
+    res.status(404).json({ error: "no resume on file" });
+    return;
+  }
+  if (!isValidResumeKey(trainer.resumeUrl)) {
+    res.status(404).json({ error: "no resume on file" });
+    return;
+  }
+  const signedUrl = await getResumeDownloadUrl(trainer.resumeUrl);
+  res.json({ url: signedUrl });
 });
 
 router.delete("/trainers/:id", async (req, res) => {
