@@ -13,6 +13,7 @@ import {
   useDeleteRequirement,
   useFlagRequirement,
   useUnflagRequirement,
+  useListMyApplications,
   getGetRequirementQueryKey,
   getGetTrainerQueryKey,
   getListRequirementApplicationsQueryKey,
@@ -87,6 +88,10 @@ export default function RequirementDetail() {
   const { data: currentTrainer, isLoading: trainerLoading } = useGetTrainer(trainerId ?? "", {
     query: { enabled: !!trainerId, queryKey: getGetTrainerQueryKey(trainerId ?? "") },
   });
+  const { data: myApplications } = useListMyApplications({
+    query: { enabled: !!trainerId },
+  });
+  const myApplication = myApplications?.find((a) => a.requirementId === id);
 
   const applyMutation = useApplyToRequirement();
   const updateAppMutation = useUpdateApplicationStatus();
@@ -344,6 +349,20 @@ export default function RequirementDetail() {
                     </form>
                   </DialogContent>
                 </Dialog>
+              )}
+              {isTrainer && myApplication && (myApplication.status === 'shortlisted' || myApplication.status === 'hired') && (
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full mt-2 gap-2"
+                  onClick={() => {
+                    setMessageAppId(myApplication.id);
+                    setMessageAppName(requirement.vendorName ?? "Vendor");
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Message {requirement.vendorName}
+                </Button>
               )}
               {isVendorOwner && (
                 <div className="flex gap-2 mt-2">
