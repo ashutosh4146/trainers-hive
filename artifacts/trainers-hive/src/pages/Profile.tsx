@@ -674,15 +674,15 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
                 </FormItem>
               )} />
 
-              <FormItem>
-                <FormLabel>Sub-skills</FormLabel>
+              <div className="space-y-2">
+                <Label>Sub-skills</Label>
                 <TagInput
                   value={subSkills}
                   onChange={setSubSkills}
                   placeholder="Type a skill and press Enter"
                   suggestions={allSkillNames}
                 />
-              </FormItem>
+              </div>
             </div>
 
             {/* 4. Years of experience: training + development */}
@@ -735,24 +735,24 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
             </div>
 
             {/* 6. Languages */}
-            <FormItem>
-              <FormLabel>Languages</FormLabel>
+            <div className="space-y-2">
+              <Label>Languages</Label>
               <TagInput
                 value={languages}
                 onChange={setLanguages}
                 placeholder="e.g. English, Hindi"
                 suggestions={languageSuggestions}
               />
-            </FormItem>
+            </div>
 
             {/* 7. Certifications */}
-            <FormItem>
-              <FormLabel>Certifications</FormLabel>
-              <FormDescription>
+            <div className="space-y-2">
+              <Label>Certifications</Label>
+              <p className="text-sm text-muted-foreground">
                 Add each certification's name and a link to verify it (or a shareable link to the certificate file).
-              </FormDescription>
+              </p>
               <CertificationsEditor value={certifications} onChange={setCertifications} />
-            </FormItem>
+            </div>
 
             {/* 8. Resume URL */}
             <FormField control={form.control} name="resumeUrl" render={({ field }) => (
