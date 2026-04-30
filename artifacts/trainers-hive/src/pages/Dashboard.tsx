@@ -271,7 +271,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
   const { data: user } = useGetCurrentUser();
   const { data: stats, isLoading: statsLoading } = useGetTrainerStats();
   const { data: applications, isLoading: appsLoading } = useListMyApplications();
-  const { data: trainerProfile } = useGetTrainer(trainerId, {
+  const { data: trainerProfile, isLoading: profileLoading } = useGetTrainer(trainerId, {
     query: { enabled: !!trainerId, queryKey: getGetTrainerQueryKey(trainerId) },
   });
   const { data: matchingReqs, isLoading: matchLoading } = useListRequirements(
@@ -337,19 +337,14 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
 
       {/* Matching Requirements */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" /> Matching Requirements
-            </CardTitle>
-            <CardDescription>Open requirements that match your skills, ranked by relevance</CardDescription>
-          </div>
-          <Link href="/requirements">
-            <Button variant="outline" size="sm" className="text-xs shrink-0">See all</Button>
-          </Link>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" /> Matching Requirements
+          </CardTitle>
+          <CardDescription>Open requirements that match your skills, ranked by relevance</CardDescription>
         </CardHeader>
         <CardContent>
-          {matchLoading ? (
+          {matchLoading || profileLoading ? (
             <Skeleton className="h-[180px] w-full" />
           ) : top5.length === 0 ? (
             <div className="text-center py-10 border border-dashed rounded-lg">
@@ -378,7 +373,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                 <Link
                   key={req.id}
                   href={`/requirements/${req.id}`}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm transition-all bg-card gap-3 group"
+                  className="flex items-center justify-between p-3 rounded-lg border hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm transition-all bg-card gap-3"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm truncate">{req.title}</p>
@@ -392,7 +387,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                       <Clock className="h-3 w-3" />
                       {format(new Date(req.deadline), "MMM d")}
                     </span>
-                    <span className="text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    <span className="text-xs font-medium text-primary whitespace-nowrap">
                       Apply →
                     </span>
                   </div>
