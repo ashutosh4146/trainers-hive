@@ -38,7 +38,7 @@ Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAu
 
 **Business email** required for `vendor` and `college` roles. Free domains (Gmail, Yahoo, etc.) are blocked on the signup/login forms.
 
-**Routes**: `/signup` and `/login` are public. `/dashboard`, `/profile`, `/settings`, `/requirements/new` redirect to `/login` if not signed in.
+**Routes**: `/signup` and `/login` are public. `/dashboard`, `/profile`, `/settings`, `/requirements/new` redirect to `/login` if not signed in. `/support`, `/about`, `/terms` are public static pages accessible without auth.
 
 `POST /api/session/switch { role }` switches the active demo user. The `college` role sends `"vendor"` to the backend.
 
@@ -46,7 +46,8 @@ Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAu
 
 - Vendor: post requirement → see applications → shortlist / hire / reject; leave reviews on hired trainers
 - Trainer: browse requirements → apply with message + proposed rate → track application status; edit profile
-- Admin: command-center dashboard with platform stats, activity feed, recent requirements, featured trainers; can remove any trainer or requirement from the marketplace via `DELETE /api/trainers/{id}` and `DELETE /api/requirements/{id}` (cascades child rows; logs a "removal" activity entry; UI gated on `user.role === "admin"` via `AdminRemoveButton`)
+- Admin: command-center dashboard with platform stats, activity feed, recent requirements, featured trainers; can remove any trainer or requirement from the marketplace via `DELETE /api/trainers/{id}` and `DELETE /api/requirements/{id}` (cascades child rows; logs a "removal" activity entry; UI gated on `user.role === "admin"` via `AdminRemoveButton`). Admin dashboard also shows a **Flagged Requirements** section listing all flagged requirements with Unflag and Remove actions.
+- **Requirement flagging**: Trainers can flag a requirement from the detail page (`POST /requirements/:id/flag` with a `reason`). A flag dialog offers preset reason chips plus a free-text "Other" field. The flagged requirement shows a badge on the detail page and cannot be re-flagged by the same trainer. Admin can unflag via `POST /requirements/:id/unflag` or permanently delete. DB columns: `flagged bool`, `flag_reason text`, `flagged_by text`, `flagged_at timestamptz`.
 - **Trainer engaged dates**: trainers can mark booked date ranges on their Profile (`engagedDates: [{startDate, endDate, note?}]` stored as jsonb on `trainers`). When viewing a requirement, the Apply button is replaced by a conflict notice if the requirement window (`startDate` + `durationDays`) overlaps any engaged range. Server enforces overlap on `POST /requirements/:id/apply` (returns `409 engaged_dates_conflict`). `PATCH /trainers/:id` is owner-or-admin only and validates engagedDates as real `YYYY-MM-DD` calendar dates with `endDate >= startDate`. `GET /requirements/:id/applications` is owning-vendor-or-admin only (the response now includes engagedDates on nested trainers).
 
 ## Useful commands
@@ -70,3 +71,4 @@ Frontend auth state stored in `localStorage` key `th_auth` (via `src/hooks/useAu
 - Frontend imports hooks ONLY from `@workspace/api-client-react`.
 - After mutations, invalidate the matching `getXxxQueryKey(...)` query.
 - No emojis anywhere in the UI; use lucide-react icons.
+- Footer (AppLayout.tsx) links to `/about`, `/hire-us`, `/support`, `/terms`.
