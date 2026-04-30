@@ -8,9 +8,13 @@ import {
   useGetCurrentUser,
   useCreateTrainerReview,
   useDeleteTrainer,
+  useListSavedTrainers,
+  useSaveTrainer,
+  useUnsaveTrainer,
   getGetTrainerQueryKey,
   getListTrainerReviewsQueryKey,
   getListTrainersQueryKey,
+  getListSavedTrainersQueryKey,
 } from "@workspace/api-client-react";
 import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2, CalendarDays } from "lucide-react";
+import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2, CalendarDays, Bookmark } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
 type EngagedRange = { startDate: string; endDate: string; note?: string };
@@ -51,8 +55,43 @@ export default function TrainerDetail() {
   const isTrainerSelf = user?.role === "trainer" && user.trainerId === id;
   const isVendor = user?.role === "vendor";
   const isAdmin = user?.role === "admin";
+  const vendorId = user?.role === "vendor" ? user.vendorId : undefined;
   const deleteTrainer = useDeleteTrainer();
   const [, navigate] = useLocation();
+
+  const { data: savedTrainers } = useListSavedTrainers(vendorId ?? "", {
+    query: { enabled: !!vendorId, queryKey: getListSavedTrainersQueryKey(vendorId ?? "") },
+  });
+  const isSaved = savedTrainers?.some((s) => s.trainerId === id) ?? false;
+  const saveTrainer = useSaveTrainer();
+  const unsaveTrainer = useUnsaveTrainer();
+
+  const handleToggleSave = () => {
+    if (!vendorId) return;
+    if (isSaved) {
+      unsaveTrainer.mutate(
+        { id: vendorId, trainerId: id },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListSavedTrainersQueryKey(vendorId) });
+            toast({ title: "Removed from saved trainers" });
+          },
+          onError: () => toast({ title: "Error", description: "Could not remove bookmark.", variant: "destructive" }),
+        },
+      );
+    } else {
+      saveTrainer.mutate(
+        { id: vendorId, data: { trainerId: id } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListSavedTrainersQueryKey(vendorId) });
+            toast({ title: "Trainer saved!", description: "Find them in your dashboard." });
+          },
+          onError: () => toast({ title: "Error", description: "Could not save trainer.", variant: "destructive" }),
+        },
+      );
+    }
+  };
 
   const [vreq, setVreq] = useState<{ id: string; status: string } | null | undefined>(undefined);
   const [isSubmittingVreq, setIsSubmittingVreq] = useState(false);
@@ -229,9 +268,20 @@ export default function TrainerDetail() {
                   )}
                 </>
               ) : user?.role === "vendor" ? (
-                <Link href="/requirements" className="w-full md:w-auto">
-                  <Button className="w-full md:w-auto">Invite to Requirement</Button>
-                </Link>
+                <div className="flex flex-col gap-2 w-full md:w-auto">
+                  <Link href="/requirements" className="w-full md:w-auto">
+                    <Button className="w-full md:w-auto">Invite to Requirement</Button>
+                  </Link>
+                  <Button
+                    variant="outline"
+                    className={`w-full gap-2 ${isSaved ? "border-primary text-primary bg-primary/5" : ""}`}
+                    onClick={handleToggleSave}
+                    disabled={saveTrainer.isPending || unsaveTrainer.isPending}
+                  >
+                    <Bookmark className={`h-4 w-4 ${isSaved ? "fill-primary" : ""}`} />
+                    {isSaved ? "Saved" : "Save Trainer"}
+                  </Button>
+                </div>
               ) : null}
               {isAdmin && (
                 <AdminRemoveButton
