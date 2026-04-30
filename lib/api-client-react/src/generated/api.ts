@@ -38,6 +38,7 @@ import type {
   Review,
   SendMessageBody,
   SkillCategory,
+  SuggestedTrainer,
   SwitchUserBody,
   Trainer,
   TrainerDetail,
@@ -1749,6 +1750,94 @@ export const useUnflagRequirement = <
 > => {
   return useMutation(getUnflagRequirementMutationOptions(options));
 };
+
+/**
+ * @summary Trainers whose skills match a requirement (up to 5, ranked)
+ */
+export const getGetSuggestedTrainersUrl = (id: string) => {
+  return `/api/requirements/${id}/suggested-trainers`;
+};
+
+export const getSuggestedTrainers = async (
+  id: string,
+  options?: RequestInit,
+): Promise<SuggestedTrainer[]> => {
+  return customFetch<SuggestedTrainer[]>(getGetSuggestedTrainersUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSuggestedTrainersQueryKey = (id: string) => {
+  return [`/api/requirements/${id}/suggested-trainers`] as const;
+};
+
+export const getGetSuggestedTrainersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSuggestedTrainers>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSuggestedTrainers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSuggestedTrainersQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSuggestedTrainers>>
+  > = ({ signal }) => getSuggestedTrainers(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSuggestedTrainers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSuggestedTrainersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSuggestedTrainers>>
+>;
+export type GetSuggestedTrainersQueryError = ErrorType<void>;
+
+/**
+ * @summary Trainers whose skills match a requirement (up to 5, ranked)
+ */
+
+export function useGetSuggestedTrainers<
+  TData = Awaited<ReturnType<typeof getSuggestedTrainers>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSuggestedTrainers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSuggestedTrainersQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getApplyToRequirementUrl = (id: string) => {
   return `/api/requirements/${id}/apply`;
