@@ -168,8 +168,12 @@ export default function Login() {
       };
 
       if (customToken) {
-        const firebaseUser = await signInWithAdminToken(customToken);
-        setAuthTokenGetter(async () => await firebaseUser.getIdToken());
+        try {
+          const firebaseUser = await signInWithAdminToken(customToken);
+          setAuthTokenGetter(async () => await firebaseUser.getIdToken());
+        } catch (firebaseErr) {
+          console.warn("Firebase sign-in failed, falling back to session auth:", firebaseErr);
+        }
       }
 
       switchUser.mutate(
