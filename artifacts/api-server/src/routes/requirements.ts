@@ -99,6 +99,36 @@ router.get("/requirements", async (req, res) => {
     return;
   }
   const { q, skill, location, remote, status, vendorId, sort, flagged } = parsed.data;
+
+  // Detect trainer session — used to filter and rank by skill relevance
+  let trainerMainSkill: string | null = null;
+  let trainerSubSkills: string[] = [];
+  try {
+    const activeId = await getActiveUserId(req);
+    if (activeId) {
+      const [activeUser] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, activeId))
+        .limit(1);
+      if (activeUser?.role === "trainer" && activeUser.trainerId) {
+        const [trainerRow] = await db
+          .select({ mainSkill: trainersTable.mainSkill, subSkills: trainersTable.subSkills })
+          .from(trainersTable)
+          .where(eq(trainersTable.id, activeUser.trainerId))
+          .limit(1);
+        if (trainerRow) {
+          trainerMainSkill = trainerRow.mainSkill;
+          trainerSubSkills = (trainerRow.subSkills as string[]) ?? [];
+        }
+      }
+    }
+  } catch {
+    // not authenticated — show all (non-trainer visitor)
+  }
+
+  const isTrainerSession = trainerMainSkill !== null;
+
   const conds: SQL[] = [];
   if (q) {
     const like = `%${q}%`;
@@ -116,13 +146,49 @@ router.get("/requirements", async (req, res) => {
   if (status) conds.push(eq(requirementsTable.status, status));
   if (vendorId) conds.push(eq(requirementsTable.vendorId, vendorId));
   if (flagged !== undefined) conds.push(eq(requirementsTable.flagged, flagged));
+
+  // For trainer sessions, restrict to requirements where at least one skill overlaps
+  if (isTrainerSession) {
+    const trainerAllSkills = [trainerMainSkill!, ...trainerSubSkills];
+    // requirement.skill matches any of trainer's skills  OR
+    // requirement has at least one subSkill that matches any of trainer's skills
+    const skillJsonb = JSON.stringify(trainerAllSkills);
+    conds.push(
+      sql`(
+        ${requirementsTable.skill} = ANY(ARRAY(SELECT jsonb_array_elements_text(${skillJsonb}::jsonb)))
+        OR ${requirementsTable.subSkills} ?| ARRAY(SELECT jsonb_array_elements_text(${skillJsonb}::jsonb))
+      )`,
+    );
+  }
+
   const where = conds.length > 0 ? and(...conds) : undefined;
-  const orderBy =
-    sort === "deadline"
-      ? asc(requirementsTable.deadline)
-      : sort === "budget"
-        ? desc(requirementsTable.budget)
-        : desc(requirementsTable.createdAt);
+
+  // Trainer relevance ordering: main-skill match → sub-skill match → date
+  let orderBy: SQL;
+  if (isTrainerSession && !sort) {
+    const mainSkillJson = JSON.stringify(trainerMainSkill);
+    const subSkillsJson = JSON.stringify(trainerSubSkills);
+    orderBy = sql`
+      CASE
+        WHEN ${requirementsTable.skill} = ${trainerMainSkill}
+          OR ${requirementsTable.subSkills} @> ${mainSkillJson}::jsonb THEN 1
+        ELSE 2
+      END ASC,
+      CASE
+        WHEN ${requirementsTable.subSkills} ?| ARRAY(SELECT jsonb_array_elements_text(${subSkillsJson}::jsonb)) THEN 1
+        ELSE 2
+      END ASC,
+      ${requirementsTable.createdAt} DESC
+    `;
+  } else {
+    orderBy =
+      sort === "deadline"
+        ? asc(requirementsTable.deadline)
+        : sort === "budget"
+          ? desc(requirementsTable.budget)
+          : desc(requirementsTable.createdAt);
+  }
+
   const rows = where
     ? await db.select().from(requirementsTable).where(where).orderBy(orderBy)
     : await db.select().from(requirementsTable).orderBy(orderBy);
