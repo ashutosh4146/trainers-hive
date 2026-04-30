@@ -527,6 +527,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/Application"
 
+  /applications/{id}/messages:
+    get:
+      operationId: listApplicationMessages
+      tags: [applications]
+      summary: Get message thread for an application
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+    post:
+      operationId: sendApplicationMessage
+      tags: [applications]
+      summary: Send a message in an application thread
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
   /stats/vendor:
     get:
       operationId: getVendorStats
@@ -1198,6 +1242,29 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    Message:
+      type: object
+      required: [id, applicationId, senderUserId, body, createdAt]
+      properties:
+        id:
+          type: string
+        applicationId:
+          type: string
+        senderUserId:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    SendMessageBody:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
 
     CreateReviewBody:
       type: object
