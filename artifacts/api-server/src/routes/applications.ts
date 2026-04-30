@@ -203,6 +203,10 @@ router.get("/applications/:id/messages", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
+  if (app.status !== "shortlisted" && app.status !== "hired") {
+    res.status(409).json({ error: "messaging_not_available", message: "Messaging is only available for shortlisted or hired applications." });
+    return;
+  }
   const messages = await db
     .select()
     .from(messagesTable)
@@ -265,6 +269,10 @@ router.post("/applications/:id/messages", async (req, res) => {
   }
   if (!isTrainerOwner && !isVendorOwner) {
     res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  if (app.status !== "shortlisted" && app.status !== "hired") {
+    res.status(409).json({ error: "messaging_not_available", message: "Messaging is only available for shortlisted or hired applications." });
     return;
   }
   const [msg] = await db
