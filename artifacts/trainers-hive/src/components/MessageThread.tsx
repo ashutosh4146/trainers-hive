@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Send } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 interface MessageThreadProps {
   applicationId: string;
@@ -47,6 +48,8 @@ export function MessageThread({
     }
   }, [messages]);
 
+  const { toast } = useToast();
+
   const sendMessage = () => {
     const trimmed = body.trim();
     if (!trimmed || sendMutation.isPending) return;
@@ -58,6 +61,9 @@ export function MessageThread({
           queryClient.invalidateQueries({
             queryKey: getListApplicationMessagesQueryKey(applicationId),
           });
+        },
+        onError: () => {
+          toast({ title: "Failed to send", description: "Your message could not be sent. Please try again.", variant: "destructive" });
         },
       },
     );
