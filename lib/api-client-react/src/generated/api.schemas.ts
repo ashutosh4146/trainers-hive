@@ -304,6 +304,7 @@ export interface Message {
 }
 
 export interface SendMessageBody {
+  /** @maxLength 2000 */
   body: string;
 }
 
