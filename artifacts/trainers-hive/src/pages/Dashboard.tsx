@@ -13,7 +13,11 @@ import {
   useListFeaturedTrainers,
   useListHireInquiries,
   useUpdateHireInquiryStatus,
+  useDeleteRequirement,
+  useUnflagRequirement,
+  getListRequirementsQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +48,8 @@ import {
   Activity,
   Plus,
   ShieldCheck,
+  Flag,
+  Trash2,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -291,7 +297,11 @@ function AdminDashboard() {
   const { data: requirements, isLoading: reqsLoading } = useListRecentRequirements();
   const { data: trainers, isLoading: trainersLoading } = useListFeaturedTrainers();
   const { data: inquiries, isLoading: inqLoading, refetch: refetchInquiries } = useListHireInquiries();
+  const { data: flaggedReqs, isLoading: flaggedLoading } = useListRequirements({ flagged: true } as any);
   const updateStatus = useUpdateHireInquiryStatus();
+  const deleteRequirement = useDeleteRequirement();
+  const unflagRequirement = useUnflagRequirement();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
@@ -505,6 +515,88 @@ function AdminDashboard() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Flagged Requirements */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5 text-destructive" /> Flagged Requirements
+            </CardTitle>
+            <CardDescription>Requirements reported by trainers as problematic</CardDescription>
+          </div>
+          <Badge variant="outline" className="text-xs border-destructive/40 text-destructive">
+            {flaggedReqs?.length ?? 0} flagged
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {flaggedLoading ? (
+            <Skeleton className="h-[120px] w-full" />
+          ) : !flaggedReqs?.length ? (
+            <p className="text-muted-foreground text-sm text-center py-8">No flagged requirements — all clear!</p>
+          ) : (
+            <div className="space-y-3">
+              {(flaggedReqs as any[]).map((req) => (
+                <div key={req.id} className="flex items-start justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5 gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link href={`/requirements/${req.id}`} className="font-medium text-sm hover:underline truncate">
+                        {req.title}
+                      </Link>
+                      <Badge variant="outline" className="text-xs font-normal">{req.skill}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{req.vendorName}</p>
+                    {req.flagReason && (
+                      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                        <Flag className="h-3 w-3 shrink-0" />
+                        {req.flagReason}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1 text-muted-foreground hover:text-foreground"
+                      disabled={unflagRequirement.isPending}
+                      onClick={async () => {
+                        try {
+                          await unflagRequirement.mutateAsync({ id: req.id });
+                          queryClient.invalidateQueries({ queryKey: getListRequirementsQueryKey() });
+                          toast({ title: "Flag removed", description: `"${req.title}" has been unflagged.` });
+                        } catch {
+                          toast({ title: "Error", description: "Could not unflag.", variant: "destructive" });
+                        }
+                      }}
+                    >
+                      Unflag
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                      disabled={deleteRequirement.isPending}
+                      onClick={async () => {
+                        if (!confirm(`Remove "${req.title}"? This cannot be undone.`)) return;
+                        try {
+                          await deleteRequirement.mutateAsync({ id: req.id });
+                          queryClient.invalidateQueries({ queryKey: getListRequirementsQueryKey() });
+                          toast({ title: "Requirement removed", description: `"${req.title}" has been deleted.` });
+                        } catch {
+                          toast({ title: "Error", description: "Could not remove.", variant: "destructive" });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
