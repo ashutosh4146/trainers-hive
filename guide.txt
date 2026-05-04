@@ -1,0 +1,224 @@
+TRAINERS HIVE — DEPLOYMENT & HANDOVER GUIDE
+============================================
+Last updated: May 2026
+
+
+==============================================
+1. WHAT'S CURRENTLY RUNNING ON EC2
+==============================================
+
+Service       Purpose
+---------     -------------------------------------------------------
+nginx         Serves the built frontend (static files), gzip + caching
+pm2           Keeps the API Node.js process alive (process: api-server)
+PostgreSQL    The application database
+
+The frontend is a plain static build (HTML/JS/CSS) — no Node.js needed
+to serve it. Only the API server is a running Node process.
+
+
+==============================================
+2. REPLIT-SPECIFIC THINGS THAT NEED TO CHANGE
+==============================================
+
+These are the only parts of the code tied to the Replit platform.
+Everything else is standard Node/React/PostgreSQL.
+
+----------------------------------------------
+2a. REPLIT_DOMAINS env var → replace with your own domain
+----------------------------------------------
+Used to build full URLs for email unsubscribe links in:
+  artifacts/api-server/src/lib/mailer.ts
+
+Action: Replace `process.env.REPLIT_DOMAINS` with your own domain env var,
+e.g. `process.env.APP_DOMAIN`, and set it to your production domain
+(e.g. "trainershive.com").
+
+----------------------------------------------
+2b. Replit Vite plugins → safe to remove
+----------------------------------------------
+These three packages are only active when the REPL_ID env var is set,
+so they do nothing in any other environment. You can safely remove them
+from vite.config.ts and package.json if you want a clean setup:
+
+  @replit/vite-plugin-cartographer
+  @replit/vite-plugin-dev-banner
+  @replit/vite-plugin-runtime-error-modal
+
+----------------------------------------------
+2c. kill-port.mjs dev script — Linux /proc specific
+----------------------------------------------
+The file artifacts/trainers-hive/kill-port.mjs reads /proc/net/tcp to
+evict stale processes before Vite starts. This only works on Linux.
+
+On macOS or Windows dev machines, replace the dev script in
+artifacts/trainers-hive/package.json with:
+
+  "dev": "npx kill-port $PORT 2>/dev/null || true && vite --config vite.config.ts --host 0.0.0.0"
+
+Or simply remove it and set strictPort: false in vite.config.ts.
+
+
+==============================================
+3. ENVIRONMENT VARIABLES — API SERVER
+==============================================
+
+REQUIRED
+--------
+PORT                      Port the API listens on (e.g. 3000)
+DATABASE_URL              PostgreSQL connection string
+SESSION_SECRET            Signs auth JWTs — any long random string (64+ chars)
+FIREBASE_SERVICE_ACCOUNT  Firebase Admin SDK credentials — full JSON, single line
+UNSUBSCRIBE_SECRET        Signs email unsubscribe tokens — any 64-char random string
+GMAIL_USER                Gmail address used to send notification emails
+GMAIL_APP_PASSWORD        Gmail App Password (not the Gmail account password)
+ADMIN_EMAIL               Email address of the admin account
+AWS_REGION                AWS region for S3 (used for resume file uploads)
+S3_BUCKET_NAME            S3 bucket name for resume file uploads
+
+OPTIONAL
+--------
+RESEND_API_KEY            Sends OTP/login emails via Resend.
+                          If missing, OTP codes are logged to console instead.
+ADMIN_PASSCODE            Passcode for admin login.
+                          Default: "trainershive@admin"
+NODE_ENV                  Set to "production" on the production server.
+LOG_LEVEL                 Pino log level. Default: "info"
+
+
+==============================================
+4. ENVIRONMENT VARIABLES — FRONTEND (Vite build)
+==============================================
+
+These go in a .env file in artifacts/trainers-hive/ before building.
+
+VITE_FIREBASE_API_KEY              Firebase Web API key
+VITE_FIREBASE_MESSAGING_SENDER_ID  Firebase messaging sender ID
+VITE_FIREBASE_APP_ID               Firebase app ID
+
+Note: The Firebase project ID and auth domain are currently hardcoded
+to "trainershive-b2995" in:
+  artifacts/trainers-hive/src/lib/firebase.ts
+
+If deploying on a new Firebase project, update those values in that file.
+
+
+==============================================
+5. THIRD-PARTY SERVICES TO SET UP
+==============================================
+
+Service       What it's used for
+---------     -------------------------------------------------------
+Firebase      Authentication (OTP login, Google sign-in, custom tokens)
+              → Only Firebase Auth is used. Firestore and Storage are NOT used.
+              → Requires a Firebase project with Email Link and Google sign-in enabled.
+
+Gmail         All notification emails (application updates, messages,
+              endorsements, withdrawals, requirement matches).
+              → Create a Gmail App Password at myaccount.google.com/apppasswords
+
+Resend        OTP / login verification emails.
+              → Sign up at resend.com, get an API key.
+              → If skipped, OTP codes appear in server logs only.
+
+AWS S3        Stores trainer resume file uploads.
+              → Create an S3 bucket and an IAM user with s3:PutObject,
+                s3:GetObject, s3:DeleteObject permissions on that bucket.
+
+PostgreSQL    The main application database.
+
+
+==============================================
+6. SERVER SETUP STEPS (new machine)
+==============================================
+
+Prerequisites:
+  - Node.js 20+
+  - pnpm  (npm install -g pnpm)
+  - PostgreSQL installed and running
+  - nginx installed
+  - pm2 installed  (npm install -g pm2)
+
+Step 1 — Clone the repo and install dependencies
+  git clone https://github.com/ashutosh4146/trainers-hive.git
+  cd trainers-hive
+  pnpm install
+
+Step 2 — Create the database and apply schema
+  createdb trainershive
+  # Set DATABASE_URL in your environment, then:
+  pnpm --filter @workspace/db run push
+
+Step 3 — Build the API server
+  pnpm --filter @workspace/api-server run build
+  # Output: artifacts/api-server/dist/index.mjs
+
+Step 4 — Build the frontend
+  # Create artifacts/trainers-hive/.env with the VITE_* vars above, then:
+  pnpm --filter @workspace/trainers-hive run build
+  # Output: artifacts/trainers-hive/dist/public/
+
+Step 5 — Start the API with pm2
+  cd artifacts/api-server
+  PORT=3000 NODE_ENV=production DATABASE_URL=... pm2 start dist/index.mjs --name api-server
+  pm2 save
+  pm2 startup   # to auto-start on reboot
+
+Step 6 — Configure nginx
+  Copy the built frontend to /var/www/html (or any directory), then add
+  an nginx site config similar to:
+
+  server {
+      listen 80;
+      server_name yourdomain.com;
+
+      root /var/www/html;
+      index index.html;
+
+      gzip on;
+      gzip_types text/plain text/css application/javascript application/json;
+
+      location /api {
+          proxy_pass http://localhost:3000;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+      }
+
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+  }
+
+  sudo nginx -t && sudo systemctl reload nginx
+
+Step 7 — Re-deploy after code changes
+  # API:
+  pnpm --filter @workspace/api-server run build
+  pm2 restart api-server
+
+  # Frontend:
+  pnpm --filter @workspace/trainers-hive run build
+  sudo cp -r artifacts/trainers-hive/dist/public/. /var/www/html/
+
+
+==============================================
+7. HOW AUTHENTICATION WORKS (overview)
+==============================================
+
+1. User enters email → server sends OTP via Resend (or logs it if no key).
+2. User enters OTP → server creates a Firebase custom token.
+3. Client signs in to Firebase with the custom token → gets a Firebase ID token.
+4. Client sends Firebase ID token with every API request (Authorization: Bearer).
+5. Server verifies the token with Firebase Admin SDK → maps email to DB user.
+
+Google sign-in follows the same flow from step 3 onward.
+
+Admin login uses a separate passcode + ADMIN_EMAIL flow.
+
+
+==============================================
+8. REPOSITORY
+==============================================
+
+GitHub: https://github.com/ashutosh4146/trainers-hive
+Branch: main
