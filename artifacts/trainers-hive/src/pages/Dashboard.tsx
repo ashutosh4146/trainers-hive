@@ -3,35 +3,48 @@ import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
   useGetCurrentUser,
+  useGetVendor,
   useGetVendorStats,
   useGetTrainerStats,
   useGetPlatformStats,
   useListRequirements,
   useListMyApplications,
-  useListActivity,
   useListRecentRequirements,
   useListFeaturedTrainers,
   useListHireInquiries,
   useUpdateHireInquiryStatus,
   useDeleteRequirement,
   useUnflagRequirement,
+  useGetVendorHiringStats,
   useListSavedTrainers,
   useUnsaveTrainer,
+  useListVendorEndorsements,
+  useUpdateTrainerEndorsement,
+  useDeleteTrainerEndorsement,
+  getListVendorEndorsementsQueryKey,
   useGetTrainer,
   useListAdminUsers,
   useDeactivateUser,
   useReactivateUser,
   useChangeUserRole,
+  useWithdrawApplication,
+  useListAdminVendors,
+  useVerifyVendor,
+  useListHireThroughUsRequirements,
+  useGetSkillsDemand,
   getListRequirementsQueryKey,
   getListSavedTrainersQueryKey,
   getGetTrainerQueryKey,
   getListAdminUsersQueryKey,
+  getListAdminVendorsQueryKey,
+  getListMyApplicationsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TrainerAvatar } from "@/components/TrainerAvatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -67,7 +80,7 @@ import {
   Eye,
   TrendingUp,
   FileText,
-  Activity,
+  ClipboardList,
   Plus,
   ShieldCheck,
   Flag,
@@ -78,7 +91,20 @@ import {
   UserCheck,
   Search,
   RefreshCw,
+  Download,
+  LogOut,
+  ThumbsUp,
+  Pencil,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { MessageThread } from "@/components/MessageThread";
@@ -89,19 +115,63 @@ type VerificationRequest = {
   status: string;
   message: string | null;
   adminNote: string | null;
+  aadhaarNumber: string | null;
+  panNumber: string | null;
+  qualification: string | null;
+  dateOfBirth: string | null;
   createdAt: string;
   trainer: { id: string; name: string; avatarUrl: string; mainSkill: string } | null;
 };
 
 function VendorDashboard({ vendorId }: { vendorId: string }) {
+  const { data: vendor } = useGetVendor(vendorId);
   const { data: stats, isLoading: statsLoading } = useGetVendorStats();
+  const { data: hiringStats, isLoading: hiringLoading } = useGetVendorHiringStats(vendorId);
   const { data: requirements, isLoading: reqsLoading } = useListRequirements({ vendorId });
   const { data: savedTrainers, isLoading: savedLoading } = useListSavedTrainers(vendorId, {
     query: { queryKey: getListSavedTrainersQueryKey(vendorId) },
   });
+  const { data: givenEndorsements, isLoading: endorsementsLoading } = useListVendorEndorsements(vendorId, {
+    query: { queryKey: getListVendorEndorsementsQueryKey(vendorId) },
+  });
   const unsaveTrainer = useUnsaveTrainer();
+  const updateEndorsement = useUpdateTrainerEndorsement();
+  const deleteEndorsement = useDeleteTrainerEndorsement();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const [editingEndorsement, setEditingEndorsement] = useState<{ id: string; trainerId: string; text: string } | null>(null);
+  const [editText, setEditText] = useState("");
+  const [deletingEndorsementId, setDeletingEndorsementId] = useState<string | null>(null);
+
+  const handleSaveEditEndorsement = () => {
+    if (!editingEndorsement) return;
+    updateEndorsement.mutate(
+      { id: editingEndorsement.trainerId, endorsementId: editingEndorsement.id, data: { text: editText } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListVendorEndorsementsQueryKey(vendorId) });
+          setEditingEndorsement(null);
+          toast({ title: "Endorsement updated" });
+        },
+        onError: () => toast({ title: "Error", description: "Could not update endorsement.", variant: "destructive" }),
+      },
+    );
+  };
+
+  const handleDeleteEndorsement = (endorsementId: string, trainerId: string) => {
+    deleteEndorsement.mutate(
+      { id: trainerId, endorsementId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListVendorEndorsementsQueryKey(vendorId) });
+          setDeletingEndorsementId(null);
+          toast({ title: "Endorsement removed" });
+        },
+        onError: () => toast({ title: "Error", description: "Could not remove endorsement.", variant: "destructive" }),
+      },
+    );
+  };
 
   const handleUnsave = (trainerId: string, trainerName: string) => {
     unsaveTrainer.mutate(
@@ -121,12 +191,55 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard title="Total Requirements" value={stats?.totalRequirements || 0} icon={<FileText />} />
-        <StatCard title="Open Requirements" value={stats?.openRequirements || 0} icon={<Briefcase />} />
-        <StatCard title="Applications" value={stats?.applicationsReceived || 0} icon={<Users />} />
-        <StatCard title="Shortlisted" value={stats?.shortlistedTrainers || 0} icon={<Star />} />
-        <StatCard title="Hired" value={stats?.hiredTrainers || 0} icon={<CheckCircle />} />
+        <StatCard title="Total Requirements" value={stats?.totalRequirements || 0} icon={<FileText />} href="#your-requirements" />
+        <StatCard title="Open Requirements" value={stats?.openRequirements || 0} icon={<Briefcase />} href="#your-requirements" />
+        <StatCard title="Applications" value={stats?.applicationsReceived || 0} icon={<Users />} href="#your-requirements" />
+        <StatCard title="Shortlisted" value={stats?.shortlistedTrainers || 0} icon={<Star />} href="#your-requirements" />
+        <StatCard title="Hired" value={stats?.hiredTrainers || 0} icon={<CheckCircle />} href="#your-requirements" />
       </div>
+
+      {vendor?.verified && (
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 w-fit">
+          <ShieldCheck className="h-5 w-5 shrink-0 text-blue-600" />
+          <div>
+            <p className="font-semibold text-sm leading-tight">Verified by Trainers Hive</p>
+            <p className="text-xs text-blue-600 leading-tight mt-0.5">Your company profile has been verified.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Time-to-hire stat card */}
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-3 pb-2">
+          <Clock className="h-5 w-5 text-primary" />
+          <CardTitle className="text-base">Avg. Time to Hire</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {hiringLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+          ) : !hiringStats || hiringStats.hiredCount === 0 ? (
+            <div className="text-muted-foreground text-sm py-1">
+              <p className="text-lg font-semibold text-foreground mb-0.5">No hires yet</p>
+              <p>Time-to-hire will appear here once you mark an applicant as hired.</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-3xl font-bold text-primary">
+                {hiringStats.avgDays} <span className="text-base font-normal text-muted-foreground">days avg.</span>
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {hiringStats.hiredCount} {hiringStats.hiredCount === 1 ? "requirement" : "requirements"} hired
+                {hiringStats.minDays !== null && hiringStats.maxDays !== null && (
+                  <> · fastest {hiringStats.minDays}d · slowest {hiringStats.maxDays}d</>
+                )}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card>
@@ -178,7 +291,7 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
         </Card>
       </div>
 
-      <Card>
+      <Card id="your-requirements">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Your Requirements</CardTitle>
           <Link href="/requirements/new">
@@ -284,6 +397,125 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Endorsements Given */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ThumbsUp className="h-5 w-5 text-primary" /> Endorsements Given
+            </CardTitle>
+            <CardDescription>Endorsements you've written for trainers you've worked with</CardDescription>
+          </div>
+          <Badge variant="outline" className="text-xs">
+            {givenEndorsements?.length ?? 0} given
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {endorsementsLoading ? (
+            <Skeleton className="h-[120px] w-full" />
+          ) : !givenEndorsements?.length ? (
+            <div className="text-center py-10 border border-dashed rounded-lg">
+              <ThumbsUp className="mx-auto h-8 w-8 text-muted-foreground mb-3 opacity-40" />
+              <p className="font-medium text-muted-foreground">No endorsements yet</p>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">After completing a training engagement, you can endorse that trainer from their profile.</p>
+              <Link href="/trainers"><Button variant="outline" size="sm">Browse Trainers</Button></Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {givenEndorsements.map((e) => (
+                <div key={e.id} className="flex items-start justify-between p-3 rounded-lg border gap-4 hover:border-primary/30 transition-colors">
+                  <Link href={`/trainers/${e.trainerId}`} className="flex items-start gap-3 min-w-0 flex-1">
+                    <img
+                      src={e.trainerAvatarUrl}
+                      alt={e.trainerName}
+                      className="h-10 w-10 rounded-full object-cover shrink-0 bg-muted mt-0.5"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm">{e.trainerName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(e.createdAt), 'MMM yyyy')}</p>
+                      <p className="text-sm text-muted-foreground mt-1 italic line-clamp-2">"{e.text}"</p>
+                    </div>
+                  </Link>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1"
+                      onClick={() => {
+                        setEditingEndorsement({ id: e.id, trainerId: e.trainerId, text: e.text });
+                        setEditText(e.text);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" /> Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeletingEndorsementId(e.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit endorsement dialog */}
+      <Dialog open={!!editingEndorsement} onOpenChange={(open) => { if (!open) setEditingEndorsement(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Endorsement</DialogTitle>
+            <DialogDescription>Update your endorsement for {editingEndorsement ? givenEndorsements?.find((e) => e.id === editingEndorsement.id)?.trainerName : ""}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={editText}
+              onChange={(ev) => setEditText(ev.target.value)}
+              maxLength={300}
+              rows={4}
+              placeholder="Describe your experience working with this trainer…"
+            />
+            <p className="text-xs text-muted-foreground text-right">{editText.length}/300</p>
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button variant="outline" onClick={() => setEditingEndorsement(null)}>Cancel</Button>
+            <Button
+              onClick={handleSaveEditEndorsement}
+              disabled={updateEndorsement.isPending || editText.trim().length === 0}
+            >
+              {updateEndorsement.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete endorsement confirmation */}
+      <AlertDialog open={!!deletingEndorsementId} onOpenChange={(open) => { if (!open) setDeletingEndorsementId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove endorsement?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete your endorsement. The trainer will no longer see it on their profile.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const end = givenEndorsements?.find((e) => e.id === deletingEndorsementId);
+                if (end) handleDeleteEndorsement(end.id, end.trainerId);
+              }}
+              disabled={deleteEndorsement.isPending}
+            >
+              {deleteEndorsement.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -303,16 +535,20 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
   const hasNoSkills = !!trainerProfile && !trainerProfile.mainSkill;
   const [messageAppId, setMessageAppId] = useState<string | null>(null);
   const [messageAppTitle, setMessageAppTitle] = useState<string>("");
+  const [withdrawAppId, setWithdrawAppId] = useState<string | null>(null);
+  const [withdrawReason, setWithdrawReason] = useState<string>("");
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const withdrawMutation = useWithdrawApplication();
 
   if (statsLoading) return <DashboardSkeleton />;
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard title="Applications" value={stats?.applicationsSent || 0} icon={<FileText />} />
-        <StatCard title="Shortlisted" value={stats?.shortlisted || 0} icon={<Star />} />
-        <StatCard title="Hired" value={stats?.hired || 0} icon={<CheckCircle />} />
+        <StatCard title="Applications" value={stats?.applicationsSent || 0} icon={<FileText />} href="#your-applications" />
+        <StatCard title="Shortlisted" value={stats?.shortlisted || 0} icon={<Star />} href="#your-applications" />
+        <StatCard title="Hired" value={stats?.hired || 0} icon={<CheckCircle />} href="#your-applications" />
         <StatCard title="Rating" value={stats?.averageRating?.toFixed(1) || "0.0"} icon={<Star className="text-amber-500 fill-amber-500" />} />
         <StatCard title="Reviews" value={stats?.totalReviews || 0} icon={<Users />} />
         <StatCard title="Profile Views" value={stats?.profileViews || 0} icon={<Eye />} />
@@ -419,7 +655,10 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Skills in Demand */}
+      <SkillsInDemandCard mainSkill={trainerProfile?.mainSkill} />
+
+      <Card id="your-applications">
         <CardHeader>
           <CardTitle>Your Applications</CardTitle>
         </CardHeader>
@@ -430,10 +669,12 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
             <div className="space-y-4">
               {applications.map(app => {
                 const canMessage = app.status === 'shortlisted' || app.status === 'hired';
+                const canWithdraw = app.status !== 'rejected' && app.status !== 'withdrawn';
+                const isWithdrawn = app.status === 'withdrawn';
                 return (
                   <div
                     key={app.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors bg-card gap-4 hover:shadow-sm cursor-pointer"
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border transition-colors bg-card gap-4 cursor-pointer ${isWithdrawn ? 'opacity-60 hover:border-border' : 'hover:border-primary/50 hover:shadow-sm'}`}
                     onClick={() => navigate(`/requirements/${app.requirementId}`)}
                   >
                     <div className="flex items-center gap-4">
@@ -444,14 +685,27 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                       <div>
                         <h4 className="font-semibold">{app.requirement.title}</h4>
                         <p className="text-sm text-muted-foreground">{app.requirement.vendorName}</p>
+                        {isWithdrawn && (app as any).withdrawnReason && (
+                          <p className="text-xs text-muted-foreground mt-0.5 italic">"{(app as any).withdrawnReason}"</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3 sm:justify-end flex-wrap">
-                      <div className="text-sm">
-                        <span className="text-muted-foreground">Proposed: </span>
-                        <span className="font-medium">${app.proposedRate}</span>
-                      </div>
-                      <Badge variant={app.status === 'hired' ? 'default' : app.status === 'shortlisted' ? 'secondary' : app.status === 'rejected' ? 'destructive' : 'outline'} className="capitalize w-24 justify-center">
+                      {app.proposedRate != null && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">Proposed: </span>
+                          <span className="font-medium">₹{app.proposedRate}</span>
+                        </div>
+                      )}
+                      <Badge
+                        variant={
+                          app.status === 'hired' ? 'default'
+                          : app.status === 'shortlisted' ? 'secondary'
+                          : app.status === 'rejected' || app.status === 'withdrawn' ? 'destructive'
+                          : 'outline'
+                        }
+                        className="capitalize w-24 justify-center"
+                      >
                         {app.status}
                       </Badge>
                       {canMessage && (
@@ -467,6 +721,21 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                         >
                           <MessageSquare className="h-3.5 w-3.5" />
                           Message
+                        </Button>
+                      )}
+                      {canWithdraw && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 shrink-0 text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWithdrawAppId(app.id);
+                            setWithdrawReason("");
+                          }}
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          Withdraw
                         </Button>
                       )}
                     </div>
@@ -486,6 +755,52 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Withdraw confirmation dialog */}
+      <Dialog open={!!withdrawAppId} onOpenChange={(open) => { if (!open) setWithdrawAppId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw your application?</DialogTitle>
+            <DialogDescription>
+              This will notify the vendor. If you were already hired, they will be alerted immediately. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Label htmlFor="withdraw-reason">Reason <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+            <Textarea
+              id="withdraw-reason"
+              placeholder="e.g. Schedule conflict, personal reasons…"
+              rows={3}
+              value={withdrawReason}
+              onChange={(e) => setWithdrawReason(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setWithdrawAppId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={withdrawMutation.isPending}
+              onClick={() => {
+                if (!withdrawAppId) return;
+                withdrawMutation.mutate(
+                  { id: withdrawAppId, data: { reason: withdrawReason.trim() || undefined } },
+                  {
+                    onSuccess: () => {
+                      setWithdrawAppId(null);
+                      queryClient.invalidateQueries({ queryKey: getListMyApplicationsQueryKey() });
+                    },
+                    onError: () => {
+                      setWithdrawAppId(null);
+                    },
+                  }
+                );
+              }}
+            >
+              {withdrawMutation.isPending ? "Withdrawing…" : "Yes, withdraw"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {messageAppId && user?.id && (
         <MessageThread
@@ -782,12 +1097,146 @@ function AdminUsersSection() {
   );
 }
 
+function AdminVendorsSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+
+  const params = { q: q || undefined, page, pageSize: 20 };
+
+  const { data, isLoading, refetch } = useListAdminVendors(params, {
+    query: { queryKey: getListAdminVendorsQueryKey(params) },
+  });
+
+  const verifyVendor = useVerifyVendor();
+
+  const handleToggleVerify = async (id: string, currentlyVerified: boolean, name: string) => {
+    try {
+      await verifyVendor.mutateAsync({ id, data: { verified: !currentlyVerified } });
+      queryClient.invalidateQueries({ queryKey: getListAdminVendorsQueryKey() });
+      toast({
+        title: currentlyVerified ? "Verification removed" : "Vendor verified",
+        description: `${name} has been ${currentlyVerified ? "unverified" : "verified"}.`,
+      });
+    } catch {
+      toast({ title: "Error", description: "Could not update verification.", variant: "destructive" });
+    }
+  };
+
+  const vendors = data?.vendors ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / 20));
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 flex-wrap">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" /> Vendor Verification
+          </CardTitle>
+          <CardDescription>Grant or revoke the verified badge for vendor companies</CardDescription>
+        </div>
+        <Badge variant="outline" className="text-xs shrink-0">{total} total</Badge>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by company or email..."
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setPage(1); }}
+              className="pl-8"
+            />
+          </div>
+          <Button variant="outline" size="icon" onClick={() => refetch()} title="Refresh">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <Skeleton className="h-[200px] w-full" />
+        ) : vendors.length === 0 ? (
+          <p className="text-center text-muted-foreground text-sm py-8">No vendors found.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
+                  <th className="text-left px-4 py-3 font-medium">Company</th>
+                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Industry</th>
+                  <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Location</th>
+                  <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Joined</th>
+                  <th className="text-left px-4 py-3 font-medium">Verified</th>
+                  <th className="text-right px-4 py-3 font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {vendors.map((v) => (
+                  <tr key={v.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="font-medium truncate max-w-[180px]">{v.companyName}</div>
+                      <div className="text-xs text-muted-foreground truncate">{v.email}</div>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      <span className="text-xs text-muted-foreground">{v.industry}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <span className="text-xs text-muted-foreground">{v.location}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <span className="text-xs text-muted-foreground">{format(new Date(v.createdAt), "MMM d, yyyy")}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {v.verified ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                          <ShieldCheck className="h-3.5 w-3.5" /> Verified
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={`text-xs gap-1 ${v.verified ? "text-destructive border-destructive/30 hover:bg-destructive/10" : "text-primary border-primary/30 hover:bg-primary/10"}`}
+                        disabled={verifyVendor.isPending}
+                        onClick={() => handleToggleVerify(v.id, v.verified, v.companyName)}
+                      >
+                        <ShieldCheck className="h-3 w-3" />
+                        {v.verified ? "Remove" : "Verify"}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
+            <span>Page {page} of {totalPages} ({total} vendors)</span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+              <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats();
-  const { data: activity, isLoading: actLoading } = useListActivity();
   const { data: requirements, isLoading: reqsLoading } = useListRecentRequirements();
   const { data: trainers, isLoading: trainersLoading } = useListFeaturedTrainers();
   const { data: inquiries, isLoading: inqLoading, refetch: refetchInquiries } = useListHireInquiries();
+  const { data: hireThroughUsReqs, isLoading: hireThroughUsLoading } = useListHireThroughUsRequirements();
   const { data: flaggedReqs, isLoading: flaggedLoading } = useListRequirements({ flagged: true } as any);
   const updateStatus = useUpdateHireInquiryStatus();
   const deleteRequirement = useDeleteRequirement();
@@ -797,6 +1246,13 @@ function AdminDashboard() {
 
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
   const [vreqLoading, setVreqLoading] = useState(true);
+
+  type AnalyticsTrend = { week: string; count: number }[];
+  const [analytics, setAnalytics] = useState<{
+    trainerSignupsTrend: AnalyticsTrend;
+    applicationsTrend: AnalyticsTrend;
+    requirementsTrend: AnalyticsTrend;
+  } | null>(null);
 
   const fetchVerificationRequests = async () => {
     setVreqLoading(true);
@@ -808,7 +1264,13 @@ function AdminDashboard() {
     }
   };
 
-  useEffect(() => { fetchVerificationRequests(); }, []);
+  useEffect(() => {
+    fetchVerificationRequests();
+    fetch("/api/admin/analytics")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setAnalytics(data); })
+      .catch(() => {});
+  }, []);
 
   const handleVerificationAction = async (id: string, status: "approved" | "rejected", adminNote?: string) => {
     const res = await fetch(`/api/verification-requests/${id}`, {
@@ -858,37 +1320,83 @@ function AdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Activity className="w-5 h-5"/> Activity Feed</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5" /> Action Items
+            </CardTitle>
+            <CardDescription>Things that need your attention right now</CardDescription>
           </CardHeader>
-          <CardContent className="px-0">
-            <div className="px-6 space-y-6 max-h-[350px] overflow-y-auto">
-              {actLoading ? <Skeleton className="h-[200px] w-full" /> : activity?.length ? (
-                activity.map((item, i) => (
-                  <div key={item.id} className="flex gap-4 relative">
-                    {i !== activity.length - 1 && <div className="absolute left-[19px] top-10 bottom-[-24px] w-px bg-border" />}
-                    <Avatar className="h-10 w-10 border-2 border-background z-10 shrink-0">
-                      <AvatarImage src={item.avatarUrl} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs">{item.type.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">{item.subtitle}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center text-muted-foreground text-sm">No recent activity</p>
-              )}
-            </div>
+          <CardContent className="space-y-2">
+            {[
+              {
+                icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
+                label: "Pending verifications",
+                count: vreqLoading ? null : verificationRequests.filter(r => r.status === "pending").length,
+                target: "verification-requests",
+              },
+              {
+                icon: <Flag className="h-4 w-4 text-destructive" />,
+                label: "Flagged requirements",
+                count: flaggedLoading ? null : (flaggedReqs?.length ?? 0),
+                target: "flagged-requirements",
+              },
+              {
+                icon: <Briefcase className="h-4 w-4 text-amber-500" />,
+                label: "New hire inquiries",
+                count: inqLoading ? null : (inquiries?.filter(i => i.status === "new").length ?? 0),
+                target: "hire-inquiries",
+              },
+              {
+                icon: <Eye className="h-4 w-4 text-violet-500" />,
+                label: "Hire Through Us requests",
+                count: hireThroughUsLoading ? null : (hireThroughUsReqs?.length ?? 0),
+                target: "hire-through-us",
+              },
+            ].map(item => (
+              <button
+                key={item.label}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border hover:border-primary/40 hover:bg-muted/40 transition-all text-left group"
+                onClick={() => document.getElementById(item.target)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              >
+                <div className="flex items-center gap-2.5">
+                  {item.icon}
+                  <span className="text-sm font-medium">{item.label}</span>
+                </div>
+                {item.count === null ? (
+                  <Skeleton className="h-5 w-6 rounded-full" />
+                ) : (
+                  <Badge variant={item.count > 0 ? "default" : "secondary"} className="text-xs min-w-[1.5rem] justify-center">
+                    {item.count}
+                  </Badge>
+                )}
+              </button>
+            ))}
+            {!vreqLoading && !flaggedLoading && !inqLoading && !hireThroughUsLoading &&
+              verificationRequests.filter(r => r.status === "pending").length === 0 &&
+              !flaggedReqs?.length &&
+              !inquiries?.filter(i => i.status === "new").length &&
+              !hireThroughUsReqs?.length && (
+              <p className="text-center text-xs text-muted-foreground pt-3 pb-1 flex items-center justify-center gap-1.5">
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" /> All clear — nothing urgent right now
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Recent Requirements</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                window.location.href = "/api/admin/export/requirements";
+              }}
+              data-testid="button-export-requirements-csv"
+            >
+              <Download className="h-4 w-4 mr-2" /> Export CSV
+            </Button>
           </CardHeader>
           <CardContent>
             {reqsLoading ? <Skeleton className="h-[200px] w-full" /> : requirements?.length ? (
@@ -917,10 +1425,7 @@ function AdminDashboard() {
                 {trainers.slice(0, 5).map(trainer => (
                   <Link key={trainer.id} href={`/trainers/${trainer.id}`} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={trainer.avatarUrl} />
-                        <AvatarFallback>{trainer.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
+                      <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-8 w-8" />
                       <div>
                         <p className="font-medium text-sm">{trainer.name}</p>
                         <p className="text-xs text-muted-foreground truncate max-w-[150px]">{trainer.headline}</p>
@@ -937,8 +1442,73 @@ function AdminDashboard() {
         </Card>
       </div>
 
+      {/* Growth Analytics */}
+      {analytics && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-4 w-4 text-primary" /> Trainer Sign-ups
+              </CardTitle>
+              <CardDescription>Weekly new trainer registrations (12 weeks)</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={analytics.trainerSignupsTrend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" tick={false} axisLine={false} tickLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} labelFormatter={(v) => `Week of ${v}`} />
+                  <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.15)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4 text-primary" /> Applications
+              </CardTitle>
+              <CardDescription>Weekly applications received (12 weeks)</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={analytics.applicationsTrend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" tick={false} axisLine={false} tickLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} labelFormatter={(v) => `Week of ${v}`} />
+                  <Area type="monotone" dataKey="count" stroke="hsl(180 60% 35%)" fill="hsl(180 60% 35% / 0.15)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Briefcase className="h-4 w-4 text-primary" /> Requirements Posted
+              </CardTitle>
+              <CardDescription>Weekly new requirements (12 weeks)</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={analytics.requirementsTrend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" tick={false} axisLine={false} tickLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} labelFormatter={(v) => `Week of ${v}`} />
+                  <Area type="monotone" dataKey="count" stroke="hsl(142 60% 35%)" fill="hsl(142 60% 35% / 0.15)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Hire Us Inquiries */}
-      <Card>
+      <Card id="hire-inquiries">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
@@ -946,7 +1516,19 @@ function AdminDashboard() {
             </CardTitle>
             <CardDescription>Companies that requested managed trainer sourcing</CardDescription>
           </div>
-          <Badge variant="outline" className="text-xs">{inquiries?.length ?? 0} total</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">{inquiries?.length ?? 0} total</Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                window.location.href = "/api/admin/export/applications";
+              }}
+              data-testid="button-export-applications-csv"
+            >
+              <Download className="h-4 w-4 mr-2" /> Export CSV
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {inqLoading ? (
@@ -1011,8 +1593,68 @@ function AdminDashboard() {
         </CardContent>
       </Card>
 
+      {/* Hire Through Us Requirements */}
+      <Card id="hire-through-us">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" /> Hire Through Us Requirements
+            </CardTitle>
+            <CardDescription>Requirements submitted with managed-sourcing request — not visible publicly</CardDescription>
+          </div>
+          <Badge variant="outline" className="text-xs">{hireThroughUsReqs?.length ?? 0} total</Badge>
+        </CardHeader>
+        <CardContent>
+          {hireThroughUsLoading ? (
+            <Skeleton className="h-[120px] w-full" />
+          ) : !hireThroughUsReqs?.length ? (
+            <p className="text-muted-foreground text-sm text-center py-8">No hire-through-us requirements yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="text-left pb-3 pr-4 font-medium">Title</th>
+                    <th className="text-left pb-3 pr-4 font-medium hidden md:table-cell">Organisation</th>
+                    <th className="text-left pb-3 pr-4 font-medium hidden lg:table-cell">Skill</th>
+                    <th className="text-left pb-3 pr-4 font-medium hidden lg:table-cell">Location</th>
+                    <th className="text-left pb-3 font-medium">Posted</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {(hireThroughUsReqs as any[]).map((req) => (
+                    <tr key={req.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3 pr-4">
+                        <Link href={`/requirements/${req.id}`} className="font-medium hover:underline line-clamp-1">
+                          {req.title}
+                        </Link>
+                        {req.isUrgent && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                            Urgent
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 hidden md:table-cell text-muted-foreground">{req.vendorName}</td>
+                      <td className="py-3 pr-4 hidden lg:table-cell">
+                        <Badge variant="outline" className="text-xs font-normal">{req.skill}</Badge>
+                      </td>
+                      <td className="py-3 pr-4 hidden lg:table-cell text-muted-foreground text-xs">
+                        {req.location ?? (req.remote ? "Remote" : "—")}
+                      </td>
+                      <td className="py-3 text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Flagged Requirements */}
-      <Card>
+      <Card id="flagged-requirements">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
@@ -1096,8 +1738,11 @@ function AdminDashboard() {
       {/* User Management */}
       <AdminUsersSection />
 
+      {/* Vendor Verification */}
+      <AdminVendorsSection />
+
       {/* Verification Requests */}
-      <Card>
+      <Card id="verification-requests">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
@@ -1117,32 +1762,50 @@ function AdminDashboard() {
           ) : (
             <div className="space-y-3">
               {verificationRequests.map((req) => (
-                <div key={req.id} className="flex items-center justify-between p-3 rounded-lg border gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar className="h-9 w-9 shrink-0">
-                      <AvatarImage src={req.trainer?.avatarUrl} />
-                      <AvatarFallback>{req.trainer?.name?.charAt(0) ?? "T"}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{req.trainer?.name ?? req.trainerId}</p>
-                      <p className="text-xs text-muted-foreground truncate">{req.trainer?.mainSkill}</p>
-                      {req.message && <p className="text-xs text-muted-foreground italic mt-0.5 truncate">"{req.message}"</p>}
+                <div key={req.id} className="p-4 rounded-lg border space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <TrainerAvatar name={req.trainer?.name ?? "Trainer"} avatarUrl={req.trainer?.avatarUrl} className="h-9 w-9 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{req.trainer?.name ?? req.trainerId}</p>
+                        <p className="text-xs text-muted-foreground truncate">{req.trainer?.mainSkill}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {req.status === "pending" ? (
+                        <>
+                          <Button size="sm" variant="outline" className="text-xs text-green-700 border-green-200 hover:bg-green-50" onClick={() => handleVerificationAction(req.id, "approved")}>
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-xs text-red-700 border-red-200 hover:bg-red-50" onClick={() => handleVerificationAction(req.id, "rejected")}>
+                            Reject
+                          </Button>
+                        </>
+                      ) : (
+                        <Badge variant={req.status === "approved" ? "secondary" : "outline"} className={req.status === "approved" ? "bg-green-100 text-green-800" : "text-red-600 border-red-200"}>
+                          {req.status === "approved" ? "Approved" : "Rejected"}
+                        </Badge>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {req.status === "pending" ? (
-                      <>
-                        <Button size="sm" variant="outline" className="text-xs text-green-700 border-green-200 hover:bg-green-50" onClick={() => handleVerificationAction(req.id, "approved")}>
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-xs text-red-700 border-red-200 hover:bg-red-50" onClick={() => handleVerificationAction(req.id, "rejected")}>
-                          Reject
-                        </Button>
-                      </>
-                    ) : (
-                      <Badge variant={req.status === "approved" ? "secondary" : "outline"} className={req.status === "approved" ? "bg-green-100 text-green-800" : "text-red-600 border-red-200"}>
-                        {req.status === "approved" ? "Approved" : "Rejected"}
-                      </Badge>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs border-t pt-3">
+                    {req.aadhaarNumber && (
+                      <div><span className="text-muted-foreground">Aadhaar: </span><span className="font-mono">{req.aadhaarNumber}</span></div>
+                    )}
+                    {req.panNumber && (
+                      <div><span className="text-muted-foreground">PAN: </span><span className="font-mono">{req.panNumber}</span></div>
+                    )}
+                    {req.dateOfBirth && (
+                      <div><span className="text-muted-foreground">Date of Birth: </span>{req.dateOfBirth}</div>
+                    )}
+                    {req.qualification && (
+                      <div className="col-span-2"><span className="text-muted-foreground">Qualification: </span>{req.qualification}</div>
+                    )}
+                    {req.message && (
+                      <div className="col-span-2"><span className="text-muted-foreground">Note: </span><span className="italic">"{req.message}"</span></div>
+                    )}
+                    {!req.aadhaarNumber && !req.panNumber && !req.dateOfBirth && !req.qualification && !req.message && (
+                      <div className="col-span-2 text-muted-foreground italic">No verification details provided.</div>
                     )}
                   </div>
                 </div>
@@ -1155,9 +1818,83 @@ function AdminDashboard() {
   );
 }
 
-function StatCard({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) {
+function SkillsInDemandCard({ mainSkill }: { mainSkill?: string | null }) {
+  const { data: skillDemand, isLoading } = useGetSkillsDemand();
+  const top10 = skillDemand?.slice(0, 10) ?? [];
+  const maxCount = top10.length > 0 ? top10[0]!.count : 1;
+
   return (
     <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingUp className="h-5 w-5 text-primary" /> Skills in Demand
+          </CardTitle>
+          <CardDescription className="mt-0.5">Top skills in open requirements right now</CardDescription>
+        </div>
+        <Link href="/skills-demand">
+          <Button variant="outline" size="sm" className="text-xs shrink-0">View all</Button>
+        </Link>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-4 w-28 shrink-0" />
+                <Skeleton className="h-6 flex-1" />
+                <Skeleton className="h-4 w-8 shrink-0" />
+              </div>
+            ))}
+          </div>
+        ) : top10.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">No open requirements yet.</p>
+        ) : (
+          <div className="space-y-2.5">
+            {top10.map((item) => {
+              const isMySkill = !!(mainSkill && item.skill.toLowerCase() === mainSkill.toLowerCase());
+              const widthPct = Math.max(4, Math.round((item.count / maxCount) * 100));
+              return (
+                <div key={item.skill} className="flex items-center gap-3">
+                  <div
+                    className={`w-32 text-sm truncate shrink-0 font-medium ${isMySkill ? "text-primary" : "text-foreground"}`}
+                    title={item.skill}
+                  >
+                    {item.skill}
+                    {isMySkill && (
+                      <Badge className="ml-1.5 text-[9px] py-0 px-1 h-4 leading-none align-middle">You</Badge>
+                    )}
+                  </div>
+                  <div className="flex-1 relative h-6 bg-muted rounded overflow-hidden">
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded transition-all duration-500 ${isMySkill ? "bg-primary" : "bg-primary/25"}`}
+                      style={{ width: `${widthPct}%` }}
+                    />
+                  </div>
+                  <div className="w-16 text-right shrink-0 text-xs text-muted-foreground whitespace-nowrap">
+                    <span className={`font-semibold ${isMySkill ? "text-primary" : "text-foreground"}`}>{item.count}</span>{" "}
+                    {item.count === 1 ? "req" : "reqs"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatCard({ title, value, icon, href }: { title: string; value: string | number; icon: React.ReactNode; href?: string }) {
+  const handleClick = () => {
+    if (!href) return;
+    if (href.startsWith("#")) {
+      document.getElementById(href.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const inner = (
+    <Card className={href ? "hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer" : ""}>
       <CardContent className="p-6">
         <div className="flex justify-between items-start">
           <div className="space-y-2">
@@ -1171,6 +1908,10 @@ function StatCard({ title, value, icon }: { title: string; value: string | numbe
       </CardContent>
     </Card>
   );
+
+  if (!href) return inner;
+  if (href.startsWith("#")) return <div onClick={handleClick} className="cursor-pointer">{inner}</div>;
+  return <Link href={href}>{inner}</Link>;
 }
 
 function DashboardSkeleton() {
