@@ -20,22 +20,31 @@ import type {
   ActivityItem,
   AdminUser,
   AdminUsersPage,
+  AdminVendorsPage,
+  AiMatch,
   Application,
   ApplicationWithRequirement,
   ApplicationWithTrainer,
   ApplyBody,
+  BulkRejectResult,
   ChangeUserRoleBody,
+  CreateEndorsementBody,
   CreateHireInquiryBody,
   CreateRequirementBody,
   CreateReviewBody,
   CurrentUser,
+  Endorsement,
+  EndorsementsListResponse,
   FlagRequirementBody,
   HealthStatus,
   HireInquiry,
+  HiringStats,
   ListAdminUsersParams,
+  ListAdminVendorsParams,
   ListRequirementsParams,
   ListTrainersParams,
   Message,
+  MessageThreadItem,
   PlatformStats,
   Requirement,
   RequirementDetail,
@@ -47,18 +56,23 @@ import type {
   SavedTrainer,
   SendMessageBody,
   SkillCategory,
+  SkillDemand,
   SuggestedTrainer,
   SwitchUserBody,
   Trainer,
   TrainerDetail,
   TrainerStats,
   UpdateApplicationBody,
+  UpdateApplicationNoteBody,
   UpdateHireInquiryStatusBody,
   UpdateRequirementBody,
   UpdateTrainerBody,
   UpdateVendorBody,
   Vendor,
+  VendorEndorsement,
   VendorStats,
+  VerifyVendorBody,
+  WithdrawApplicationBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -373,6 +387,81 @@ export function useListSkills<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListSkillsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Ranked list of skills by open requirement count
+ */
+export const getGetSkillsDemandUrl = () => {
+  return `/api/skills/demand`;
+};
+
+export const getSkillsDemand = async (
+  options?: RequestInit,
+): Promise<SkillDemand[]> => {
+  return customFetch<SkillDemand[]>(getGetSkillsDemandUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSkillsDemandQueryKey = () => {
+  return [`/api/skills/demand`] as const;
+};
+
+export const getGetSkillsDemandQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSkillsDemand>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSkillsDemand>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSkillsDemandQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSkillsDemand>>> = ({
+    signal,
+  }) => getSkillsDemand({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSkillsDemand>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSkillsDemandQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSkillsDemand>>
+>;
+export type GetSkillsDemandQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Ranked list of skills by open requirement count
+ */
+
+export function useGetSkillsDemand<
+  TData = Awaited<ReturnType<typeof getSkillsDemand>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSkillsDemand>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSkillsDemandQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -1136,6 +1225,377 @@ export const useCreateTrainerReview = <
   return useMutation(getCreateTrainerReviewMutationOptions(options));
 };
 
+/**
+ * @summary List public endorsements for a trainer
+ */
+export const getListTrainerEndorsementsUrl = (id: string) => {
+  return `/api/trainers/${id}/endorsements`;
+};
+
+export const listTrainerEndorsements = async (
+  id: string,
+  options?: RequestInit,
+): Promise<EndorsementsListResponse> => {
+  return customFetch<EndorsementsListResponse>(
+    getListTrainerEndorsementsUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListTrainerEndorsementsQueryKey = (id: string) => {
+  return [`/api/trainers/${id}/endorsements`] as const;
+};
+
+export const getListTrainerEndorsementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTrainerEndorsements>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTrainerEndorsements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListTrainerEndorsementsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTrainerEndorsements>>
+  > = ({ signal }) =>
+    listTrainerEndorsements(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTrainerEndorsements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTrainerEndorsementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTrainerEndorsements>>
+>;
+export type ListTrainerEndorsementsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List public endorsements for a trainer
+ */
+
+export function useListTrainerEndorsements<
+  TData = Awaited<ReturnType<typeof listTrainerEndorsements>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTrainerEndorsements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTrainerEndorsementsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an endorsement (vendor with completed engagement only)
+ */
+export const getCreateTrainerEndorsementUrl = (id: string) => {
+  return `/api/trainers/${id}/endorsements`;
+};
+
+export const createTrainerEndorsement = async (
+  id: string,
+  createEndorsementBody: CreateEndorsementBody,
+  options?: RequestInit,
+): Promise<Endorsement> => {
+  return customFetch<Endorsement>(getCreateTrainerEndorsementUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createEndorsementBody),
+  });
+};
+
+export const getCreateTrainerEndorsementMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTrainerEndorsement>>,
+    TError,
+    { id: string; data: BodyType<CreateEndorsementBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTrainerEndorsement>>,
+  TError,
+  { id: string; data: BodyType<CreateEndorsementBody> },
+  TContext
+> => {
+  const mutationKey = ["createTrainerEndorsement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTrainerEndorsement>>,
+    { id: string; data: BodyType<CreateEndorsementBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createTrainerEndorsement(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTrainerEndorsementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTrainerEndorsement>>
+>;
+export type CreateTrainerEndorsementMutationBody =
+  BodyType<CreateEndorsementBody>;
+export type CreateTrainerEndorsementMutationError = ErrorType<void>;
+
+/**
+ * @summary Create an endorsement (vendor with completed engagement only)
+ */
+export const useCreateTrainerEndorsement = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTrainerEndorsement>>,
+    TError,
+    { id: string; data: BodyType<CreateEndorsementBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createTrainerEndorsement>>,
+  TError,
+  { id: string; data: BodyType<CreateEndorsementBody> },
+  TContext
+> => {
+  return useMutation(getCreateTrainerEndorsementMutationOptions(options));
+};
+
+/**
+ * @summary Update own endorsement text
+ */
+export const getUpdateTrainerEndorsementUrl = (
+  id: string,
+  endorsementId: string,
+) => {
+  return `/api/trainers/${id}/endorsements/${endorsementId}`;
+};
+
+export const updateTrainerEndorsement = async (
+  id: string,
+  endorsementId: string,
+  createEndorsementBody: CreateEndorsementBody,
+  options?: RequestInit,
+): Promise<Endorsement> => {
+  return customFetch<Endorsement>(
+    getUpdateTrainerEndorsementUrl(id, endorsementId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createEndorsementBody),
+    },
+  );
+};
+
+export const getUpdateTrainerEndorsementMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTrainerEndorsement>>,
+    TError,
+    {
+      id: string;
+      endorsementId: string;
+      data: BodyType<CreateEndorsementBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTrainerEndorsement>>,
+  TError,
+  { id: string; endorsementId: string; data: BodyType<CreateEndorsementBody> },
+  TContext
+> => {
+  const mutationKey = ["updateTrainerEndorsement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTrainerEndorsement>>,
+    { id: string; endorsementId: string; data: BodyType<CreateEndorsementBody> }
+  > = (props) => {
+    const { id, endorsementId, data } = props ?? {};
+
+    return updateTrainerEndorsement(id, endorsementId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTrainerEndorsementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTrainerEndorsement>>
+>;
+export type UpdateTrainerEndorsementMutationBody =
+  BodyType<CreateEndorsementBody>;
+export type UpdateTrainerEndorsementMutationError = ErrorType<void>;
+
+/**
+ * @summary Update own endorsement text
+ */
+export const useUpdateTrainerEndorsement = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTrainerEndorsement>>,
+    TError,
+    {
+      id: string;
+      endorsementId: string;
+      data: BodyType<CreateEndorsementBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTrainerEndorsement>>,
+  TError,
+  { id: string; endorsementId: string; data: BodyType<CreateEndorsementBody> },
+  TContext
+> => {
+  return useMutation(getUpdateTrainerEndorsementMutationOptions(options));
+};
+
+/**
+ * @summary Delete own endorsement
+ */
+export const getDeleteTrainerEndorsementUrl = (
+  id: string,
+  endorsementId: string,
+) => {
+  return `/api/trainers/${id}/endorsements/${endorsementId}`;
+};
+
+export const deleteTrainerEndorsement = async (
+  id: string,
+  endorsementId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteTrainerEndorsementUrl(id, endorsementId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteTrainerEndorsementMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTrainerEndorsement>>,
+    TError,
+    { id: string; endorsementId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTrainerEndorsement>>,
+  TError,
+  { id: string; endorsementId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteTrainerEndorsement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTrainerEndorsement>>,
+    { id: string; endorsementId: string }
+  > = (props) => {
+    const { id, endorsementId } = props ?? {};
+
+    return deleteTrainerEndorsement(id, endorsementId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTrainerEndorsementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTrainerEndorsement>>
+>;
+
+export type DeleteTrainerEndorsementMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete own endorsement
+ */
+export const useDeleteTrainerEndorsement = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTrainerEndorsement>>,
+    TError,
+    { id: string; endorsementId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTrainerEndorsement>>,
+  TError,
+  { id: string; endorsementId: string },
+  TContext
+> => {
+  return useMutation(getDeleteTrainerEndorsementMutationOptions(options));
+};
+
 export const getGetVendorUrl = (id: string) => {
   return `/api/vendors/${id}`;
 };
@@ -1294,6 +1754,182 @@ export const useUpdateVendor = <
 > => {
   return useMutation(getUpdateVendorMutationOptions(options));
 };
+
+/**
+ * @summary List all endorsements authored by a vendor (with trainer details)
+ */
+export const getListVendorEndorsementsUrl = (id: string) => {
+  return `/api/vendors/${id}/endorsements`;
+};
+
+export const listVendorEndorsements = async (
+  id: string,
+  options?: RequestInit,
+): Promise<VendorEndorsement[]> => {
+  return customFetch<VendorEndorsement[]>(getListVendorEndorsementsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListVendorEndorsementsQueryKey = (id: string) => {
+  return [`/api/vendors/${id}/endorsements`] as const;
+};
+
+export const getListVendorEndorsementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listVendorEndorsements>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listVendorEndorsements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListVendorEndorsementsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listVendorEndorsements>>
+  > = ({ signal }) => listVendorEndorsements(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listVendorEndorsements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListVendorEndorsementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listVendorEndorsements>>
+>;
+export type ListVendorEndorsementsQueryError = ErrorType<void>;
+
+/**
+ * @summary List all endorsements authored by a vendor (with trainer details)
+ */
+
+export function useListVendorEndorsements<
+  TData = Awaited<ReturnType<typeof listVendorEndorsements>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listVendorEndorsements>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListVendorEndorsementsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Time-to-hire stats for a vendor (owner or admin)
+ */
+export const getGetVendorHiringStatsUrl = (id: string) => {
+  return `/api/vendors/${id}/hiring-stats`;
+};
+
+export const getVendorHiringStats = async (
+  id: string,
+  options?: RequestInit,
+): Promise<HiringStats> => {
+  return customFetch<HiringStats>(getGetVendorHiringStatsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVendorHiringStatsQueryKey = (id: string) => {
+  return [`/api/vendors/${id}/hiring-stats`] as const;
+};
+
+export const getGetVendorHiringStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVendorHiringStats>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVendorHiringStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetVendorHiringStatsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVendorHiringStats>>
+  > = ({ signal }) => getVendorHiringStats(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVendorHiringStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVendorHiringStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVendorHiringStats>>
+>;
+export type GetVendorHiringStatsQueryError = ErrorType<void>;
+
+/**
+ * @summary Time-to-hire stats for a vendor (owner or admin)
+ */
+
+export function useGetVendorHiringStats<
+  TData = Awaited<ReturnType<typeof getVendorHiringStats>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getVendorHiringStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVendorHiringStatsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get all trainers bookmarked by a vendor
@@ -2127,6 +2763,95 @@ export const useFlagRequirement = <
   return useMutation(getFlagRequirementMutationOptions(options));
 };
 
+/**
+ * @summary Reject all submitted and shortlisted applications for a requirement (vendor-owner only)
+ */
+export const getBulkRejectRequirementApplicationsUrl = (id: string) => {
+  return `/api/requirements/${id}/bulk-reject`;
+};
+
+export const bulkRejectRequirementApplications = async (
+  id: string,
+  options?: RequestInit,
+): Promise<BulkRejectResult> => {
+  return customFetch<BulkRejectResult>(
+    getBulkRejectRequirementApplicationsUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getBulkRejectRequirementApplicationsMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkRejectRequirementApplications>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkRejectRequirementApplications>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["bulkRejectRequirementApplications"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkRejectRequirementApplications>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return bulkRejectRequirementApplications(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkRejectRequirementApplicationsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkRejectRequirementApplications>>
+>;
+
+export type BulkRejectRequirementApplicationsMutationError = ErrorType<void>;
+
+/**
+ * @summary Reject all submitted and shortlisted applications for a requirement (vendor-owner only)
+ */
+export const useBulkRejectRequirementApplications = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkRejectRequirementApplications>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkRejectRequirementApplications>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(
+    getBulkRejectRequirementApplicationsMutationOptions(options),
+  );
+};
+
 export const getUnflagRequirementUrl = (id: string) => {
   return `/api/requirements/${id}/unflag`;
 };
@@ -2204,6 +2929,95 @@ export const useUnflagRequirement = <
 > => {
   return useMutation(getUnflagRequirementMutationOptions(options));
 };
+
+/**
+ * @summary AI-ranked trainer matches for a requirement (vendor owner only)
+ */
+export const getGetRequirementAiMatchesUrl = (id: string) => {
+  return `/api/requirements/${id}/ai-matches`;
+};
+
+export const getRequirementAiMatches = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AiMatch[]> => {
+  return customFetch<AiMatch[]>(getGetRequirementAiMatchesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRequirementAiMatchesQueryKey = (id: string) => {
+  return [`/api/requirements/${id}/ai-matches`] as const;
+};
+
+export const getGetRequirementAiMatchesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRequirementAiMatches>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRequirementAiMatches>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRequirementAiMatchesQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRequirementAiMatches>>
+  > = ({ signal }) =>
+    getRequirementAiMatches(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRequirementAiMatches>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRequirementAiMatchesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRequirementAiMatches>>
+>;
+export type GetRequirementAiMatchesQueryError = ErrorType<void>;
+
+/**
+ * @summary AI-ranked trainer matches for a requirement (vendor owner only)
+ */
+
+export function useGetRequirementAiMatches<
+  TData = Awaited<ReturnType<typeof getRequirementAiMatches>>,
+  TError = ErrorType<void>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRequirementAiMatches>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRequirementAiMatchesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Trainers whose skills match a requirement (up to 5, ranked)
@@ -2614,6 +3428,340 @@ export const useUpdateApplicationStatus = <
   TContext
 > => {
   return useMutation(getUpdateApplicationStatusMutationOptions(options));
+};
+
+/**
+ * @summary List all message threads for the current user
+ */
+export const getListMessageThreadsUrl = () => {
+  return `/api/messages/threads`;
+};
+
+export const listMessageThreads = async (
+  options?: RequestInit,
+): Promise<MessageThreadItem[]> => {
+  return customFetch<MessageThreadItem[]>(getListMessageThreadsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMessageThreadsQueryKey = () => {
+  return [`/api/messages/threads`] as const;
+};
+
+export const getListMessageThreadsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMessageThreads>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMessageThreads>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListMessageThreadsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMessageThreads>>
+  > = ({ signal }) => listMessageThreads({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMessageThreads>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMessageThreadsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMessageThreads>>
+>;
+export type ListMessageThreadsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all message threads for the current user
+ */
+
+export function useListMessageThreads<
+  TData = Awaited<ReturnType<typeof listMessageThreads>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listMessageThreads>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMessageThreadsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save a private vendor note on an application
+ */
+export const getUpdateApplicationNoteUrl = (id: string) => {
+  return `/api/applications/${id}/note`;
+};
+
+export const updateApplicationNote = async (
+  id: string,
+  updateApplicationNoteBody: UpdateApplicationNoteBody,
+  options?: RequestInit,
+): Promise<Application> => {
+  return customFetch<Application>(getUpdateApplicationNoteUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateApplicationNoteBody),
+  });
+};
+
+export const getUpdateApplicationNoteMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateApplicationNote>>,
+    TError,
+    { id: string; data: BodyType<UpdateApplicationNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateApplicationNote>>,
+  TError,
+  { id: string; data: BodyType<UpdateApplicationNoteBody> },
+  TContext
+> => {
+  const mutationKey = ["updateApplicationNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateApplicationNote>>,
+    { id: string; data: BodyType<UpdateApplicationNoteBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateApplicationNote(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateApplicationNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateApplicationNote>>
+>;
+export type UpdateApplicationNoteMutationBody =
+  BodyType<UpdateApplicationNoteBody>;
+export type UpdateApplicationNoteMutationError = ErrorType<void>;
+
+/**
+ * @summary Save a private vendor note on an application
+ */
+export const useUpdateApplicationNote = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateApplicationNote>>,
+    TError,
+    { id: string; data: BodyType<UpdateApplicationNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateApplicationNote>>,
+  TError,
+  { id: string; data: BodyType<UpdateApplicationNoteBody> },
+  TContext
+> => {
+  return useMutation(getUpdateApplicationNoteMutationOptions(options));
+};
+
+/**
+ * @summary Mark a hired application as completed (vendor-owner only)
+ */
+export const getCompleteApplicationUrl = (id: string) => {
+  return `/api/applications/${id}/complete`;
+};
+
+export const completeApplication = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Application> => {
+  return customFetch<Application>(getCompleteApplicationUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCompleteApplicationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeApplication>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeApplication>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["completeApplication"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeApplication>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return completeApplication(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteApplicationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeApplication>>
+>;
+
+export type CompleteApplicationMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark a hired application as completed (vendor-owner only)
+ */
+export const useCompleteApplication = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeApplication>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeApplication>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getCompleteApplicationMutationOptions(options));
+};
+
+/**
+ * @summary Trainer withdraws their own application
+ */
+export const getWithdrawApplicationUrl = (id: string) => {
+  return `/api/applications/${id}/withdraw`;
+};
+
+export const withdrawApplication = async (
+  id: string,
+  withdrawApplicationBody?: WithdrawApplicationBody,
+  options?: RequestInit,
+): Promise<Application> => {
+  return customFetch<Application>(getWithdrawApplicationUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(withdrawApplicationBody),
+  });
+};
+
+export const getWithdrawApplicationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof withdrawApplication>>,
+    TError,
+    { id: string; data: BodyType<WithdrawApplicationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof withdrawApplication>>,
+  TError,
+  { id: string; data: BodyType<WithdrawApplicationBody> },
+  TContext
+> => {
+  const mutationKey = ["withdrawApplication"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof withdrawApplication>>,
+    { id: string; data: BodyType<WithdrawApplicationBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return withdrawApplication(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type WithdrawApplicationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof withdrawApplication>>
+>;
+export type WithdrawApplicationMutationBody = BodyType<WithdrawApplicationBody>;
+export type WithdrawApplicationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Trainer withdraws their own application
+ */
+export const useWithdrawApplication = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof withdrawApplication>>,
+    TError,
+    { id: string; data: BodyType<WithdrawApplicationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof withdrawApplication>>,
+  TError,
+  { id: string; data: BodyType<WithdrawApplicationBody> },
+  TContext
+> => {
+  return useMutation(getWithdrawApplicationMutationOptions(options));
 };
 
 /**
@@ -3342,6 +4490,233 @@ export const useUpdateHireInquiryStatus = <
 };
 
 /**
+ * @summary List all requirements posted with "hire through us" (admin only)
+ */
+export const getListHireThroughUsRequirementsUrl = () => {
+  return `/api/admin/requirements/hire-through-us`;
+};
+
+export const listHireThroughUsRequirements = async (
+  options?: RequestInit,
+): Promise<Requirement[]> => {
+  return customFetch<Requirement[]>(getListHireThroughUsRequirementsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListHireThroughUsRequirementsQueryKey = () => {
+  return [`/api/admin/requirements/hire-through-us`] as const;
+};
+
+export const getListHireThroughUsRequirementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listHireThroughUsRequirements>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listHireThroughUsRequirements>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListHireThroughUsRequirementsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listHireThroughUsRequirements>>
+  > = ({ signal }) =>
+    listHireThroughUsRequirements({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listHireThroughUsRequirements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListHireThroughUsRequirementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listHireThroughUsRequirements>>
+>;
+export type ListHireThroughUsRequirementsQueryError = ErrorType<void>;
+
+/**
+ * @summary List all requirements posted with "hire through us" (admin only)
+ */
+
+export function useListHireThroughUsRequirements<
+  TData = Awaited<ReturnType<typeof listHireThroughUsRequirements>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listHireThroughUsRequirements>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListHireThroughUsRequirementsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Download a CSV of every requirement (admin only)
+ */
+export const getExportRequirementsCsvUrl = () => {
+  return `/api/admin/export/requirements`;
+};
+
+export const exportRequirementsCsv = async (
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getExportRequirementsCsvUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportRequirementsCsvQueryKey = () => {
+  return [`/api/admin/export/requirements`] as const;
+};
+
+export const getExportRequirementsCsvQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportRequirementsCsv>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportRequirementsCsv>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportRequirementsCsvQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof exportRequirementsCsv>>
+  > = ({ signal }) => exportRequirementsCsv({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportRequirementsCsv>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportRequirementsCsvQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportRequirementsCsv>>
+>;
+export type ExportRequirementsCsvQueryError = ErrorType<void>;
+
+/**
+ * @summary Download a CSV of every requirement (admin only)
+ */
+
+export function useExportRequirementsCsv<
+  TData = Awaited<ReturnType<typeof exportRequirementsCsv>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportRequirementsCsv>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportRequirementsCsvQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Download a CSV of every application (admin only)
+ */
+export const getExportApplicationsCsvUrl = () => {
+  return `/api/admin/export/applications`;
+};
+
+export const exportApplicationsCsv = async (
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getExportApplicationsCsvUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportApplicationsCsvQueryKey = () => {
+  return [`/api/admin/export/applications`] as const;
+};
+
+export const getExportApplicationsCsvQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportApplicationsCsv>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportApplicationsCsv>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportApplicationsCsvQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof exportApplicationsCsv>>
+  > = ({ signal }) => exportApplicationsCsv({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportApplicationsCsv>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportApplicationsCsvQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportApplicationsCsv>>
+>;
+export type ExportApplicationsCsvQueryError = ErrorType<void>;
+
+/**
+ * @summary Download a CSV of every application (admin only)
+ */
+
+export function useExportApplicationsCsv<
+  TData = Awaited<ReturnType<typeof exportApplicationsCsv>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportApplicationsCsv>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportApplicationsCsvQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary List all users (admin only)
  */
 export const getListAdminUsersUrl = (params?: ListAdminUsersParams) => {
@@ -3688,4 +5063,188 @@ export const useChangeUserRole = <
   TContext
 > => {
   return useMutation(getChangeUserRoleMutationOptions(options));
+};
+
+/**
+ * @summary List all vendors with verified status (admin only)
+ */
+export const getListAdminVendorsUrl = (params?: ListAdminVendorsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/vendors?${stringifiedParams}`
+    : `/api/admin/vendors`;
+};
+
+export const listAdminVendors = async (
+  params?: ListAdminVendorsParams,
+  options?: RequestInit,
+): Promise<AdminVendorsPage> => {
+  return customFetch<AdminVendorsPage>(getListAdminVendorsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminVendorsQueryKey = (
+  params?: ListAdminVendorsParams,
+) => {
+  return [`/api/admin/vendors`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminVendorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminVendors>>,
+  TError = ErrorType<void>,
+>(
+  params?: ListAdminVendorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminVendors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAdminVendorsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminVendors>>
+  > = ({ signal }) => listAdminVendors(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminVendors>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminVendorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminVendors>>
+>;
+export type ListAdminVendorsQueryError = ErrorType<void>;
+
+/**
+ * @summary List all vendors with verified status (admin only)
+ */
+
+export function useListAdminVendors<
+  TData = Awaited<ReturnType<typeof listAdminVendors>>,
+  TError = ErrorType<void>,
+>(
+  params?: ListAdminVendorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminVendors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminVendorsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set or unset vendor verified status (admin only)
+ */
+export const getVerifyVendorUrl = (id: string) => {
+  return `/api/admin/vendors/${id}/verify`;
+};
+
+export const verifyVendor = async (
+  id: string,
+  verifyVendorBody: VerifyVendorBody,
+  options?: RequestInit,
+): Promise<Vendor> => {
+  return customFetch<Vendor>(getVerifyVendorUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(verifyVendorBody),
+  });
+};
+
+export const getVerifyVendorMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyVendor>>,
+    TError,
+    { id: string; data: BodyType<VerifyVendorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof verifyVendor>>,
+  TError,
+  { id: string; data: BodyType<VerifyVendorBody> },
+  TContext
+> => {
+  const mutationKey = ["verifyVendor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof verifyVendor>>,
+    { id: string; data: BodyType<VerifyVendorBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return verifyVendor(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VerifyVendorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof verifyVendor>>
+>;
+export type VerifyVendorMutationBody = BodyType<VerifyVendorBody>;
+export type VerifyVendorMutationError = ErrorType<void>;
+
+/**
+ * @summary Set or unset vendor verified status (admin only)
+ */
+export const useVerifyVendor = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyVendor>>,
+    TError,
+    { id: string; data: BodyType<VerifyVendorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof verifyVendor>>,
+  TError,
+  { id: string; data: BodyType<VerifyVendorBody> },
+  TContext
+> => {
+  return useMutation(getVerifyVendorMutationOptions(options));
 };
