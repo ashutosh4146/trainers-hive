@@ -32,12 +32,18 @@ export interface SwitchUserBody {
   name?: string;
   email?: string;
   orgName?: string;
+  orgType?: string;
 }
 
 export interface SkillCategory {
   id: string;
   name: string;
   skills: string[];
+}
+
+export interface SkillDemand {
+  skill: string;
+  count: number;
 }
 
 /**
@@ -50,6 +56,13 @@ export const TrainerTrainerType = {
   trainer: "trainer",
   developer: "developer",
   both: "both",
+} as const;
+
+export type TrainerGender = (typeof TrainerGender)[keyof typeof TrainerGender];
+
+export const TrainerGender = {
+  male: "male",
+  female: "female",
 } as const;
 
 export interface EngagedDateRange {
@@ -80,7 +93,10 @@ export interface Trainer {
   availability?: string;
   /** Whether the user is a full-time trainer, developer, or both */
   trainerType?: TrainerTrainerType;
+  gender?: TrainerGender;
   engagedDates: EngagedDateRange[];
+  /** Number of endorsements this trainer has received */
+  endorsementCount: number;
 }
 
 export interface SavedTrainer {
@@ -129,6 +145,14 @@ export const UpdateTrainerBodyTrainerType = {
   both: "both",
 } as const;
 
+export type UpdateTrainerBodyGender =
+  (typeof UpdateTrainerBodyGender)[keyof typeof UpdateTrainerBodyGender];
+
+export const UpdateTrainerBodyGender = {
+  male: "male",
+  female: "female",
+} as const;
+
 export interface UpdateTrainerBody {
   name?: string;
   headline?: string;
@@ -145,12 +169,14 @@ export interface UpdateTrainerBody {
   languages?: string[];
   certifications?: Certification[];
   resumeUrl?: string;
+  gender?: UpdateTrainerBodyGender;
   engagedDates?: EngagedDateRange[];
 }
 
 export interface Vendor {
   id: string;
   companyName: string;
+  orgType?: string;
   industry: string;
   location: string;
   contactName: string;
@@ -218,6 +244,11 @@ export interface Requirement {
   flagReason?: string;
   flaggedBy?: string;
   flaggedAt?: string;
+  vendorVerified?: boolean;
+  isUrgent?: boolean;
+  isFeatured?: boolean;
+  isPrivate?: boolean;
+  hireThroughUs?: boolean;
 }
 
 export type RequirementDetail = Requirement & {
@@ -244,6 +275,10 @@ export interface CreateRequirementBody {
   startDate?: string;
   budget?: number;
   feeType?: FeeType;
+  isUrgent?: boolean;
+  isFeatured?: boolean;
+  isPrivate?: boolean;
+  hireThroughUs?: boolean;
 }
 
 export interface UpdateRequirementBody {
@@ -264,10 +299,18 @@ export interface UpdateRequirementBody {
   language?: string;
   trainerScope?: string;
   startDate?: string;
+  isUrgent?: boolean;
+  isFeatured?: boolean;
+  isPrivate?: boolean;
+  hireThroughUs?: boolean;
 }
 
 export interface FlagRequirementBody {
   reason: string;
+}
+
+export interface BulkRejectResult {
+  rejectedCount: number;
 }
 
 export type ApplicationStatus =
@@ -278,6 +321,8 @@ export const ApplicationStatus = {
   shortlisted: "shortlisted",
   rejected: "rejected",
   hired: "hired",
+  withdrawn: "withdrawn",
+  completed: "completed",
 } as const;
 
 export interface Application {
@@ -287,7 +332,16 @@ export interface Application {
   status: ApplicationStatus;
   message: string;
   proposedRate: number;
+  withdrawnReason?: string;
+  /** Private note visible only to the owning vendor */
+  vendorNote?: string;
+  /** When the training was marked as completed */
+  completedAt?: string;
   createdAt: string;
+}
+
+export interface WithdrawApplicationBody {
+  reason?: string;
 }
 
 export type ApplicationWithTrainer = Application & {
@@ -299,12 +353,19 @@ export type ApplicationWithRequirement = Application & {
 };
 
 export interface ApplyBody {
-  message: string;
-  proposedRate: number;
+  message?: string;
+  proposedRate?: number | null;
 }
 
+/**
+ * Update application status. Note — the `completed` status is not accepted here; use `POST /applications/{id}/complete` instead.
+ */
 export interface UpdateApplicationBody {
   status: ApplicationStatus;
+}
+
+export interface UpdateApplicationNoteBody {
+  note: string;
 }
 
 export interface Review {
@@ -344,12 +405,57 @@ export interface Review {
   createdAt: string;
 }
 
+export interface Endorsement {
+  id: string;
+  trainerId: string;
+  vendorId: string;
+  vendorName: string;
+  vendorLogoUrl?: string;
+  /** @maxLength 300 */
+  text: string;
+  createdAt: string;
+}
+
+export interface EndorsementsListResponse {
+  endorsements: Endorsement[];
+  /** True if the authenticated vendor has a completed engagement with this trainer AND has not yet endorsed them (always false for non-vendors or vendors who already endorsed) */
+  canEndorse: boolean;
+}
+
+export interface VendorEndorsement {
+  id: string;
+  trainerId: string;
+  vendorId: string;
+  trainerName: string;
+  trainerAvatarUrl: string;
+  /** @maxLength 300 */
+  text: string;
+  createdAt: string;
+}
+
+export interface CreateEndorsementBody {
+  /** @maxLength 300 */
+  text: string;
+}
+
 export interface Message {
   id: string;
   applicationId: string;
   senderUserId: string;
   body: string;
   createdAt: string;
+}
+
+export interface MessageThreadItem {
+  applicationId: string;
+  requirementId: string;
+  requirementTitle: string;
+  otherPartyName: string;
+  otherPartyAvatarUrl: string;
+  status: ApplicationStatus;
+  lastMessageBody?: string | null;
+  lastMessageAt?: string | null;
+  lastMessageSenderUserId?: string | null;
 }
 
 export interface SendMessageBody {
@@ -384,6 +490,13 @@ export interface CreateReviewBody {
   ratingCommunication: number;
   comment: string;
   engagementTitle?: string;
+}
+
+export interface HiringStats {
+  hiredCount: number;
+  avgDays?: number | null;
+  minDays?: number | null;
+  maxDays?: number | null;
 }
 
 export interface SkillCount {
@@ -422,6 +535,20 @@ export interface PlatformStats {
   openRequirementCount: number;
   completedEngagements: number;
   skillBreakdown: SkillCount[];
+}
+
+export interface AiMatch {
+  trainerId: string;
+  name: string;
+  mainSkill: string;
+  subSkills?: string[];
+  experienceYears: number;
+  rating: number;
+  avatarUrl: string;
+  location?: string;
+  verified?: boolean;
+  /** One-sentence AI-generated explanation of why this trainer fits */
+  reason: string;
 }
 
 export type ActivityItemType =
@@ -526,6 +653,29 @@ export interface ChangeUserRoleBody {
   role: ChangeUserRoleBodyRole;
 }
 
+export interface AdminVendorItem {
+  id: string;
+  companyName: string;
+  orgType?: string;
+  email: string;
+  industry: string;
+  location: string;
+  verified: boolean;
+  logoUrl?: string;
+  createdAt: string;
+}
+
+export interface AdminVendorsPage {
+  vendors: AdminVendorItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface VerifyVendorBody {
+  verified: boolean;
+}
+
 export interface ResumeDownloadUrlResponse {
   /** Presigned S3 GET URL (valid for 1 hour) */
   url: string;
@@ -559,11 +709,24 @@ export interface ResumeUploadResponse {
 export type ListTrainersParams = {
   q?: string;
   skill?: string;
+  /**
+   * Comma-separated skills (OR-matched against mainSkill and subSkills)
+   */
+  skills?: string;
   location?: string;
   remote?: boolean;
   minExperience?: number;
+  gender?: ListTrainersGender;
   sort?: ListTrainersSort;
 };
+
+export type ListTrainersGender =
+  (typeof ListTrainersGender)[keyof typeof ListTrainersGender];
+
+export const ListTrainersGender = {
+  male: "male",
+  female: "female",
+} as const;
 
 export type ListTrainersSort =
   (typeof ListTrainersSort)[keyof typeof ListTrainersSort];
@@ -572,6 +735,7 @@ export const ListTrainersSort = {
   rating: "rating",
   experience: "experience",
   recent: "recent",
+  endorsements: "endorsements",
 } as const;
 
 export type ListRequirementsParams = {
@@ -583,6 +747,10 @@ export type ListRequirementsParams = {
   vendorId?: string;
   sort?: ListRequirementsSort;
   flagged?: boolean;
+  /**
+   * Comma-separated skill names (OR-match)
+   */
+  skills?: string;
 };
 
 export type ListRequirementsStatus =
@@ -627,3 +795,9 @@ export const ListAdminUsersStatus = {
   active: "active",
   deactivated: "deactivated",
 } as const;
+
+export type ListAdminVendorsParams = {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+};
