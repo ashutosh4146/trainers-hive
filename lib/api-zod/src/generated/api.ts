@@ -35,6 +35,7 @@ export const SwitchUserBody = zod.object({
   name: zod.string().optional(),
   email: zod.string().email().optional(),
   orgName: zod.string().optional(),
+  orgType: zod.string().optional(),
 });
 
 export const SwitchUserResponse = zod.object({
@@ -58,15 +59,31 @@ export const ListSkillsResponseItem = zod.object({
 export const ListSkillsResponse = zod.array(ListSkillsResponseItem);
 
 /**
+ * @summary Ranked list of skills by open requirement count
+ */
+export const GetSkillsDemandResponseItem = zod.object({
+  skill: zod.string(),
+  count: zod.number(),
+});
+export const GetSkillsDemandResponse = zod.array(GetSkillsDemandResponseItem);
+
+/**
  * @summary Browse trainers
  */
 export const ListTrainersQueryParams = zod.object({
   q: zod.coerce.string().optional(),
   skill: zod.coerce.string().optional(),
+  skills: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Comma-separated skills (OR-matched against mainSkill and subSkills)",
+    ),
   location: zod.coerce.string().optional(),
   remote: zod.coerce.boolean().optional(),
   minExperience: zod.coerce.number().optional(),
-  sort: zod.enum(["rating", "experience", "recent"]).optional(),
+  gender: zod.enum(["male", "female"]).optional(),
+  sort: zod.enum(["rating", "experience", "recent", "endorsements"]).optional(),
 });
 
 export const ListTrainersResponseItem = zod.object({
@@ -91,6 +108,7 @@ export const ListTrainersResponseItem = zod.object({
     .enum(["trainer", "developer", "both"])
     .optional()
     .describe("Whether the user is a full-time trainer, developer, or both"),
+  gender: zod.enum(["male", "female"]).optional(),
   engagedDates: zod.array(
     zod.object({
       startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -98,6 +116,9 @@ export const ListTrainersResponseItem = zod.object({
       note: zod.string().optional(),
     }),
   ),
+  endorsementCount: zod
+    .number()
+    .describe("Number of endorsements this trainer has received"),
 });
 export const ListTrainersResponse = zod.array(ListTrainersResponseItem);
 
@@ -126,6 +147,7 @@ export const ListFeaturedTrainersResponseItem = zod.object({
     .enum(["trainer", "developer", "both"])
     .optional()
     .describe("Whether the user is a full-time trainer, developer, or both"),
+  gender: zod.enum(["male", "female"]).optional(),
   engagedDates: zod.array(
     zod.object({
       startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -133,6 +155,9 @@ export const ListFeaturedTrainersResponseItem = zod.object({
       note: zod.string().optional(),
     }),
   ),
+  endorsementCount: zod
+    .number()
+    .describe("Number of endorsements this trainer has received"),
 });
 export const ListFeaturedTrainersResponse = zod.array(
   ListFeaturedTrainersResponseItem,
@@ -165,6 +190,7 @@ export const GetTrainerResponse = zod
       .enum(["trainer", "developer", "both"])
       .optional()
       .describe("Whether the user is a full-time trainer, developer, or both"),
+    gender: zod.enum(["male", "female"]).optional(),
     engagedDates: zod.array(
       zod.object({
         startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -172,6 +198,9 @@ export const GetTrainerResponse = zod
         note: zod.string().optional(),
       }),
     ),
+    endorsementCount: zod
+      .number()
+      .describe("Number of endorsements this trainer has received"),
   })
   .and(
     zod.object({
@@ -229,6 +258,7 @@ export const UpdateTrainerBody = zod.object({
     )
     .optional(),
   resumeUrl: zod.string().optional(),
+  gender: zod.enum(["male", "female"]).optional(),
   engagedDates: zod
     .array(
       zod.object({
@@ -263,6 +293,7 @@ export const UpdateTrainerResponse = zod
       .enum(["trainer", "developer", "both"])
       .optional()
       .describe("Whether the user is a full-time trainer, developer, or both"),
+    gender: zod.enum(["male", "female"]).optional(),
     engagedDates: zod.array(
       zod.object({
         startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -270,6 +301,9 @@ export const UpdateTrainerResponse = zod
         note: zod.string().optional(),
       }),
     ),
+    endorsementCount: zod
+      .number()
+      .describe("Number of endorsements this trainer has received"),
   })
   .and(
     zod.object({
@@ -440,6 +474,83 @@ export const CreateTrainerReviewBody = zod.object({
   engagementTitle: zod.string().optional(),
 });
 
+/**
+ * @summary List public endorsements for a trainer
+ */
+export const ListTrainerEndorsementsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const listTrainerEndorsementsResponseEndorsementsItemTextMax = 300;
+
+export const ListTrainerEndorsementsResponse = zod.object({
+  endorsements: zod.array(
+    zod.object({
+      id: zod.string(),
+      trainerId: zod.string(),
+      vendorId: zod.string(),
+      vendorName: zod.string(),
+      vendorLogoUrl: zod.string().optional(),
+      text: zod
+        .string()
+        .max(listTrainerEndorsementsResponseEndorsementsItemTextMax),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  canEndorse: zod
+    .boolean()
+    .describe(
+      "True if the authenticated vendor has a completed engagement with this trainer AND has not yet endorsed them (always false for non-vendors or vendors who already endorsed)",
+    ),
+});
+
+/**
+ * @summary Create an endorsement (vendor with completed engagement only)
+ */
+export const CreateTrainerEndorsementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const createTrainerEndorsementBodyTextMax = 300;
+
+export const CreateTrainerEndorsementBody = zod.object({
+  text: zod.string().max(createTrainerEndorsementBodyTextMax),
+});
+
+/**
+ * @summary Update own endorsement text
+ */
+export const UpdateTrainerEndorsementParams = zod.object({
+  id: zod.coerce.string(),
+  endorsementId: zod.coerce.string(),
+});
+
+export const updateTrainerEndorsementBodyTextMax = 300;
+
+export const UpdateTrainerEndorsementBody = zod.object({
+  text: zod.string().max(updateTrainerEndorsementBodyTextMax),
+});
+
+export const updateTrainerEndorsementResponseTextMax = 300;
+
+export const UpdateTrainerEndorsementResponse = zod.object({
+  id: zod.string(),
+  trainerId: zod.string(),
+  vendorId: zod.string(),
+  vendorName: zod.string(),
+  vendorLogoUrl: zod.string().optional(),
+  text: zod.string().max(updateTrainerEndorsementResponseTextMax),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete own endorsement
+ */
+export const DeleteTrainerEndorsementParams = zod.object({
+  id: zod.coerce.string(),
+  endorsementId: zod.coerce.string(),
+});
+
 export const GetVendorParams = zod.object({
   id: zod.coerce.string(),
 });
@@ -447,6 +558,7 @@ export const GetVendorParams = zod.object({
 export const GetVendorResponse = zod.object({
   id: zod.string(),
   companyName: zod.string(),
+  orgType: zod.string().optional(),
   industry: zod.string(),
   location: zod.string(),
   contactName: zod.string(),
@@ -475,6 +587,7 @@ export const UpdateVendorBody = zod.object({
 export const UpdateVendorResponse = zod.object({
   id: zod.string(),
   companyName: zod.string(),
+  orgType: zod.string().optional(),
   industry: zod.string(),
   location: zod.string(),
   contactName: zod.string(),
@@ -484,6 +597,42 @@ export const UpdateVendorResponse = zod.object({
   logoUrl: zod.string(),
   verified: zod.boolean(),
   websiteUrl: zod.string().optional(),
+});
+
+/**
+ * @summary List all endorsements authored by a vendor (with trainer details)
+ */
+export const ListVendorEndorsementsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const listVendorEndorsementsResponseTextMax = 300;
+
+export const ListVendorEndorsementsResponseItem = zod.object({
+  id: zod.string(),
+  trainerId: zod.string(),
+  vendorId: zod.string(),
+  trainerName: zod.string(),
+  trainerAvatarUrl: zod.string(),
+  text: zod.string().max(listVendorEndorsementsResponseTextMax),
+  createdAt: zod.coerce.date(),
+});
+export const ListVendorEndorsementsResponse = zod.array(
+  ListVendorEndorsementsResponseItem,
+);
+
+/**
+ * @summary Time-to-hire stats for a vendor (owner or admin)
+ */
+export const GetVendorHiringStatsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetVendorHiringStatsResponse = zod.object({
+  hiredCount: zod.number(),
+  avgDays: zod.number().nullish(),
+  minDays: zod.number().nullish(),
+  maxDays: zod.number().nullish(),
 });
 
 /**
@@ -520,6 +669,7 @@ export const ListSavedTrainersResponseItem = zod.object({
       .enum(["trainer", "developer", "both"])
       .optional()
       .describe("Whether the user is a full-time trainer, developer, or both"),
+    gender: zod.enum(["male", "female"]).optional(),
     engagedDates: zod.array(
       zod.object({
         startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -527,6 +677,9 @@ export const ListSavedTrainersResponseItem = zod.object({
         note: zod.string().optional(),
       }),
     ),
+    endorsementCount: zod
+      .number()
+      .describe("Number of endorsements this trainer has received"),
   }),
 });
 export const ListSavedTrainersResponse = zod.array(
@@ -564,6 +717,10 @@ export const ListRequirementsQueryParams = zod.object({
   vendorId: zod.coerce.string().optional(),
   sort: zod.enum(["recent", "deadline", "budget"]).optional(),
   flagged: zod.coerce.boolean().optional(),
+  skills: zod.coerce
+    .string()
+    .optional()
+    .describe("Comma-separated skill names (OR-match)"),
 });
 
 export const ListRequirementsResponseItem = zod.object({
@@ -596,6 +753,11 @@ export const ListRequirementsResponseItem = zod.object({
   flagReason: zod.string().optional(),
   flaggedBy: zod.string().optional(),
   flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
 });
 export const ListRequirementsResponse = zod.array(ListRequirementsResponseItem);
 
@@ -618,6 +780,10 @@ export const CreateRequirementBody = zod.object({
   startDate: zod.string().optional(),
   budget: zod.number().optional(),
   feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
 });
 
 /**
@@ -653,6 +819,11 @@ export const ListRecentRequirementsResponseItem = zod.object({
   flagReason: zod.string().optional(),
   flaggedBy: zod.string().optional(),
   flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
 });
 export const ListRecentRequirementsResponse = zod.array(
   ListRecentRequirementsResponseItem,
@@ -693,6 +864,11 @@ export const GetRequirementResponse = zod
     flagReason: zod.string().optional(),
     flaggedBy: zod.string().optional(),
     flaggedAt: zod.coerce.date().optional(),
+    vendorVerified: zod.boolean().optional(),
+    isUrgent: zod.boolean().optional(),
+    isFeatured: zod.boolean().optional(),
+    isPrivate: zod.boolean().optional(),
+    hireThroughUs: zod.boolean().optional(),
   })
   .and(
     zod.object({
@@ -700,6 +876,7 @@ export const GetRequirementResponse = zod
       vendor: zod.object({
         id: zod.string(),
         companyName: zod.string(),
+        orgType: zod.string().optional(),
         industry: zod.string(),
         location: zod.string(),
         contactName: zod.string(),
@@ -735,6 +912,10 @@ export const UpdateRequirementBody = zod.object({
   language: zod.string().optional(),
   trainerScope: zod.string().optional(),
   startDate: zod.string().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
 });
 
 export const UpdateRequirementResponse = zod.object({
@@ -767,6 +948,11 @@ export const UpdateRequirementResponse = zod.object({
   flagReason: zod.string().optional(),
   flaggedBy: zod.string().optional(),
   flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
 });
 
 export const DeleteRequirementParams = zod.object({
@@ -811,6 +997,22 @@ export const FlagRequirementResponse = zod.object({
   flagReason: zod.string().optional(),
   flaggedBy: zod.string().optional(),
   flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
+});
+
+/**
+ * @summary Reject all submitted and shortlisted applications for a requirement (vendor-owner only)
+ */
+export const BulkRejectRequirementApplicationsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const BulkRejectRequirementApplicationsResponse = zod.object({
+  rejectedCount: zod.number(),
 });
 
 export const UnflagRequirementParams = zod.object({
@@ -847,7 +1049,37 @@ export const UnflagRequirementResponse = zod.object({
   flagReason: zod.string().optional(),
   flaggedBy: zod.string().optional(),
   flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
 });
+
+/**
+ * @summary AI-ranked trainer matches for a requirement (vendor owner only)
+ */
+export const GetRequirementAiMatchesParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetRequirementAiMatchesResponseItem = zod.object({
+  trainerId: zod.string(),
+  name: zod.string(),
+  mainSkill: zod.string(),
+  subSkills: zod.array(zod.string()).optional(),
+  experienceYears: zod.number(),
+  rating: zod.number(),
+  avatarUrl: zod.string(),
+  location: zod.string().optional(),
+  verified: zod.boolean().optional(),
+  reason: zod
+    .string()
+    .describe("One-sentence AI-generated explanation of why this trainer fits"),
+});
+export const GetRequirementAiMatchesResponse = zod.array(
+  GetRequirementAiMatchesResponseItem,
+);
 
 /**
  * @summary Trainers whose skills match a requirement (up to 5, ranked)
@@ -873,8 +1105,8 @@ export const ApplyToRequirementParams = zod.object({
 });
 
 export const ApplyToRequirementBody = zod.object({
-  message: zod.string(),
-  proposedRate: zod.number(),
+  message: zod.string().optional(),
+  proposedRate: zod.number().nullish(),
 });
 
 export const ListRequirementApplicationsParams = zod.object({
@@ -886,9 +1118,25 @@ export const ListRequirementApplicationsResponseItem = zod
     id: zod.string(),
     requirementId: zod.string(),
     trainerId: zod.string(),
-    status: zod.enum(["submitted", "shortlisted", "rejected", "hired"]),
+    status: zod.enum([
+      "submitted",
+      "shortlisted",
+      "rejected",
+      "hired",
+      "withdrawn",
+      "completed",
+    ]),
     message: zod.string(),
     proposedRate: zod.number(),
+    withdrawnReason: zod.string().optional(),
+    vendorNote: zod
+      .string()
+      .optional()
+      .describe("Private note visible only to the owning vendor"),
+    completedAt: zod.coerce
+      .date()
+      .optional()
+      .describe("When the training was marked as completed"),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -919,6 +1167,7 @@ export const ListRequirementApplicationsResponseItem = zod
           .describe(
             "Whether the user is a full-time trainer, developer, or both",
           ),
+        gender: zod.enum(["male", "female"]).optional(),
         engagedDates: zod.array(
           zod.object({
             startDate: zod.string().describe("ISO date YYYY-MM-DD (inclusive)"),
@@ -926,6 +1175,9 @@ export const ListRequirementApplicationsResponseItem = zod
             note: zod.string().optional(),
           }),
         ),
+        endorsementCount: zod
+          .number()
+          .describe("Number of endorsements this trainer has received"),
       }),
     }),
   );
@@ -941,9 +1193,25 @@ export const ListMyApplicationsResponseItem = zod
     id: zod.string(),
     requirementId: zod.string(),
     trainerId: zod.string(),
-    status: zod.enum(["submitted", "shortlisted", "rejected", "hired"]),
+    status: zod.enum([
+      "submitted",
+      "shortlisted",
+      "rejected",
+      "hired",
+      "withdrawn",
+      "completed",
+    ]),
     message: zod.string(),
     proposedRate: zod.number(),
+    withdrawnReason: zod.string().optional(),
+    vendorNote: zod
+      .string()
+      .optional()
+      .describe("Private note visible only to the owning vendor"),
+    completedAt: zod.coerce
+      .date()
+      .optional()
+      .describe("When the training was marked as completed"),
     createdAt: zod.coerce.date(),
   })
   .and(
@@ -978,6 +1246,11 @@ export const ListMyApplicationsResponseItem = zod
         flagReason: zod.string().optional(),
         flaggedBy: zod.string().optional(),
         flaggedAt: zod.coerce.date().optional(),
+        vendorVerified: zod.boolean().optional(),
+        isUrgent: zod.boolean().optional(),
+        isFeatured: zod.boolean().optional(),
+        isPrivate: zod.boolean().optional(),
+        hireThroughUs: zod.boolean().optional(),
       }),
     }),
   );
@@ -989,17 +1262,176 @@ export const UpdateApplicationStatusParams = zod.object({
   id: zod.coerce.string(),
 });
 
-export const UpdateApplicationStatusBody = zod.object({
-  status: zod.enum(["submitted", "shortlisted", "rejected", "hired"]),
-});
+export const UpdateApplicationStatusBody = zod
+  .object({
+    status: zod.enum([
+      "submitted",
+      "shortlisted",
+      "rejected",
+      "hired",
+      "withdrawn",
+      "completed",
+    ]),
+  })
+  .describe(
+    "Update application status. Note — the `completed` status is not accepted here; use `POST \/applications\/{id}\/complete` instead.",
+  );
 
 export const UpdateApplicationStatusResponse = zod.object({
   id: zod.string(),
   requirementId: zod.string(),
   trainerId: zod.string(),
-  status: zod.enum(["submitted", "shortlisted", "rejected", "hired"]),
+  status: zod.enum([
+    "submitted",
+    "shortlisted",
+    "rejected",
+    "hired",
+    "withdrawn",
+    "completed",
+  ]),
   message: zod.string(),
   proposedRate: zod.number(),
+  withdrawnReason: zod.string().optional(),
+  vendorNote: zod
+    .string()
+    .optional()
+    .describe("Private note visible only to the owning vendor"),
+  completedAt: zod.coerce
+    .date()
+    .optional()
+    .describe("When the training was marked as completed"),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List all message threads for the current user
+ */
+export const ListMessageThreadsResponseItem = zod.object({
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  requirementTitle: zod.string(),
+  otherPartyName: zod.string(),
+  otherPartyAvatarUrl: zod.string(),
+  status: zod.enum([
+    "submitted",
+    "shortlisted",
+    "rejected",
+    "hired",
+    "withdrawn",
+    "completed",
+  ]),
+  lastMessageBody: zod.string().nullish(),
+  lastMessageAt: zod.coerce.date().nullish(),
+  lastMessageSenderUserId: zod.string().nullish(),
+});
+export const ListMessageThreadsResponse = zod.array(
+  ListMessageThreadsResponseItem,
+);
+
+/**
+ * @summary Save a private vendor note on an application
+ */
+export const UpdateApplicationNoteParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateApplicationNoteBody = zod.object({
+  note: zod.string(),
+});
+
+export const UpdateApplicationNoteResponse = zod.object({
+  id: zod.string(),
+  requirementId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum([
+    "submitted",
+    "shortlisted",
+    "rejected",
+    "hired",
+    "withdrawn",
+    "completed",
+  ]),
+  message: zod.string(),
+  proposedRate: zod.number(),
+  withdrawnReason: zod.string().optional(),
+  vendorNote: zod
+    .string()
+    .optional()
+    .describe("Private note visible only to the owning vendor"),
+  completedAt: zod.coerce
+    .date()
+    .optional()
+    .describe("When the training was marked as completed"),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Mark a hired application as completed (vendor-owner only)
+ */
+export const CompleteApplicationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CompleteApplicationResponse = zod.object({
+  id: zod.string(),
+  requirementId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum([
+    "submitted",
+    "shortlisted",
+    "rejected",
+    "hired",
+    "withdrawn",
+    "completed",
+  ]),
+  message: zod.string(),
+  proposedRate: zod.number(),
+  withdrawnReason: zod.string().optional(),
+  vendorNote: zod
+    .string()
+    .optional()
+    .describe("Private note visible only to the owning vendor"),
+  completedAt: zod.coerce
+    .date()
+    .optional()
+    .describe("When the training was marked as completed"),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Trainer withdraws their own application
+ */
+export const WithdrawApplicationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const WithdrawApplicationBody = zod.object({
+  reason: zod.string().optional(),
+});
+
+export const WithdrawApplicationResponse = zod.object({
+  id: zod.string(),
+  requirementId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum([
+    "submitted",
+    "shortlisted",
+    "rejected",
+    "hired",
+    "withdrawn",
+    "completed",
+  ]),
+  message: zod.string(),
+  proposedRate: zod.number(),
+  withdrawnReason: zod.string().optional(),
+  vendorNote: zod
+    .string()
+    .optional()
+    .describe("Private note visible only to the owning vendor"),
+  completedAt: zod.coerce
+    .date()
+    .optional()
+    .describe("When the training was marked as completed"),
   createdAt: zod.coerce.date(),
 });
 
@@ -1167,6 +1599,49 @@ export const UpdateHireInquiryStatusResponse = zod.object({
 });
 
 /**
+ * @summary List all requirements posted with "hire through us" (admin only)
+ */
+export const ListHireThroughUsRequirementsResponseItem = zod.object({
+  id: zod.string(),
+  vendorId: zod.string(),
+  vendorName: zod.string(),
+  vendorLogoUrl: zod.string(),
+  title: zod.string(),
+  skill: zod.string(),
+  subSkills: zod.array(zod.string()),
+  durationDays: zod.number(),
+  location: zod.string(),
+  remote: zod.boolean().optional(),
+  deadline: zod.coerce.date(),
+  status: zod.enum(["open", "closed", "vacant"]),
+  createdAt: zod.coerce.date(),
+  applicationCount: zod.number(),
+  trainingType: zod.string().optional(),
+  trainingMode: zod.string().optional(),
+  trainerCount: zod.number().optional(),
+  trainerType: zod.string().optional(),
+  benefits: zod.string().optional(),
+  certifications: zod.string().optional(),
+  language: zod.string().optional(),
+  trainerScope: zod.string().optional(),
+  startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
+});
+export const ListHireThroughUsRequirementsResponse = zod.array(
+  ListHireThroughUsRequirementsResponseItem,
+);
+
+/**
  * @summary List all users (admin only)
  */
 export const ListAdminUsersQueryParams = zod.object({
@@ -1267,4 +1742,58 @@ export const ChangeUserRoleResponse = zod.object({
     .string()
     .optional()
     .describe("ISO timestamp; present when the account is deactivated"),
+});
+
+/**
+ * @summary List all vendors with verified status (admin only)
+ */
+export const ListAdminVendorsQueryParams = zod.object({
+  q: zod.coerce.string().optional(),
+  page: zod.coerce.number().optional(),
+  pageSize: zod.coerce.number().optional(),
+});
+
+export const ListAdminVendorsResponse = zod.object({
+  vendors: zod.array(
+    zod.object({
+      id: zod.string(),
+      companyName: zod.string(),
+      orgType: zod.string().optional(),
+      email: zod.string(),
+      industry: zod.string(),
+      location: zod.string(),
+      verified: zod.boolean(),
+      logoUrl: zod.string().optional(),
+      createdAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
+});
+
+/**
+ * @summary Set or unset vendor verified status (admin only)
+ */
+export const VerifyVendorParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const VerifyVendorBody = zod.object({
+  verified: zod.boolean(),
+});
+
+export const VerifyVendorResponse = zod.object({
+  id: zod.string(),
+  companyName: zod.string(),
+  orgType: zod.string().optional(),
+  industry: zod.string(),
+  location: zod.string(),
+  contactName: zod.string(),
+  contactDesignation: zod.string(),
+  email: zod.string(),
+  about: zod.string().optional(),
+  logoUrl: zod.string(),
+  verified: zod.boolean(),
+  websiteUrl: zod.string().optional(),
 });
