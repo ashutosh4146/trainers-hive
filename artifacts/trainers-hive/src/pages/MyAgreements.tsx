@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useListMyAgreements, getListMyAgreementsQueryKey, getAuthToken } from "@workspace/api-client-react";
+import { useListMyAgreements, getListMyAgreementsQueryKey } from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export default function MyAgreements() {
     if (downloading) return;
     setDownloading(agreementId);
     try {
-      const token = await getAuthToken();
+      const token = localStorage.getItem("th_session_token");
       const res = await fetch(`/api/agreements/${agreementId}/pdf`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
