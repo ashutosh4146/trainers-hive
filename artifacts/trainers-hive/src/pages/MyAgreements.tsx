@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useListMyAgreements, getListMyAgreementsQueryKey } from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileSignature, Download, ExternalLink, Loader2 } from "lucide-react";
+import { auth } from "@/lib/firebase";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
@@ -27,6 +29,35 @@ function fmtDate(s: string | null | undefined): string {
 
 export default function MyAgreements() {
   const { data, isLoading } = useListMyAgreements({ query: { queryKey: getListMyAgreementsQueryKey() } });
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  async function downloadPdf(agreementId: string, title: string) {
+    if (downloading) return;
+    setDownloading(agreementId);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`/api/agreements/${agreementId}/pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `agreement-${agreementId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Could not download PDF: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   return (
     <div className="container max-w-5xl mx-auto py-8 px-4 space-y-6">
@@ -86,10 +117,15 @@ export default function MyAgreements() {
                     </Link>
                   </Button>
                   {(ag.status === "accepted" || ag.status === "cancelled") && (
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`/api/agreements/${ag.id}/pdf`} target="_blank" rel="noopener noreferrer">
-                        <Download className="h-3.5 w-3.5 mr-1.5" /> PDF
-                      </a>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={downloading === ag.id}
+                      onClick={() => downloadPdf(ag.id, ag.requirementTitle)}
+                    >
+                      {downloading === ag.id
+                        ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Downloading…</>
+                        : <><Download className="h-3.5 w-3.5 mr-1.5" /> PDF</>}
                     </Button>
                   )}
                 </div>

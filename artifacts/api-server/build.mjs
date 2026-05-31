@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { rm, cp } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -22,6 +22,9 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    // pdfkit reads font AFM files from a sibling `data/` directory at runtime.
+    // esbuild doesn't copy non-JS assets, so we copy them manually after the build.
+    // (see copyPdfkitData below)
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:
@@ -118,6 +121,20 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  await copyPdfkitData(distDir);
+}
+
+async function copyPdfkitData(distDir) {
+  try {
+    const pdfkitRoot = path.dirname(globalThis.require.resolve("pdfkit/package.json"));
+    // pdfkit stores AFM files under js/data/ in v0.18+
+    const src = path.join(pdfkitRoot, "js", "data");
+    const dest = path.join(distDir, "data");
+    await cp(src, dest, { recursive: true });
+  } catch (err) {
+    console.warn("Warning: could not copy pdfkit data files:", err.message);
+  }
 }
 
 buildAll().catch((err) => {
