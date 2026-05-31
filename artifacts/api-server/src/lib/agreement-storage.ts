@@ -53,3 +53,15 @@ export async function getAgreementDownloadUrl(objectKey: string): Promise<string
     { expiresIn: 600 },
   );
 }
+
+export async function getAgreementPdfBody(objectKey: string): Promise<Buffer> {
+  const { client, bucket } = getConfig();
+  const resp = await client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: objectKey }),
+  );
+  if (!resp.Body) {
+    throw new Error(`Agreement PDF object has no body: ${objectKey}`);
+  }
+  const bytes = await resp.Body.transformToByteArray();
+  return Buffer.from(bytes);
+}

@@ -21,7 +21,7 @@ import { newId } from "../lib/ids";
 import { renderAgreementPdf } from "../lib/agreement-pdf";
 import {
   uploadAgreementPdf,
-  getAgreementDownloadUrl,
+  getAgreementPdfBody,
   isStorageConfigured,
 } from "../lib/agreement-storage";
 import { messagesTable } from "@workspace/db";
@@ -874,15 +874,22 @@ router.get("/agreements/:id/pdf", async (req, res) => {
   }
 
   // If the agreement was finalized on acceptance and uploaded to object
-  // storage, redirect the client to a short-lived signed URL pointing at
-  // the immutable stored file rather than re-rendering on every download.
+  // storage, stream the immutable stored file back through the API rather
+  // than re-rendering on every download. We stream it server-side (instead
+  // of redirecting the browser to a presigned S3 URL) so the authenticated
+  // fetch stays same-origin and is not blocked by S3 CORS.
   if (ag.storedPdfKey && isStorageConfigured()) {
     try {
-      const url = await getAgreementDownloadUrl(ag.storedPdfKey);
-      res.redirect(302, url);
+      const body = await getAgreementPdfBody(ag.storedPdfKey);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="agreement-${ag.id}.pdf"`,
+      );
+      res.send(body);
       return;
     } catch (err) {
-      req.log.error({ err }, "Failed to sign stored agreement PDF URL; falling back to render");
+      req.log.error({ err }, "Failed to fetch stored agreement PDF; falling back to render");
     }
   }
 
