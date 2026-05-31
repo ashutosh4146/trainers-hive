@@ -10,10 +10,34 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&family=Inter:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&family=Inter:wght@400;500;600;700&display=swap"></noscript>
+    <style>
+      #sh-nav{position:sticky;top:0;z-index:50;width:100%;height:64px;border-bottom:1px solid rgba(0,0,0,0.08);display:flex;align-items:center;padding:0 1.5rem;font-family:Outfit,Inter,system-ui,sans-serif;background:rgba(243,248,248,0.95);}
+      @media(prefers-color-scheme:dark){#sh-nav{background:rgba(15,25,35,0.95);border-bottom-color:rgba(255,255,255,0.08);}}
+      #sh-nav-brand{font-weight:700;font-size:1.1rem;color:hsl(180,50%,30%);display:flex;align-items:center;gap:0.4rem;}
+      @media(prefers-color-scheme:dark){#sh-nav-brand{color:hsl(180,50%,50%);}}
+      #sh-hero{width:100%;padding:clamp(5rem,10vw,10rem) 1.5rem;background:#0f172a;color:#f8fafc;box-sizing:border-box;}
+      #sh-hero h1{font-size:clamp(2rem,5vw,4.5rem);font-weight:900;letter-spacing:-0.025em;line-height:1.1;margin:0 0 1.5rem;max-width:48rem;}
+      #sh-hero p{font-size:1.1rem;color:#cbd5e1;max-width:42rem;line-height:1.65;margin:0;}
+      #sh-hero .primary{color:hsl(180,50%,45%);}
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <nav id="sh-nav">
+        <span id="sh-nav-brand">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+          Trainers Hive
+        </span>
+      </nav>
+      <section id="sh-hero">
+        <div>
+          <h1>Source top-tier <span class="primary">expert trainers</span> for your institution.</h1>
+          <p>Trainers Hive is the verified infrastructure layer connecting corporate L&amp;D leaders, universities, and specialized training professionals for high-stakes engagements.</p>
+        </div>
+      </section>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

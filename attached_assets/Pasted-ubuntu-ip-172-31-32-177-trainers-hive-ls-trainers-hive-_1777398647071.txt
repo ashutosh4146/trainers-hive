@@ -1,0 +1,16 @@
+ubuntu@ip-172-31-32-177:~/trainers-hive$ ls ~/trainers-hive/artifacts/trainers-hive/dist/public/index.html
+/home/ubuntu/trainers-hive/artifacts/trainers-hive/dist/public/index.html
+ubuntu@ip-172-31-32-177:~/trainers-hive$ sudo tail -5 /var/log/nginx/error.log
+2026/04/28 17:01:21 [crit] 6801#6801: *9 stat() "/home/ubuntu/trainers-hive/artifacts/trainers-hive/dist/public/index.html" failed (13: Permission denied), client: 47.15.97.157, server: _, request: "GET /favicon.ico HTTP/1.1", host: "13.234.33.199", referrer: "http://13.234.33.199/"
+2026/04/28 17:01:21 [crit] 6801#6801: *9 stat() "/home/ubuntu/trainers-hive/artifacts/trainers-hive/dist/public/index.html" failed (13: Permission denied), client: 47.15.97.157, server: _, request: "GET /favicon.ico HTTP/1.1", host: "13.234.33.199", referrer: "http://13.234.33.199/"
+2026/04/28 17:01:21 [crit] 6801#6801: *9 stat() "/home/ubuntu/trainers-hive/artifacts/trainers-hive/dist/public/index.html" failed (13: Permission denied), client: 47.15.97.157, server: _, request: "GET /favicon.ico HTTP/1.1", host: "13.234.33.199", referrer: "http://13.234.33.199/"
+2026/04/28 17:01:21 [crit] 6801#6801: *9 stat() "/home/ubuntu/trainers-hive/artifacts/trainers-hive/dist/public/index.html" failed (13: Permission denied), client: 47.15.97.157, server: _, request: "GET /favicon.ico HTTP/1.1", host: "13.234.33.199", referrer: "http://13.234.33.199/"
+2026/04/28 17:01:21 [error] 6801#6801: *9 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 47.15.97.157, server: _, request: "GET /favicon.ico HTTP/1.1", host: "13.234.33.199", referrer: "http://13.234.33.199/"
+ubuntu@ip-172-31-32-177:~/trainers-hive$ pm2 status
+curl http://localhost:8080/api/healthz
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ api-server         │ fork     │ 1    │ online    │ 0%       │ 68.0mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+{"status":"ok"}ubuntu@ip-172-31-32-177:~/trainers-hive$

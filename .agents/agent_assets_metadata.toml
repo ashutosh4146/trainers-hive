@@ -6,3 +6,9 @@ id = "ihLhKnbeO_-ydD6eZ5Zv8"
 uri = "file://trainers-hive.tar.gz"
 type = "unspecified"
 title = "Trainers Hive — source code (330 KB)"
+
+[[outputs]]
+id = "AyaR9NajpPVjh2V3iAPSI"
+uri = "file://trainers-hive-source.zip"
+type = "unspecified"
+title = "Trainers Hive — Source Code"

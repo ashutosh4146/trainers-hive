@@ -16,6 +16,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import {
   Form,
@@ -138,9 +139,24 @@ const requirementSchema = z.object({
   payoutChoice: z.enum(["discuss", "reveal"]).default("discuss"),
   budget: z.coerce.number().min(0).optional(),
   feeType: z.enum(["fixed", "negotiable"]).optional(),
-  startDate: z.string().optional(),
+  startDate: z
+    .string()
+    .optional()
+    .refine((val) => {
+      if (!val) return true;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return new Date(val) >= today;
+    }, "Training start date cannot be in the past"),
   durationDays: z.coerce.number().min(1, "Duration must be at least 1 day"),
-  deadline: z.string().min(1, "Application deadline is required"),
+  deadline: z
+    .string()
+    .min(1, "Application deadline is required")
+    .refine((val) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return new Date(val) >= today;
+    }, "Deadline cannot be in the past"),
   description: z
     .string()
     .min(1, "Description is required")
@@ -284,6 +300,17 @@ export default function NewRequirement() {
   const payoutChoice = form.watch("payoutChoice");
   const descriptionValue = form.watch("description");
   const wordCount = countWords(descriptionValue || "");
+
+  // Watch the fields that determine the end date so it recalculates live
+  const watchedStartDate = form.watch("startDate");
+  const watchedDurationDays = form.watch("durationDays");
+  const computedEndDate = (() => {
+    if (!watchedStartDate || !watchedDurationDays) return "Select start date & duration";
+    const d = new Date(watchedStartDate + "T00:00:00Z");
+    if (Number.isNaN(d.getTime())) return "Invalid date";
+    d.setUTCDate(d.getUTCDate() + Math.max(0, watchedDurationDays - 1));
+    return d.toISOString().slice(0, 10);
+  })();
 
   useEffect(() => {
     if (!selectedTemplate || !previousRequirements) return;
@@ -919,23 +946,43 @@ export default function NewRequirement() {
                 </Badge>
                 Timeline
               </CardTitle>
+              <CardDescription>
+                Define when the training starts and ends, and when applications close
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="startDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Expected Start Date</FormLabel>
+                      <FormLabel>Training Start Date</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <Input
+                          type="date"
+                          min={new Date().toISOString().split("T")[0]}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Training End Date
+                  </label>
+                  <Input
+                    type="text"
+                    disabled
+                    value={computedEndDate}
+                    className="bg-muted text-muted-foreground"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <FormField
                   control={form.control}
                   name="durationDays"
@@ -957,7 +1004,11 @@ export default function NewRequirement() {
                     <FormItem>
                       <FormLabel>Application Deadline</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <Input
+                          type="date"
+                          min={new Date().toISOString().split("T")[0]}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

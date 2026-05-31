@@ -1,0 +1,69 @@
+ubuntu@ip-172-31-32-177:~/trainers-hive$ PORT=3000 BASE_PATH="/" \
+VITE_FIREBASE_API_KEY="AIzaSyC3m1IZj4o8Xgjy6z7M5rQpiFKrfmhS_do" \
+VITE_FIREBASE_APP_ID="1:491480752528:web:f3035c483319531a3ed315" \
+VITE_FIREBASE_MESSAGING_SENDER_ID="491480752528" \
+pnpm --filter @workspace/trainers-hive run build
+
+sudo cp -r ~/trainers-hive/artifacts/trainers-hive/dist/public/. /var/www/html/
+pm2 restart api-server
+
+> @workspace/trainers-hive@0.0.0 build /home/ubuntu/trainers-hive/artifacts/trainers-hive
+> vite build --config vite.config.ts
+
+vite v7.3.2 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 3216 modules transformed.
+rendering chunks (62)...
+<--- Last few GCs --->
+
+[7808:0x8ffd9d0]    32231 ms: Mark-Compact 432.1 (461.6) -> 424.1 (454.1) MB, 611.22 / 0.00 ms  (average mu = 0.117, current mu = 0.070) allocation failure; scavenge might not succeed
+[7808:0x8ffd9d0]    32248 ms: Scavenge 426.8 (456.8) -> 426.8 (456.8) MB, 3.82 / 0.00 ms  (average mu = 0.117, current mu = 0.070) allocation failure;
+[7808:0x8ffd9d0]    32301 ms: Scavenge 429.8 (459.6) -> 429.7 (459.6) MB, 2.34 / 0.00 ms  (average mu = 0.117, current mu = 0.070) allocation failure;
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0xb78db3 node::OOMErrorHandler(char const*, v8::OOMDetails const&) [node]
+ 2: 0xee8300 v8::Utils::ReportOOMFailure(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [node]
+ 3: 0xee85e7 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [node]
+ 4: 0x10fb205  [node]
+ 5: 0x10fb794 v8::internal::Heap::RecomputeLimits(v8::internal::GarbageCollector) [node]
+ 6: 0x1112684 v8::internal::Heap::PerformGarbageCollection(v8::internal::GarbageCollector, v8::internal::GarbageCollectionReason, char const*) [node]
+ 7: 0x1112e9c v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags) [node]
+ 8: 0x10e91f1 v8::internal::HeapAllocator::AllocateRawWithLightRetrySlowPath(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [node]
+ 9: 0x10ea385 v8::internal::HeapAllocator::AllocateRawWithRetryOrFailSlowPath(int, v8::internal::AllocationType, v8::internal::AllocationOrigin, v8::internal::AllocationAlignment) [node]
+10: 0x10c69a6 v8::internal::Factory::AllocateRaw(int, v8::internal::AllocationType, v8::internal::AllocationAlignment) [node]
+11: 0x10b8304 v8::internal::FactoryBase<v8::internal::Factory>::AllocateRawWithImmortalMap(int, v8::internal::AllocationType, v8::internal::Map, v8::internal::AllocationAlignment) [node]
+12: 0x10bb667 v8::internal::FactoryBase<v8::internal::Factory>::NewRawTwoByteString(int, v8::internal::AllocationType) [node]
+13: 0x122c9f7 v8::internal::JsonParser<unsigned short>::MakeString(v8::internal::JsonString const&, v8::internal::Handle<v8::internal::String>) [node]
+14: 0x12328dd  [node]
+15: 0x1234849 v8::internal::JsonParser<unsigned short>::ParseJson(v8::internal::Handle<v8::internal::Object>) [node]
+16: 0xf7a80e v8::internal::Builtin_JsonParse(int, unsigned long*, v8::internal::Isolate*) [node]
+17: 0x195e376  [node]
+Aborted (core dumped)
+/home/ubuntu/trainers-hive/artifacts/trainers-hive:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/trainers-hive@0.0.0 build: `vite build --config vite.config.ts`
+Exit status 134
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [api-server](ids: [ 0 ])
+[PM2] [api-server](0) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 0  │ api-server         │ fork     │ 1    │ online    │ 0%       │ 37.3mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+ubuntu@ip-172-31-32-177:~/trainers-hive$ sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+fallocate: fallocate failed: Text file busy
+mkswap: error: /swapfile is mounted; will not make swapspace
+swapon: /swapfile: swapon failed: Device or resource busy
+ubuntu@ip-172-31-32-177:~/trainers-hive$

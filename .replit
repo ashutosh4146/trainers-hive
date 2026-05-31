@@ -18,7 +18,7 @@ integrations = ["github:1.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+timeoutMs = 60000
 
 [[ports]]
 localPort = 8080
@@ -46,6 +46,9 @@ externalPort = 3000
 VITE_FIREBASE_API_KEY = "AIzaSyC3m1IZj4o8Xgjy6z7M5rQpiFKrfmhS_do"
 VITE_FIREBASE_APP_ID = "1:491480752528:web:f3035c483319531a3ed315"
 VITE_FIREBASE_MESSAGING_SENDER_ID = "491480752528"
+
+[userenv.production]
+APP_DOMAIN = "trainershive.com"
 
 [nix]
 channel = "stable-25_05"
