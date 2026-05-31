@@ -130,6 +130,7 @@ export default function AgreementSection({ applicationId, role }: Props) {
   const [requestNote, setRequestNote] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey });
@@ -274,8 +275,39 @@ export default function AgreementSection({ applicationId, role }: Props) {
     );
   };
 
-  const pdfUrl = `/api/agreements/${agreement.id}/pdf`;
   const counterparty = role === "vendor" ? agreement.trainerName : agreement.vendorName;
+
+  const downloadPdf = async () => {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      const token = localStorage.getItem("th_session_token");
+      const res = await fetch(`/api/agreements/${agreement.id}/pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `agreement-${agreement.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast({
+        title: "Could not download PDF",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   return (
     <Card className="border-primary/30">
@@ -446,10 +478,8 @@ export default function AgreementSection({ applicationId, role }: Props) {
             </>
           )}
           {isFinal && (
-            <Button size="sm" variant="outline" asChild>
-              <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
-                <Download className="h-3.5 w-3.5 mr-1.5" /> Download PDF
-              </a>
+            <Button size="sm" variant="outline" onClick={downloadPdf} disabled={downloadingPdf}>
+              <Download className="h-3.5 w-3.5 mr-1.5" /> {downloadingPdf ? "Downloading…" : "Download PDF"}
             </Button>
           )}
           {canCancel && !editing && (
