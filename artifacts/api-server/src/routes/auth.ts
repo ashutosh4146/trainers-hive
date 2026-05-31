@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createOtp, verifyOtp } from "../lib/otp";
-import { sendOtpEmail } from "../lib/email";
+import { sendOtpEmail, sendPasswordResetEmail } from "../lib/email";
 import { createCustomToken } from "../lib/firebase";
 import { getActiveUserId, signAppJwt } from "../lib/session";
 import { db, usersTable } from "@workspace/db";
