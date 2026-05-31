@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, requirementsTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -104,13 +104,48 @@ router.get("/skills/demand", async (_req, res) => {
   const rows = await db
     .select({
       skill: requirementsTable.skill,
-      count: sql<number>`COUNT(*)::int`,
+      subSkills: requirementsTable.subSkills,
     })
     .from(requirementsTable)
-    .where(eq(requirementsTable.status, "open"))
-    .groupBy(requirementsTable.skill)
-    .orderBy(desc(sql`COUNT(*)`));
-  res.json(rows);
+    .where(eq(requirementsTable.status, "open"));
+
+  const canonical = new Map<string, string>();
+  for (const cat of SKILLS) {
+    canonical.set(cat.name.toLowerCase(), cat.name);
+    for (const name of cat.skills) {
+      canonical.set(name.toLowerCase(), name);
+    }
+  }
+
+  const counts = new Map<string, number>();
+  const labels = new Map<string, string>();
+  const collect = (raw: unknown, seen: Set<string>) => {
+    if (typeof raw !== "string") return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    seen.add(key);
+    if (!labels.has(key)) {
+      labels.set(key, canonical.get(key) ?? trimmed);
+    }
+  };
+
+  for (const row of rows) {
+    const seen = new Set<string>();
+    if (row.skill) collect(row.skill, seen);
+    if (Array.isArray(row.subSkills)) {
+      for (const s of row.subSkills as string[]) collect(s, seen);
+    }
+    for (const key of seen) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  const demand = Array.from(counts.entries())
+    .map(([key, count]) => ({ skill: labels.get(key) ?? key, count }))
+    .sort((a, b) => b.count - a.count);
+
+  res.json(demand);
 });
 
 export default router;

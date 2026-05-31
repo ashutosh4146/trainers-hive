@@ -101,6 +101,7 @@ import {
   Mail,
   Phone,
   UserPlus,
+  Building,
 } from "lucide-react";
 import {
   Dialog,
@@ -1402,7 +1403,7 @@ function AdminDashboard() {
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Trainers" value={stats?.trainerCount || 0} icon={<Users />} />
-        <StatCard title="Total Vendors" value={stats?.vendorCount || 0} icon={<Building2 />} />
+        <StatCard title="Total Vendors" value={stats?.vendorCount || 0} icon={<Building />} />
         <StatCard title="Open Requirements" value={stats?.openRequirementCount || 0} icon={<Briefcase />} />
         <StatCard title="Completed Engagements" value={stats?.completedEngagements || 0} icon={<CheckCircle />} />
       </div>
@@ -2231,8 +2232,8 @@ function StatCard({ title, value, icon, href }: { title: string; value: string |
   };
 
   const inner = (
-    <Card className={href ? "hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer" : ""}>
-      <CardContent className="p-6">
+    <Card className={`h-full ${href ? "hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer" : ""}`}>
+      <CardContent className="p-6 h-full">
         <div className="flex justify-between items-start">
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
@@ -2247,8 +2248,8 @@ function StatCard({ title, value, icon, href }: { title: string; value: string |
   );
 
   if (!href) return inner;
-  if (href.startsWith("#")) return <div onClick={handleClick} className="cursor-pointer">{inner}</div>;
-  return <Link href={href}>{inner}</Link>;
+  if (href.startsWith("#")) return <div onClick={handleClick} className="cursor-pointer h-full">{inner}</div>;
+  return <Link href={href} className="block h-full">{inner}</Link>;
 }
 
 function DashboardSkeleton() {
@@ -2264,12 +2265,6 @@ function DashboardSkeleton() {
     </div>
   );
 }
-
-// Quick helper for missing icon
-function Building2(props: any) {
-  return <Building {...props} />;
-}
-import { Building } from "lucide-react";
 
 export default function Dashboard() {
   const { isSignedIn } = useAuth();
