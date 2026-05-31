@@ -268,6 +268,14 @@ router.post("/auth/password/reset/confirm", async (req, res) => {
     return;
   }
 
+  if (user.passwordHash) {
+    const same = await bcrypt.compare(password, user.passwordHash);
+    if (same) {
+      res.status(400).json({ error: "New password must be different from your current password." });
+      return;
+    }
+  }
+
   const hash = await bcrypt.hash(password, 10);
   await db.update(usersTable).set({ passwordHash: hash }).where(eq(usersTable.id, user.id));
   res.json({ ok: true });
