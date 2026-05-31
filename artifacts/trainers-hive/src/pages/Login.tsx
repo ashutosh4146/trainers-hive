@@ -26,7 +26,7 @@ const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
   { id: "vendor",  label: "Organisation", icon: <Building2 className="h-5 w-5" /> },
 ];
 
-type View = "select" | "sent";
+type View = "select" | "sent" | "forgot";
 type LoginMethod = "link" | "password";
 
 export default function Login() {
@@ -40,6 +40,13 @@ export default function Login() {
   const [isSending, setIsSending] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+
+  // Password-reset flow
+  const [resetStep, setResetStep] = useState<"request" | "confirm">("request");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const { auth, signIn } = useAuth();
   const [, navigate] = useLocation();
@@ -197,6 +204,81 @@ export default function Login() {
     }
   };
 
+  const openForgotPassword = () => {
+    setErrors({});
+    setResetStep("request");
+    setResetCode("");
+    setNewPassword("");
+    setView("forgot");
+  };
+
+  const handleSendResetCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs: Record<string, string> = {};
+    if (!email.trim()) {
+      errs.email = "Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errs.email = "Enter a valid email address.";
+    }
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setIsResetting(true);
+    try {
+      const res = await fetch("/api/auth/password/reset/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "Could not send reset code.");
+      }
+      setResetStep("confirm");
+      toast({
+        title: "Check your inbox",
+        description: `If an account exists for ${email.trim()}, we've sent a 6-digit reset code.`,
+      });
+    } catch (err) {
+      toast({ title: "Could not send code", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleConfirmReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs: Record<string, string> = {};
+    if (resetCode.trim().length !== 6) errs.resetCode = "Enter the 6-digit code from your email.";
+    if (newPassword.length < 6) errs.newPassword = "Password must be at least 6 characters.";
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setIsResetting(true);
+    try {
+      const res = await fetch("/api/auth/password/reset/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), otp: resetCode.trim(), password: newPassword }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "Could not reset password.");
+      }
+      toast({ title: "Password updated", description: "You can now sign in with your new password." });
+      setPassword("");
+      setNewPassword("");
+      setResetCode("");
+      setResetStep("request");
+      setLoginMethod("password");
+      setView("select");
+    } catch (err) {
+      toast({ title: "Reset failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background flex flex-col">
       <header className="flex items-center gap-2 px-8 py-5 border-b bg-background/80 backdrop-blur">
@@ -314,6 +396,15 @@ export default function Login() {
                         <KeyRound className="h-4 w-4" />
                         {isPasswordLoading ? "Signing in…" : "Sign In with Password"}
                       </Button>
+                      <div className="text-center">
+                        <button
+                          type="button"
+                          className="text-sm text-primary underline underline-offset-2 hover:text-primary/80 font-medium"
+                          onClick={openForgotPassword}
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
                     </form>
                   ) : (
                     <form onSubmit={handleSendLink}>
@@ -401,6 +492,115 @@ export default function Login() {
 
                   <Button type="button" variant="ghost" size="sm" className="w-full gap-1" onClick={() => setView("select")}>
                     <ArrowLeft className="h-4 w-4" /> Change email
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Step: Forgot / reset password */}
+          {view === "forgot" && (
+            <>
+              <div className="text-center space-y-2">
+                <div className="flex justify-center mb-2">
+                  <div className="rounded-full bg-primary/10 p-4">
+                    <KeyRound className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight">Reset your password</h1>
+                <p className="text-muted-foreground">
+                  {resetStep === "request"
+                    ? "Enter your email and we'll send you a reset code."
+                    : "Enter the code we emailed you and choose a new password."}
+                </p>
+              </div>
+              <Card className="border-2">
+                <CardContent className="p-6 space-y-5">
+                  {resetStep === "request" ? (
+                    <form onSubmit={handleSendResetCode} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="reset-email">Email Address</Label>
+                        <Input
+                          id="reset-email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          autoComplete="username"
+                        />
+                        {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                      </div>
+                      <Button type="submit" size="lg" className="w-full gap-2" disabled={isResetting}>
+                        <Mail className="h-4 w-4" />
+                        {isResetting ? "Sending code…" : "Send reset code"}
+                      </Button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleConfirmReset} className="space-y-4">
+                      <input type="email" name="username" autoComplete="username" value={email} onChange={() => {}} className="sr-only" tabIndex={-1} aria-hidden="true" />
+                      <p className="text-sm text-muted-foreground">
+                        Code sent to <span className="font-semibold text-foreground">{email}</span>
+                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="reset-code">Reset code</Label>
+                        <Input
+                          id="reset-code"
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="6-digit code"
+                          value={resetCode}
+                          onChange={(e) => setResetCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          className="tracking-[0.5em] text-center text-lg"
+                        />
+                        {errors.resetCode && <p className="text-sm text-destructive">{errors.resetCode}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="new-password">New password</Label>
+                        <div className="relative">
+                          <Input
+                            id="new-password"
+                            type={showNewPassword ? "text" : "password"}
+                            placeholder="At least 6 characters"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            autoComplete="new-password"
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setShowNewPassword((v) => !v)}
+                            tabIndex={-1}
+                          >
+                            {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        {errors.newPassword && <p className="text-sm text-destructive">{errors.newPassword}</p>}
+                      </div>
+                      <Button type="submit" size="lg" className="w-full gap-2" disabled={isResetting}>
+                        <KeyRound className="h-4 w-4" />
+                        {isResetting ? "Updating…" : "Reset password"}
+                      </Button>
+                      <div className="text-center">
+                        <button
+                          type="button"
+                          className="text-sm text-primary underline underline-offset-2 hover:text-primary/80 font-medium disabled:opacity-50"
+                          onClick={handleSendResetCode}
+                          disabled={isResetting}
+                        >
+                          Resend code
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full gap-1"
+                    onClick={() => { setErrors({}); setView("select"); }}
+                  >
+                    <ArrowLeft className="h-4 w-4" /> Back to sign in
                   </Button>
                 </CardContent>
               </Card>
