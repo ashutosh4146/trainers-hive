@@ -36,13 +36,29 @@ export const trainersTable = pgTable("trainers", {
     .default(0),
   trainerType: text("trainer_type"), // 'trainer' | 'developer' | 'both' | null
   resumeUrl: text("resume_url"),
+  gender: text("gender"), // 'male' | 'female' | null
   engagedDates: jsonb("engaged_dates")
     .$type<Array<{ startDate: string; endDate: string; note?: string }>>()
     .notNull()
     .default([]),
+  emailPrefs: jsonb("email_prefs")
+    .$type<{
+      endorsements: boolean;
+      applicationStatus: boolean;
+      newRequirementMatch: boolean;
+      messages: boolean;
+    }>()
+    .notNull()
+    .default({
+      endorsements: true,
+      applicationStatus: true,
+      newRequirementMatch: true,
+      messages: true,
+    }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
 export type Trainer = typeof trainersTable.$inferSelect;
+export type TrainerEmailPrefs = NonNullable<Trainer["emailPrefs"]>;

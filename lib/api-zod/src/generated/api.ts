@@ -758,6 +758,7 @@ export const ListRequirementsResponseItem = zod.object({
   isFeatured: zod.boolean().optional(),
   isPrivate: zod.boolean().optional(),
   hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
 });
 export const ListRequirementsResponse = zod.array(ListRequirementsResponseItem);
 
@@ -824,6 +825,7 @@ export const ListRecentRequirementsResponseItem = zod.object({
   isFeatured: zod.boolean().optional(),
   isPrivate: zod.boolean().optional(),
   hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
 });
 export const ListRecentRequirementsResponse = zod.array(
   ListRecentRequirementsResponseItem,
@@ -869,6 +871,7 @@ export const GetRequirementResponse = zod
     isFeatured: zod.boolean().optional(),
     isPrivate: zod.boolean().optional(),
     hireThroughUs: zod.boolean().optional(),
+    hidden: zod.boolean().optional(),
   })
   .and(
     zod.object({
@@ -953,6 +956,7 @@ export const UpdateRequirementResponse = zod.object({
   isFeatured: zod.boolean().optional(),
   isPrivate: zod.boolean().optional(),
   hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
 });
 
 export const DeleteRequirementParams = zod.object({
@@ -1002,6 +1006,7 @@ export const FlagRequirementResponse = zod.object({
   isFeatured: zod.boolean().optional(),
   isPrivate: zod.boolean().optional(),
   hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
 });
 
 /**
@@ -1054,6 +1059,112 @@ export const UnflagRequirementResponse = zod.object({
   isFeatured: zod.boolean().optional(),
   isPrivate: zod.boolean().optional(),
   hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
+});
+
+/**
+ * @summary Hide a requirement from public listings (admin only)
+ */
+export const HideRequirementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const HideRequirementResponse = zod.object({
+  id: zod.string(),
+  vendorId: zod.string(),
+  vendorName: zod.string(),
+  vendorLogoUrl: zod.string(),
+  title: zod.string(),
+  skill: zod.string(),
+  subSkills: zod.array(zod.string()),
+  durationDays: zod.number(),
+  location: zod.string(),
+  remote: zod.boolean().optional(),
+  deadline: zod.coerce.date(),
+  status: zod.enum(["open", "closed", "vacant"]),
+  createdAt: zod.coerce.date(),
+  applicationCount: zod.number(),
+  trainingType: zod.string().optional(),
+  trainingMode: zod.string().optional(),
+  trainerCount: zod.number().optional(),
+  trainerType: zod.string().optional(),
+  benefits: zod.string().optional(),
+  certifications: zod.string().optional(),
+  language: zod.string().optional(),
+  trainerScope: zod.string().optional(),
+  startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
+});
+
+/**
+ * @summary Restore a hidden requirement to public listings (admin only)
+ */
+export const UnhideRequirementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UnhideRequirementResponse = zod.object({
+  id: zod.string(),
+  vendorId: zod.string(),
+  vendorName: zod.string(),
+  vendorLogoUrl: zod.string(),
+  title: zod.string(),
+  skill: zod.string(),
+  subSkills: zod.array(zod.string()),
+  durationDays: zod.number(),
+  location: zod.string(),
+  remote: zod.boolean().optional(),
+  deadline: zod.coerce.date(),
+  status: zod.enum(["open", "closed", "vacant"]),
+  createdAt: zod.coerce.date(),
+  applicationCount: zod.number(),
+  trainingType: zod.string().optional(),
+  trainingMode: zod.string().optional(),
+  trainerCount: zod.number().optional(),
+  trainerType: zod.string().optional(),
+  benefits: zod.string().optional(),
+  certifications: zod.string().optional(),
+  language: zod.string().optional(),
+  trainerScope: zod.string().optional(),
+  startDate: zod.string().optional(),
+  budget: zod.number().optional(),
+  feeType: zod.enum(["fixed", "negotiable"]).optional(),
+  flagged: zod.boolean().optional(),
+  flagReason: zod.string().optional(),
+  flaggedBy: zod.string().optional(),
+  flaggedAt: zod.coerce.date().optional(),
+  vendorVerified: zod.boolean().optional(),
+  isUrgent: zod.boolean().optional(),
+  isFeatured: zod.boolean().optional(),
+  isPrivate: zod.boolean().optional(),
+  hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
+});
+
+/**
+ * @summary Email a warning to the vendor who posted this requirement (admin only)
+ */
+export const WarnRequirementVendorParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const WarnRequirementVendorBody = zod.object({
+  message: zod.string().min(1),
+});
+
+export const WarnRequirementVendorResponse = zod.object({
+  ok: zod.boolean(),
 });
 
 /**
@@ -1251,6 +1362,7 @@ export const ListMyApplicationsResponseItem = zod
         isFeatured: zod.boolean().optional(),
         isPrivate: zod.boolean().optional(),
         hireThroughUs: zod.boolean().optional(),
+        hidden: zod.boolean().optional(),
       }),
     }),
   );
@@ -1556,6 +1668,7 @@ export const CreateHireInquiryBody = zod.object({
  */
 export const ListHireInquiriesResponseItem = zod.object({
   id: zod.string(),
+  userId: zod.string().optional(),
   companyName: zod.string(),
   contactName: zod.string(),
   email: zod.string(),
@@ -1565,12 +1678,57 @@ export const ListHireInquiriesResponseItem = zod.object({
   timeline: zod.string().optional(),
   headcount: zod.string().optional(),
   location: zod.string().optional(),
-  status: zod.enum(["new", "contacted", "in_progress", "closed"]),
+  status: zod.enum(["new", "contacted", "in_progress", "resolved", "closed"]),
   createdAt: zod.coerce.date(),
 });
 export const ListHireInquiriesResponse = zod.array(
   ListHireInquiriesResponseItem,
 );
+
+/**
+ * @summary List the current user's own inquiries
+ */
+export const ListMyHireInquiriesResponseItem = zod.object({
+  id: zod.string(),
+  userId: zod.string().optional(),
+  companyName: zod.string(),
+  contactName: zod.string(),
+  email: zod.string(),
+  phone: zod.string().optional(),
+  trainingNeed: zod.string(),
+  budget: zod.string().optional(),
+  timeline: zod.string().optional(),
+  headcount: zod.string().optional(),
+  location: zod.string().optional(),
+  status: zod.enum(["new", "contacted", "in_progress", "resolved", "closed"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListMyHireInquiriesResponse = zod.array(
+  ListMyHireInquiriesResponseItem,
+);
+
+/**
+ * @summary Get a single inquiry (admin or owner)
+ */
+export const GetHireInquiryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetHireInquiryResponse = zod.object({
+  id: zod.string(),
+  userId: zod.string().optional(),
+  companyName: zod.string(),
+  contactName: zod.string(),
+  email: zod.string(),
+  phone: zod.string().optional(),
+  trainingNeed: zod.string(),
+  budget: zod.string().optional(),
+  timeline: zod.string().optional(),
+  headcount: zod.string().optional(),
+  location: zod.string().optional(),
+  status: zod.enum(["new", "contacted", "in_progress", "resolved", "closed"]),
+  createdAt: zod.coerce.date(),
+});
 
 /**
  * @summary Update inquiry status (admin only)
@@ -1580,11 +1738,12 @@ export const UpdateHireInquiryStatusParams = zod.object({
 });
 
 export const UpdateHireInquiryStatusBody = zod.object({
-  status: zod.enum(["new", "contacted", "in_progress", "closed"]),
+  status: zod.enum(["new", "contacted", "in_progress", "resolved", "closed"]),
 });
 
 export const UpdateHireInquiryStatusResponse = zod.object({
   id: zod.string(),
+  userId: zod.string().optional(),
   companyName: zod.string(),
   contactName: zod.string(),
   email: zod.string(),
@@ -1594,8 +1753,37 @@ export const UpdateHireInquiryStatusResponse = zod.object({
   timeline: zod.string().optional(),
   headcount: zod.string().optional(),
   location: zod.string().optional(),
-  status: zod.enum(["new", "contacted", "in_progress", "closed"]),
+  status: zod.enum(["new", "contacted", "in_progress", "resolved", "closed"]),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List messages on an inquiry (admin or owner)
+ */
+export const ListHireInquiryMessagesParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ListHireInquiryMessagesResponseItem = zod.object({
+  id: zod.string(),
+  inquiryId: zod.string(),
+  senderUserId: zod.string(),
+  body: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListHireInquiryMessagesResponse = zod.array(
+  ListHireInquiryMessagesResponseItem,
+);
+
+/**
+ * @summary Send a message on an inquiry (admin or owner)
+ */
+export const SendHireInquiryMessageParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SendHireInquiryMessageBody = zod.object({
+  body: zod.string(),
 });
 
 /**
@@ -1636,6 +1824,7 @@ export const ListHireThroughUsRequirementsResponseItem = zod.object({
   isFeatured: zod.boolean().optional(),
   isPrivate: zod.boolean().optional(),
   hireThroughUs: zod.boolean().optional(),
+  hidden: zod.boolean().optional(),
 });
 export const ListHireThroughUsRequirementsResponse = zod.array(
   ListHireThroughUsRequirementsResponseItem,
@@ -1797,3 +1986,298 @@ export const VerifyVendorResponse = zod.object({
   verified: zod.boolean(),
   websiteUrl: zod.string().optional(),
 });
+
+/**
+ * @summary Get the engagement agreement for an application (auto-creates a draft if missing and the application is hired)
+ */
+export const GetApplicationAgreementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetApplicationAgreementResponse = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  vendorId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum(["draft", "awaiting_trainer", "accepted", "cancelled"]),
+  agreedFee: zod.number().nullish(),
+  feeCurrency: zod.string(),
+  paymentSchedule: zod.string().nullish(),
+  travelBoarding: zod.string().nullish(),
+  cancellationNotice: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sessionsCount: zod.number().nullish(),
+  locationOrMode: zod.string().nullish(),
+  deliverables: zod.string().nullish(),
+  confidentialityClause: zod.boolean(),
+  ipOwnership: zod.string().nullish(),
+  governingLawCity: zod.string(),
+  specialClauses: zod.string().nullish(),
+  vendorAcceptedAt: zod.coerce.date().nullish(),
+  vendorAcceptedIp: zod.string().nullish(),
+  trainerAcceptedAt: zod.coerce.date().nullish(),
+  trainerAcceptedIp: zod.string().nullish(),
+  changesRequestedNote: zod.string().nullish(),
+  cancelledAt: zod.coerce.date().nullish(),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  vendorName: zod.string(),
+  trainerName: zod.string(),
+  requirementTitle: zod.string(),
+});
+
+/**
+ * @summary Update commercial terms (vendor only, draft only)
+ */
+export const UpdateAgreementTermsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateAgreementTermsBody = zod.object({
+  agreedFee: zod.number().nullish(),
+  paymentSchedule: zod.string().nullish(),
+  travelBoarding: zod.string().nullish(),
+  cancellationNotice: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sessionsCount: zod.number().nullish(),
+  locationOrMode: zod.string().nullish(),
+  deliverables: zod.string().nullish(),
+  confidentialityClause: zod.boolean().optional(),
+  ipOwnership: zod.string().nullish(),
+  governingLawCity: zod.string().optional(),
+  specialClauses: zod.string().nullish(),
+});
+
+export const UpdateAgreementTermsResponse = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  vendorId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum(["draft", "awaiting_trainer", "accepted", "cancelled"]),
+  agreedFee: zod.number().nullish(),
+  feeCurrency: zod.string(),
+  paymentSchedule: zod.string().nullish(),
+  travelBoarding: zod.string().nullish(),
+  cancellationNotice: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sessionsCount: zod.number().nullish(),
+  locationOrMode: zod.string().nullish(),
+  deliverables: zod.string().nullish(),
+  confidentialityClause: zod.boolean(),
+  ipOwnership: zod.string().nullish(),
+  governingLawCity: zod.string(),
+  specialClauses: zod.string().nullish(),
+  vendorAcceptedAt: zod.coerce.date().nullish(),
+  vendorAcceptedIp: zod.string().nullish(),
+  trainerAcceptedAt: zod.coerce.date().nullish(),
+  trainerAcceptedIp: zod.string().nullish(),
+  changesRequestedNote: zod.string().nullish(),
+  cancelledAt: zod.coerce.date().nullish(),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  vendorName: zod.string(),
+  trainerName: zod.string(),
+  requirementTitle: zod.string(),
+});
+
+/**
+ * @summary Vendor submits agreement for trainer acceptance (records vendor signature)
+ */
+export const SubmitAgreementToTrainerParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SubmitAgreementToTrainerResponse = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  vendorId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum(["draft", "awaiting_trainer", "accepted", "cancelled"]),
+  agreedFee: zod.number().nullish(),
+  feeCurrency: zod.string(),
+  paymentSchedule: zod.string().nullish(),
+  travelBoarding: zod.string().nullish(),
+  cancellationNotice: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sessionsCount: zod.number().nullish(),
+  locationOrMode: zod.string().nullish(),
+  deliverables: zod.string().nullish(),
+  confidentialityClause: zod.boolean(),
+  ipOwnership: zod.string().nullish(),
+  governingLawCity: zod.string(),
+  specialClauses: zod.string().nullish(),
+  vendorAcceptedAt: zod.coerce.date().nullish(),
+  vendorAcceptedIp: zod.string().nullish(),
+  trainerAcceptedAt: zod.coerce.date().nullish(),
+  trainerAcceptedIp: zod.string().nullish(),
+  changesRequestedNote: zod.string().nullish(),
+  cancelledAt: zod.coerce.date().nullish(),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  vendorName: zod.string(),
+  trainerName: zod.string(),
+  requirementTitle: zod.string(),
+});
+
+/**
+ * @summary Trainer accepts agreement (records trainer signature, finalizes & emails)
+ */
+export const AcceptAgreementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AcceptAgreementResponse = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  vendorId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum(["draft", "awaiting_trainer", "accepted", "cancelled"]),
+  agreedFee: zod.number().nullish(),
+  feeCurrency: zod.string(),
+  paymentSchedule: zod.string().nullish(),
+  travelBoarding: zod.string().nullish(),
+  cancellationNotice: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sessionsCount: zod.number().nullish(),
+  locationOrMode: zod.string().nullish(),
+  deliverables: zod.string().nullish(),
+  confidentialityClause: zod.boolean(),
+  ipOwnership: zod.string().nullish(),
+  governingLawCity: zod.string(),
+  specialClauses: zod.string().nullish(),
+  vendorAcceptedAt: zod.coerce.date().nullish(),
+  vendorAcceptedIp: zod.string().nullish(),
+  trainerAcceptedAt: zod.coerce.date().nullish(),
+  trainerAcceptedIp: zod.string().nullish(),
+  changesRequestedNote: zod.string().nullish(),
+  cancelledAt: zod.coerce.date().nullish(),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  vendorName: zod.string(),
+  trainerName: zod.string(),
+  requirementTitle: zod.string(),
+});
+
+/**
+ * @summary Trainer requests changes (sends note back to vendor, status returns to draft)
+ */
+export const RequestAgreementChangesParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RequestAgreementChangesBody = zod.object({
+  note: zod.string().min(1),
+});
+
+export const RequestAgreementChangesResponse = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  vendorId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum(["draft", "awaiting_trainer", "accepted", "cancelled"]),
+  agreedFee: zod.number().nullish(),
+  feeCurrency: zod.string(),
+  paymentSchedule: zod.string().nullish(),
+  travelBoarding: zod.string().nullish(),
+  cancellationNotice: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sessionsCount: zod.number().nullish(),
+  locationOrMode: zod.string().nullish(),
+  deliverables: zod.string().nullish(),
+  confidentialityClause: zod.boolean(),
+  ipOwnership: zod.string().nullish(),
+  governingLawCity: zod.string(),
+  specialClauses: zod.string().nullish(),
+  vendorAcceptedAt: zod.coerce.date().nullish(),
+  vendorAcceptedIp: zod.string().nullish(),
+  trainerAcceptedAt: zod.coerce.date().nullish(),
+  trainerAcceptedIp: zod.string().nullish(),
+  changesRequestedNote: zod.string().nullish(),
+  cancelledAt: zod.coerce.date().nullish(),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  vendorName: zod.string(),
+  trainerName: zod.string(),
+  requirementTitle: zod.string(),
+});
+
+/**
+ * @summary Vendor or trainer cancels the agreement
+ */
+export const CancelAgreementParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CancelAgreementBody = zod.object({
+  reason: zod.string().optional(),
+});
+
+export const CancelAgreementResponse = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  vendorId: zod.string(),
+  trainerId: zod.string(),
+  status: zod.enum(["draft", "awaiting_trainer", "accepted", "cancelled"]),
+  agreedFee: zod.number().nullish(),
+  feeCurrency: zod.string(),
+  paymentSchedule: zod.string().nullish(),
+  travelBoarding: zod.string().nullish(),
+  cancellationNotice: zod.string().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  sessionsCount: zod.number().nullish(),
+  locationOrMode: zod.string().nullish(),
+  deliverables: zod.string().nullish(),
+  confidentialityClause: zod.boolean(),
+  ipOwnership: zod.string().nullish(),
+  governingLawCity: zod.string(),
+  specialClauses: zod.string().nullish(),
+  vendorAcceptedAt: zod.coerce.date().nullish(),
+  vendorAcceptedIp: zod.string().nullish(),
+  trainerAcceptedAt: zod.coerce.date().nullish(),
+  trainerAcceptedIp: zod.string().nullish(),
+  changesRequestedNote: zod.string().nullish(),
+  cancelledAt: zod.coerce.date().nullish(),
+  cancellationReason: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  vendorName: zod.string(),
+  trainerName: zod.string(),
+  requirementTitle: zod.string(),
+});
+
+/**
+ * @summary List engagement agreements for the current user (vendor or trainer)
+ */
+export const ListMyAgreementsResponseItem = zod.object({
+  id: zod.string(),
+  applicationId: zod.string(),
+  requirementId: zod.string(),
+  requirementTitle: zod.string(),
+  counterpartyName: zod.string(),
+  role: zod.enum(["vendor", "trainer"]),
+  status: zod.enum(["draft", "awaiting_trainer", "accepted", "cancelled"]),
+  agreedFee: zod.number().nullish(),
+  startDate: zod.string().nullish(),
+  endDate: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListMyAgreementsResponse = zod.array(ListMyAgreementsResponseItem);

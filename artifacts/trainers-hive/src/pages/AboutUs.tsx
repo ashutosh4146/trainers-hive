@@ -40,9 +40,9 @@ const STATS = [
 
 const TEAM = [
   {
-    name: "Ashutosh Singh",
+    name: "Ashutosh Singhal",
     role: "Founder & CEO",
-    bio: "15+ years in corporate L&D. Built Trainers Hive to fix the opaque, slow trainer-sourcing process he experienced first-hand.",
+    bio: "8 years in corporate L&D. Built Trainers Hive to fix the opaque, slow trainer-sourcing process he experienced first-hand.",
     initial: "A",
   },
   {
@@ -111,7 +111,7 @@ export default function AboutUs() {
               <blockquote className="text-sm text-muted-foreground italic leading-relaxed border-l-2 border-primary/30 pl-4">
                 "I spent years trying to find the right trainer for our programmes — through referrals, LinkedIn DMs, and cold calls. It was slow and unreliable. Trainers Hive is the platform I wish had existed."
               </blockquote>
-              <p className="text-xs text-muted-foreground font-medium">— Ashutosh Singh, Founder</p>
+              <p className="text-xs text-muted-foreground font-medium">— Ashutosh Singhal, Founder</p>
             </CardContent>
           </Card>
         </section>

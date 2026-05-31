@@ -1,31 +1,24 @@
 import React from "react";
 import { Navbar } from "./Navbar";
 import { Link } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { isSignedIn, auth } = useAuth();
-  const isVendorOrCollege = isSignedIn && (auth?.role === "vendor" || auth?.role === "college");
+  const isVendorOrCollege = isSignedIn && auth?.role === "vendor";
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
       <Navbar />
       <main className="flex-1 flex flex-col relative w-full">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="flex-1 flex flex-col w-full"
-          >
-            {children}
-          </motion.div>
-        </AnimatePresence>
+        <div
+          key={location}
+          className="flex-1 flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
+        >
+          {children}
+        </div>
       </main>
       <footer className="border-t py-10 mt-auto bg-card text-card-foreground">
         <div className="container mx-auto px-4 max-w-5xl">

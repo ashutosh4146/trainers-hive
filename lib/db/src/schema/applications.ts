@@ -14,7 +14,11 @@ export const applicationsTable = pgTable(
     trainerId: text("trainer_id").notNull(),
     status: text("status").notNull().default("submitted"),
     message: text("message").notNull(),
-    proposedRate: integer("proposed_rate").notNull(),
+    proposedRate: integer("proposed_rate"),
+    withdrawnReason: text("withdrawn_reason"),
+    vendorNote: text("vendor_note"),
+    hiredAt: timestamp("hired_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

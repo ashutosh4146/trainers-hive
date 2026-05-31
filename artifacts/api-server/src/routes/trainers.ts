@@ -1,6 +1,7 @@
-import { Router, type IRouter } from "express";
-import { db, trainersTable, reviewsTable, vendorsTable } from "@workspace/db";
-import { eq, and, sql, desc, asc, type SQL } from "drizzle-orm";
+import express, { Router, type IRouter } from "express";
+import { db, trainersTable, reviewsTable, vendorsTable, endorsementsTable, applicationsTable, usersTable, requirementsTable } from "@workspace/db";
+import { eq, and, sql, desc, asc, getTableColumns, type SQL } from "drizzle-orm";
+import { z } from "zod";
 import {
   ListTrainersQueryParams,
   GetTrainerParams,
@@ -11,12 +12,12 @@ import {
   ListTrainerReviewsParams,
   DeleteTrainerParams,
   RequestTrainerResumeUploadUrlParams,
-  RequestTrainerResumeUploadUrlBody,
 } from "@workspace/api-zod";
-import { applicationsTable, usersTable } from "@workspace/db";
 import { getActiveUserId } from "../lib/session";
 import { newId } from "../lib/ids";
-import { createResumeUploadUrl, getResumeDownloadUrl, isValidResumeKey } from "../lib/s3";
+import { uploadResume, getResumeDownloadUrl, isValidResumeKey } from "../lib/s3";
+import { notifyTrainerNewEndorsement } from "../lib/mailer";
+import { verifyUnsubscribeToken } from "../lib/unsubscribeToken";
 
 const ALLOWED_RESUME_TYPES = new Set([
   "application/pdf",
@@ -47,7 +48,7 @@ function normalizeCertifications(
     .filter((x): x is { name: string; url?: string } => x !== null);
 }
 
-function serializeTrainer(t: typeof trainersTable.$inferSelect) {
+function serializeTrainer(t: typeof trainersTable.$inferSelect & { endorsementCount?: number }) {
   return {
     id: t.id,
     name: t.name,
@@ -65,7 +66,9 @@ function serializeTrainer(t: typeof trainersTable.$inferSelect) {
     avatarUrl: t.avatarUrl,
     availability: t.availability ?? undefined,
     trainerType: t.trainerType ?? undefined,
+    gender: t.gender ?? undefined,
     engagedDates: t.engagedDates ?? [],
+    endorsementCount: t.endorsementCount ?? 0,
   };
 }
 
@@ -75,21 +78,32 @@ router.get("/trainers", async (req, res) => {
     res.status(400).json({ error: "invalid query", details: parsed.error.issues });
     return;
   }
-  const { q, skill, location, remote, minExperience, sort } = parsed.data;
+  const { q, skill, skills, location, remote, minExperience, gender, sort } = parsed.data;
   const conds: SQL[] = [];
   if (q) {
     const like = `%${q}%`;
     conds.push(
-      sql`(${trainersTable.name} ILIKE ${like} OR ${trainersTable.headline} ILIKE ${like} OR ${trainersTable.mainSkill} ILIKE ${like})`,
+      sql`(${trainersTable.name} ILIKE ${like} OR ${trainersTable.headline} ILIKE ${like} OR ${trainersTable.mainSkill} ILIKE ${like} OR ${trainersTable.location} ILIKE ${like} OR ${trainersTable.subSkills}::text ILIKE ${like})`,
     );
   }
   if (skill) {
     conds.push(
-      sql`(${trainersTable.mainSkill} = ${skill} OR ${trainersTable.subSkills} @> ${JSON.stringify([skill])}::jsonb)`,
+      sql`(${trainersTable.mainSkill} ILIKE ${skill} OR ${trainersTable.subSkills} @> ${JSON.stringify([skill])}::jsonb)`,
     );
   }
+  if (skills) {
+    const list = skills.split(",").map((s) => s.trim()).filter(Boolean);
+    if (list.length > 0) {
+      const orParts = list.map(
+        (s) =>
+          sql`(${trainersTable.mainSkill} ILIKE ${s} OR ${trainersTable.subSkills} @> ${JSON.stringify([s])}::jsonb)`,
+      );
+      conds.push(sql`(${sql.join(orParts, sql` OR `)})`);
+    }
+  }
   if (location) {
-    conds.push(eq(trainersTable.location, location));
+    const locLike = `%${location}%`;
+    conds.push(sql`${trainersTable.location} ILIKE ${locLike}`);
   }
   if (remote !== undefined) {
     conds.push(eq(trainersTable.remote, remote));
@@ -97,26 +111,121 @@ router.get("/trainers", async (req, res) => {
   if (minExperience !== undefined) {
     conds.push(sql`${trainersTable.experienceYears} >= ${minExperience}`);
   }
+  if (gender) {
+    conds.push(eq(trainersTable.gender, gender));
+  }
   const where = conds.length > 0 ? and(...conds) : undefined;
+  const endorsementCountSq = sql<number>`(SELECT COUNT(*) FROM endorsements WHERE endorsements.trainer_id = ${trainersTable.id})`.as("endorsementCount");
+  const baseQuery = db.select({ ...getTableColumns(trainersTable), endorsementCount: endorsementCountSq }).from(trainersTable);
   const orderBy =
     sort === "experience"
       ? desc(trainersTable.experienceYears)
       : sort === "recent"
         ? desc(trainersTable.createdAt)
-        : desc(trainersTable.rating);
+        : sort === "endorsements"
+          ? desc(endorsementCountSq)
+          : desc(trainersTable.rating);
   const rows = where
-    ? await db.select().from(trainersTable).where(where).orderBy(orderBy)
-    : await db.select().from(trainersTable).orderBy(orderBy);
+    ? await baseQuery.where(where).orderBy(orderBy)
+    : await baseQuery.orderBy(orderBy);
   res.json(rows.map(serializeTrainer));
 });
 
 router.get("/trainers/featured", async (_req, res) => {
+  const endorsementCountSq = sql<number>`(SELECT COUNT(*) FROM endorsements WHERE endorsements.trainer_id = ${trainersTable.id})`.as("endorsementCount");
   const rows = await db
-    .select()
+    .select({ ...getTableColumns(trainersTable), endorsementCount: endorsementCountSq })
     .from(trainersTable)
     .orderBy(desc(trainersTable.rating))
     .limit(6);
   res.json(rows.map(serializeTrainer));
+});
+
+const PREF_LABELS: Record<string, string> = {
+  endorsements: "endorsement emails",
+  applicationStatus: "application status emails",
+  newRequirementMatch: "requirement match emails",
+  messages: "message notification emails",
+};
+
+router.get("/trainers/unsubscribe", async (req, res) => {
+  const token = typeof req.query.token === "string" ? req.query.token : null;
+
+  const page = (title: string, body: string, color: string) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${title} — Trainers Hive</title>
+  <style>
+    body{margin:0;font-family:sans-serif;background:#f9fafb;display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .card{background:#fff;border-radius:12px;padding:40px 32px;max-width:460px;width:100%;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+    h1{margin:0 0 12px;font-size:22px;color:${color}}
+    p{margin:0 0 20px;color:#6b7280;font-size:15px}
+    a{color:#0f766e;font-weight:600;text-decoration:none}
+    .logo{font-size:20px;font-weight:700;color:#0f766e;margin-bottom:28px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">Trainers Hive</div>
+    <h1>${title}</h1>
+    ${body}
+  </div>
+</body>
+</html>`;
+
+  if (!token) {
+    res.status(400).send(page(
+      "Invalid link",
+      `<p>This unsubscribe link is missing or invalid. Please visit your <a href="/settings">account settings</a> to manage email preferences.</p>`,
+      "#dc2626",
+    ));
+    return;
+  }
+
+  const parsed = verifyUnsubscribeToken(token);
+  if (!parsed) {
+    res.status(400).send(page(
+      "Link expired or invalid",
+      `<p>This unsubscribe link has expired or is invalid. Please visit your <a href="/settings">account settings</a> to manage email preferences.</p>`,
+      "#dc2626",
+    ));
+    return;
+  }
+
+  const { trainerId, prefKey } = parsed;
+
+  const [existing] = await db
+    .select({ emailPrefs: trainersTable.emailPrefs })
+    .from(trainersTable)
+    .where(eq(trainersTable.id, trainerId))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).send(page(
+      "Trainer not found",
+      `<p>We couldn't find the account associated with this link.</p>`,
+      "#dc2626",
+    ));
+    return;
+  }
+
+  const defaults = { endorsements: true, applicationStatus: true, newRequirementMatch: true, messages: true };
+  const merged = { ...defaults, ...(existing.emailPrefs ?? {}), [prefKey]: false };
+
+  await db
+    .update(trainersTable)
+    .set({ emailPrefs: merged })
+    .where(eq(trainersTable.id, trainerId));
+
+  const label = PREF_LABELS[prefKey] ?? prefKey;
+  res.send(page(
+    "Unsubscribed",
+    `<p>You have been unsubscribed from <strong>${label}</strong>.</p>
+     <p>You can re-enable this at any time in your <a href="/settings">account settings</a>.</p>`,
+    "#0f766e",
+  ));
 });
 
 router.get("/trainers/:id", async (req, res) => {
@@ -125,8 +234,9 @@ router.get("/trainers/:id", async (req, res) => {
     res.status(400).json({ error: "invalid params" });
     return;
   }
+  const endorsementCountSq = sql<number>`(SELECT COUNT(*) FROM endorsements WHERE endorsements.trainer_id = ${trainersTable.id})`.as("endorsementCount");
   const rows = await db
-    .select()
+    .select({ ...getTableColumns(trainersTable), endorsementCount: endorsementCountSq })
     .from(trainersTable)
     .where(eq(trainersTable.id, params.data.id))
     .limit(1);
@@ -234,10 +344,21 @@ router.patch("/trainers/:id", async (req, res) => {
     }
   }
 
-  // Validate resumeUrl: must be empty/null (clear) or a valid S3 resume key (resumes/<uuid>)
+  // Validate resumeUrl: must be empty/null (clear) or a valid http(s) URL.
+  // Trainers paste a shareable link (Drive, Dropbox, personal site, etc.) — we accept any URL.
   if (body.data.resumeUrl !== undefined && body.data.resumeUrl !== null && body.data.resumeUrl !== "") {
-    if (!isValidResumeKey(body.data.resumeUrl)) {
-      res.status(400).json({ error: "resumeUrl must be a valid resume key" });
+    try {
+      const u = new URL(body.data.resumeUrl);
+      if (u.protocol !== "http:" && u.protocol !== "https:") {
+        res.status(400).json({ error: "resumeUrl must be an http or https URL" });
+        return;
+      }
+      if (body.data.resumeUrl.length > 2000) {
+        res.status(400).json({ error: "resumeUrl must be 2000 characters or less" });
+        return;
+      }
+    } catch {
+      res.status(400).json({ error: "resumeUrl must be a valid URL" });
       return;
     }
   }
@@ -275,8 +396,9 @@ router.patch("/trainers/:id", async (req, res) => {
       .set(update)
       .where(eq(trainersTable.id, params.data.id));
   }
+  const endorsementCountSqPatch = sql<number>`(SELECT COUNT(*) FROM endorsements WHERE endorsements.trainer_id = ${trainersTable.id})`.as("endorsementCount");
   const rows = await db
-    .select()
+    .select({ ...getTableColumns(trainersTable), endorsementCount: endorsementCountSqPatch })
     .from(trainersTable)
     .where(eq(trainersTable.id, params.data.id))
     .limit(1);
@@ -296,49 +418,58 @@ router.patch("/trainers/:id", async (req, res) => {
   });
 });
 
-router.post("/trainers/:id/resume", async (req, res) => {
-  const params = RequestTrainerResumeUploadUrlParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: "invalid params" });
-    return;
-  }
-  const body = RequestTrainerResumeUploadUrlBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "invalid body", details: body.error.issues });
-    return;
-  }
+router.post(
+  "/trainers/:id/resume",
+  express.raw({ type: "*/*", limit: "11mb" }),
+  async (req, res) => {
+    const params = RequestTrainerResumeUploadUrlParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "invalid params" });
+      return;
+    }
 
-  const activeId = await getActiveUserId(req);
-  const [active] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, activeId))
-    .limit(1);
-  if (!active) {
-    res.status(401).json({ error: "not authenticated" });
-    return;
-  }
-  const isOwner = active.role === "trainer" && active.trainerId === params.data.id;
-  const isAdmin = active.role === "admin";
-  if (!isOwner && !isAdmin) {
-    res.status(403).json({ error: "not allowed to upload resume for this trainer" });
-    return;
-  }
+    const activeId = await getActiveUserId(req);
+    const [active] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, activeId))
+      .limit(1);
+    if (!active) {
+      res.status(401).json({ error: "not authenticated" });
+      return;
+    }
+    const isOwner = active.role === "trainer" && active.trainerId === params.data.id;
+    const isAdmin = active.role === "admin";
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: "not allowed to upload resume for this trainer" });
+      return;
+    }
 
-  const { contentType, size } = body.data;
-  if (!ALLOWED_RESUME_TYPES.has(contentType)) {
-    res.status(400).json({ error: "Resume must be a PDF, DOC, or DOCX file" });
-    return;
-  }
-  if (size > MAX_RESUME_BYTES) {
-    res.status(400).json({ error: "Resume must be 10 MB or smaller" });
-    return;
-  }
+    const contentType = (req.headers["content-type"] ?? "").split(";")[0]!.trim();
+    if (!ALLOWED_RESUME_TYPES.has(contentType)) {
+      res.status(400).json({ error: "Resume must be a PDF, DOC, or DOCX file" });
+      return;
+    }
 
-  const { uploadUrl, objectKey } = await createResumeUploadUrl(contentType);
+    const fileBuffer = req.body as Buffer;
+    if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+      res.status(400).json({ error: "No file data received" });
+      return;
+    }
+    if (fileBuffer.length > MAX_RESUME_BYTES) {
+      res.status(400).json({ error: "Resume must be 10 MB or smaller" });
+      return;
+    }
 
-  res.json({ uploadUrl, objectPath: objectKey });
-});
+    try {
+      const { objectKey } = await uploadResume(fileBuffer, contentType);
+      res.json({ objectPath: objectKey });
+    } catch (err) {
+      req.log.error({ err }, "Failed to upload resume to S3");
+      res.status(500).json({ error: "Failed to upload resume to storage" });
+    }
+  },
+);
 
 router.get("/trainers/:id/resume/url", async (req, res) => {
   const params = GetTrainerParams.safeParse(req.params);
@@ -571,6 +702,257 @@ router.post("/trainers/:id/reviews", async (req, res) => {
     engagementTitle: engagementTitle ?? undefined,
     createdAt: new Date().toISOString(),
   });
+});
+
+// ── Endorsements ─────────────────────────────────────────────────────────────
+
+const EndorsementParams = z.object({ id: z.string().min(1) });
+const EndorsementIdParams = z.object({ id: z.string().min(1), endorsementId: z.string().min(1) });
+const EndorsementBody = z.object({ text: z.string().min(1).max(300) });
+
+router.get("/trainers/:id/endorsements", async (req, res) => {
+  const params = EndorsementParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+
+  const rows = await db
+    .select({ endorsement: endorsementsTable, vendor: vendorsTable })
+    .from(endorsementsTable)
+    .leftJoin(vendorsTable, eq(endorsementsTable.vendorId, vendorsTable.id))
+    .where(eq(endorsementsTable.trainerId, params.data.id))
+    .orderBy(desc(endorsementsTable.createdAt));
+
+  const endorsements = rows.map((r) => ({
+    id: r.endorsement.id,
+    trainerId: r.endorsement.trainerId,
+    vendorId: r.endorsement.vendorId,
+    vendorName: r.vendor?.companyName ?? "Unknown",
+    vendorLogoUrl: r.vendor?.logoUrl ?? undefined,
+    text: r.endorsement.text,
+    createdAt: r.endorsement.createdAt.toISOString(),
+  }));
+
+  // Compute canEndorse for authenticated vendor callers
+  let canEndorse = false;
+  try {
+    const activeId = await getActiveUserId(req);
+    const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+    if (active?.role === "vendor" && active.vendorId) {
+      // canEndorse = has completed engagement AND has not already endorsed
+      const alreadyEndorsed = endorsements.some((e) => e.vendorId === active.vendorId);
+      if (!alreadyEndorsed) {
+        const [completed] = await db
+          .select({ id: applicationsTable.id })
+          .from(applicationsTable)
+          .innerJoin(requirementsTable, eq(applicationsTable.requirementId, requirementsTable.id))
+          .where(and(
+            eq(applicationsTable.trainerId, params.data.id),
+            eq(requirementsTable.vendorId, active.vendorId),
+            eq(applicationsTable.status, "completed"),
+          ))
+          .limit(1);
+        canEndorse = !!completed;
+      }
+    }
+  } catch {
+    // unauthenticated — canEndorse stays false
+  }
+
+  res.json({ endorsements, canEndorse });
+});
+
+router.post("/trainers/:id/endorsements", async (req, res) => {
+  const params = EndorsementParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+  const body = EndorsementBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "invalid body", details: body.error.issues }); return; }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "vendor" || !active.vendorId) {
+    res.status(403).json({ error: "only vendors can endorse trainers" }); return;
+  }
+
+  // Require at least one completed application from this vendor for this trainer
+  // Applications link to requirements which carry the vendorId
+  const [completed] = await db
+    .select({ id: applicationsTable.id })
+    .from(applicationsTable)
+    .innerJoin(requirementsTable, eq(applicationsTable.requirementId, requirementsTable.id))
+    .where(and(
+      eq(applicationsTable.trainerId, params.data.id),
+      eq(requirementsTable.vendorId, active.vendorId),
+      eq(applicationsTable.status, "completed"),
+    ))
+    .limit(1);
+  if (!completed) {
+    res.status(403).json({ error: "you must have a completed engagement with this trainer to endorse them" }); return;
+  }
+
+  const id = newId("end");
+  try {
+    await db.insert(endorsementsTable).values({
+      id,
+      trainerId: params.data.id,
+      vendorId: active.vendorId,
+      text: body.data.text,
+    });
+  } catch (err: unknown) {
+    if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "23505") {
+      res.status(409).json({ error: "you have already endorsed this trainer" }); return;
+    }
+    throw err;
+  }
+
+  const [[vendor], [trainerRow], [trainerUser], [trainerPrefsRow]] = await Promise.all([
+    db.select().from(vendorsTable).where(eq(vendorsTable.id, active.vendorId)).limit(1),
+    db.select({ name: trainersTable.name }).from(trainersTable).where(eq(trainersTable.id, params.data.id)).limit(1),
+    db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.trainerId, params.data.id)).limit(1),
+    db.select({ emailPrefs: trainersTable.emailPrefs }).from(trainersTable).where(eq(trainersTable.id, params.data.id)).limit(1),
+  ]);
+
+  const emailPrefs = trainerPrefsRow?.emailPrefs ?? { endorsements: true, applicationStatus: true, newRequirementMatch: true, messages: true };
+  if (trainerUser?.email && trainerRow?.name && vendor && emailPrefs.endorsements !== false) {
+    const domain = process.env.APP_DOMAIN?.trim() ?? "";
+    const profileUrl = domain
+      ? `https://${domain}/trainers/${params.data.id}`
+      : `/trainers/${params.data.id}`;
+    notifyTrainerNewEndorsement({
+      trainerEmail: trainerUser.email,
+      trainerName: trainerRow.name,
+      vendorName: vendor.companyName,
+      endorsementSnippet: body.data.text,
+      profileUrl,
+      trainerId: params.data.id,
+    }).catch(() => {});
+  }
+
+  res.status(201).json({
+    id,
+    trainerId: params.data.id,
+    vendorId: active.vendorId,
+    vendorName: vendor?.companyName ?? "Unknown",
+    vendorLogoUrl: vendor?.logoUrl ?? undefined,
+    text: body.data.text,
+    createdAt: new Date().toISOString(),
+  });
+});
+
+router.put("/trainers/:id/endorsements/:endorsementId", async (req, res) => {
+  const params = EndorsementIdParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+  const body = EndorsementBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "invalid body", details: body.error.issues }); return; }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "vendor" || !active.vendorId) {
+    res.status(403).json({ error: "not authorized" }); return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(endorsementsTable)
+    .where(and(eq(endorsementsTable.id, params.data.endorsementId), eq(endorsementsTable.trainerId, params.data.id)))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "endorsement not found" }); return; }
+  if (existing.vendorId !== active.vendorId) { res.status(403).json({ error: "not your endorsement" }); return; }
+
+  await db.update(endorsementsTable)
+    .set({ text: body.data.text })
+    .where(and(eq(endorsementsTable.id, params.data.endorsementId), eq(endorsementsTable.trainerId, params.data.id)));
+
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, active.vendorId)).limit(1);
+  res.json({
+    id: existing.id,
+    trainerId: existing.trainerId,
+    vendorId: existing.vendorId,
+    vendorName: vendor?.companyName ?? "Unknown",
+    vendorLogoUrl: vendor?.logoUrl ?? undefined,
+    text: body.data.text,
+    createdAt: existing.createdAt.toISOString(),
+  });
+});
+
+router.delete("/trainers/:id/endorsements/:endorsementId", async (req, res) => {
+  const params = EndorsementIdParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "vendor" || !active.vendorId) {
+    res.status(403).json({ error: "not authorized" }); return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(endorsementsTable)
+    .where(and(eq(endorsementsTable.id, params.data.endorsementId), eq(endorsementsTable.trainerId, params.data.id)))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "endorsement not found" }); return; }
+  if (existing.vendorId !== active.vendorId) { res.status(403).json({ error: "not your endorsement" }); return; }
+
+  await db.delete(endorsementsTable).where(and(eq(endorsementsTable.id, params.data.endorsementId), eq(endorsementsTable.trainerId, params.data.id)));
+  res.status(204).send();
+});
+
+const EmailPrefsBody = z.object({
+  endorsements: z.boolean().optional(),
+  applicationStatus: z.boolean().optional(),
+  newRequirementMatch: z.boolean().optional(),
+  messages: z.boolean().optional(),
+});
+
+router.get("/trainers/:id/email-prefs", async (req, res) => {
+  const params = z.object({ id: z.string() }).safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active) { res.status(401).json({ error: "unauthenticated" }); return; }
+  if (active.role !== "trainer" || active.trainerId !== params.data.id) {
+    res.status(403).json({ error: "not authorized" }); return;
+  }
+
+  const [trainer] = await db
+    .select({ emailPrefs: trainersTable.emailPrefs })
+    .from(trainersTable)
+    .where(eq(trainersTable.id, params.data.id))
+    .limit(1);
+  if (!trainer) { res.status(404).json({ error: "trainer not found" }); return; }
+
+  const defaults = { endorsements: true, applicationStatus: true, newRequirementMatch: true, messages: true };
+  res.json({ ...defaults, ...(trainer.emailPrefs ?? {}) });
+});
+
+router.patch("/trainers/:id/email-prefs", async (req, res) => {
+  const params = z.object({ id: z.string() }).safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+  const body = EmailPrefsBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "invalid body", details: body.error.issues }); return; }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active) { res.status(401).json({ error: "unauthenticated" }); return; }
+  if (active.role !== "trainer" || active.trainerId !== params.data.id) {
+    res.status(403).json({ error: "not authorized" }); return;
+  }
+
+  const [existing] = await db
+    .select({ emailPrefs: trainersTable.emailPrefs })
+    .from(trainersTable)
+    .where(eq(trainersTable.id, params.data.id))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "trainer not found" }); return; }
+
+  const defaults = { endorsements: true, applicationStatus: true, newRequirementMatch: true, messages: true };
+  const merged = { ...defaults, ...(existing.emailPrefs ?? {}), ...body.data };
+
+  await db
+    .update(trainersTable)
+    .set({ emailPrefs: merged })
+    .where(eq(trainersTable.id, params.data.id));
+
+  res.json(merged);
 });
 
 export default router;

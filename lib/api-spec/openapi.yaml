@@ -18,6 +18,9 @@ tags:
   - name: reviews
   - name: stats
   - name: admin
+  - name: agreements
+  - name: Storage
+    description: Object storage upload and serving endpoints.
 
 paths:
   /healthz:
@@ -80,6 +83,21 @@ paths:
                 items:
                   $ref: "#/components/schemas/SkillCategory"
 
+  /skills/demand:
+    get:
+      operationId: getSkillsDemand
+      tags: [skills]
+      summary: Ranked list of skills by open requirement count
+      responses:
+        "200":
+          description: Skill demand list sorted by count descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SkillDemand"
+
   /trainers:
     get:
       operationId: listTrainers
@@ -95,6 +113,11 @@ paths:
           schema:
             type: string
         - in: query
+          name: skills
+          schema:
+            type: string
+          description: Comma-separated skills (OR-matched against mainSkill and subSkills)
+        - in: query
           name: location
           schema:
             type: string
@@ -107,10 +130,15 @@ paths:
           schema:
             type: integer
         - in: query
+          name: gender
+          schema:
+            type: string
+            enum: [male, female]
+        - in: query
           name: sort
           schema:
             type: string
-            enum: [rating, experience, recent]
+            enum: [rating, experience, recent, endorsements]
       responses:
         "200":
           description: Trainers
@@ -188,6 +216,66 @@ paths:
         "204":
           description: Deleted
 
+  /trainers/{id}/resume:
+    post:
+      operationId: requestTrainerResumeUploadUrl
+      tags: [trainers]
+      summary: Request a presigned upload URL for the trainer's resume
+      description: |
+        Authenticated — only the trainer themselves or an admin may call this.
+        Validates file metadata (contentType must be PDF/DOC/DOCX, size <= 10 MB).
+        Returns a presigned S3 PUT URL for the client to upload directly, plus
+        the objectPath (S3 key) to pass to PATCH /trainers/{id} to persist the resume URL.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResumeUploadRequest"
+      responses:
+        "200":
+          description: Presigned upload URL and objectPath
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumeUploadResponse"
+        "400":
+          description: Invalid file type or size
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not the owning trainer or admin
+
+  /trainers/{id}/resume/url:
+    get:
+      operationId: getTrainerResumeUrl
+      tags: [trainers]
+      summary: Get a presigned S3 download URL for the trainer's resume
+      description: |
+        Returns a short-lived presigned S3 GET URL for the trainer's resume.
+        Fails with 404 if the trainer has no resume on file.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Presigned download URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumeDownloadUrlResponse"
+        "404":
+          description: Trainer not found or has no resume
+
   /trainers/{id}/reviews:
     get:
       operationId: listTrainerReviews
@@ -230,6 +318,108 @@ paths:
               schema:
                 $ref: "#/components/schemas/Review"
 
+  /trainers/{id}/endorsements:
+    get:
+      operationId: listTrainerEndorsements
+      tags: [trainers]
+      summary: List public endorsements for a trainer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Endorsements with eligibility flag for the calling vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndorsementsListResponse"
+    post:
+      operationId: createTrainerEndorsement
+      tags: [trainers]
+      summary: Create an endorsement (vendor with completed engagement only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEndorsementBody"
+      responses:
+        "201":
+          description: Created endorsement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Endorsement"
+        "403":
+          description: Not a vendor, or no completed engagement with this trainer
+        "409":
+          description: Vendor already has an endorsement for this trainer
+
+  /trainers/{id}/endorsements/{endorsementId}:
+    put:
+      operationId: updateTrainerEndorsement
+      tags: [trainers]
+      summary: Update own endorsement text
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: endorsementId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEndorsementBody"
+      responses:
+        "200":
+          description: Updated endorsement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Endorsement"
+        "403":
+          description: Not the endorsement owner
+        "404":
+          description: Endorsement not found
+    delete:
+      operationId: deleteTrainerEndorsement
+      tags: [trainers]
+      summary: Delete own endorsement
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: endorsementId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Not the endorsement owner
+        "404":
+          description: Endorsement not found
+
   /vendors/{id}:
     get:
       operationId: getVendor
@@ -269,6 +459,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Vendor"
+
+  /vendors/{id}/endorsements:
+    get:
+      operationId: listVendorEndorsements
+      tags: [vendors]
+      summary: List all endorsements authored by a vendor (with trainer details)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Endorsements given by the vendor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorEndorsement"
+        "403":
+          description: Not the owning vendor or an admin
+
+  /vendors/{id}/hiring-stats:
+    get:
+      operationId: getVendorHiringStats
+      tags: [vendors]
+      summary: Time-to-hire stats for a vendor (owner or admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hiring stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HiringStats"
+        "403":
+          description: Not the owning vendor or an admin
 
   /vendors/{id}/saved-trainers:
     get:
@@ -380,6 +614,11 @@ paths:
           name: flagged
           schema:
             type: boolean
+        - in: query
+          name: skills
+          schema:
+            type: string
+          description: Comma-separated skill names (OR-match)
       responses:
         "200":
           description: Requirements
@@ -497,6 +736,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/Requirement"
 
+  /requirements/{id}/bulk-reject:
+    post:
+      operationId: bulkRejectRequirementApplications
+      tags: [requirements]
+      summary: Reject all submitted and shortlisted applications for a requirement (vendor-owner only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Number of applications rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRejectResult"
+        "403":
+          description: Not the owning vendor
+        "404":
+          description: Requirement not found
+
   /requirements/{id}/unflag:
     post:
       operationId: unflagRequirement
@@ -514,6 +776,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Requirement"
+
+  /requirements/{id}/hide:
+    post:
+      operationId: hideRequirement
+      tags: [requirements]
+      summary: Hide a requirement from public listings (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
+
+  /requirements/{id}/unhide:
+    post:
+      operationId: unhideRequirement
+      tags: [requirements]
+      summary: Restore a hidden requirement to public listings (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unhidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
+
+  /requirements/{id}/warn:
+    post:
+      operationId: warnRequirementVendor
+      tags: [requirements]
+      summary: Email a warning to the vendor who posted this requirement (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarnRequirementBody"
+      responses:
+        "200":
+          description: Warning sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+
+  /requirements/{id}/ai-matches:
+    get:
+      operationId: getRequirementAiMatches
+      tags: [requirements]
+      summary: AI-ranked trainer matches for a requirement (vendor owner only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: AI-ranked trainer matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiMatch"
+        "403":
+          description: Not the owning vendor
+        "404":
+          description: Requirement not found
 
   /requirements/{id}/suggested-trainers:
     get:
@@ -616,6 +970,102 @@ paths:
       responses:
         "200":
           description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+
+  /messages/threads:
+    get:
+      operationId: listMessageThreads
+      tags: [messages]
+      summary: List all message threads for the current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Message threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageThreadItem"
+
+  /applications/{id}/note:
+    patch:
+      operationId: updateApplicationNote
+      tags: [applications]
+      summary: Save a private vendor note on an application
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApplicationNoteBody"
+      responses:
+        "200":
+          description: Updated application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "403":
+          description: Not the owning vendor
+        "404":
+          description: Application not found
+
+  /applications/{id}/complete:
+    post:
+      operationId: completeApplication
+      tags: [applications]
+      summary: Mark a hired application as completed (vendor-owner only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Completed application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "403":
+          description: Not the owning vendor
+        "404":
+          description: Application not found
+        "409":
+          description: Application is not in hired status
+
+  /applications/{id}/withdraw:
+    post:
+      operationId: withdrawApplication
+      tags: [applications]
+      summary: Trainer withdraws their own application
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawApplicationBody"
+      responses:
+        "200":
+          description: Application after withdrawal
           content:
             application/json:
               schema:
@@ -751,6 +1201,42 @@ paths:
                 items:
                   $ref: "#/components/schemas/HireInquiry"
 
+  /hire-inquiries/mine:
+    get:
+      operationId: listMyHireInquiries
+      tags: [hire]
+      summary: List the current user's own inquiries
+      responses:
+        "200":
+          description: List of my inquiries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HireInquiry"
+
+  /hire-inquiries/{id}:
+    get:
+      operationId: getHireInquiry
+      tags: [hire]
+      summary: Get a single inquiry (admin or owner)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Inquiry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HireInquiry"
+        "404":
+          description: Not found
+
   /hire-inquiries/{id}/status:
     patch:
       operationId: updateHireInquiryStatus
@@ -775,6 +1261,99 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HireInquiry"
+
+  /hire-inquiries/{id}/messages:
+    get:
+      operationId: listHireInquiryMessages
+      tags: [hire]
+      summary: List messages on an inquiry (admin or owner)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HireInquiryMessage"
+    post:
+      operationId: sendHireInquiryMessage
+      tags: [hire]
+      summary: Send a message on an inquiry (admin or owner)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendHireInquiryMessageBody"
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HireInquiryMessage"
+
+  /admin/requirements/hire-through-us:
+    get:
+      operationId: listHireThroughUsRequirements
+      tags: [admin]
+      summary: List all requirements posted with "hire through us" (admin only)
+      responses:
+        "200":
+          description: List of hire-through-us requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Requirement"
+        "403":
+          description: Not admin
+
+  /admin/export/requirements:
+    get:
+      operationId: exportRequirementsCsv
+      tags: [admin]
+      summary: Download a CSV of every requirement (admin only)
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: Not admin
+
+  /admin/export/applications:
+    get:
+      operationId: exportApplicationsCsv
+      tags: [admin]
+      summary: Download a CSV of every application (admin only)
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: Not admin
 
   /admin/users:
     get:
@@ -889,6 +1468,214 @@ paths:
         "404":
           description: User not found
 
+  /admin/vendors:
+    get:
+      operationId: listAdminVendors
+      tags: [admin]
+      summary: List all vendors with verified status (admin only)
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vendors page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminVendorsPage"
+        "403":
+          description: Not admin
+
+  /admin/vendors/{id}/verify:
+    patch:
+      operationId: verifyVendor
+      tags: [admin]
+      summary: Set or unset vendor verified status (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyVendorBody"
+      responses:
+        "200":
+          description: Updated vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+        "403":
+          description: Not admin
+        "404":
+          description: Vendor not found
+
+  /applications/{id}/agreement:
+    get:
+      operationId: getApplicationAgreement
+      tags: [agreements]
+      summary: Get the engagement agreement for an application (auto-creates a draft if missing and the application is hired)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Agreement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementAgreement"
+        "403":
+          description: Not allowed
+        "404":
+          description: Application not found
+
+  /agreements/{id}:
+    patch:
+      operationId: updateAgreementTerms
+      tags: [agreements]
+      summary: Update commercial terms (vendor only, draft only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgreementTermsBody"
+      responses:
+        "200":
+          description: Updated agreement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementAgreement"
+        "403":
+          description: Not allowed
+        "409":
+          description: Wrong status
+        "404":
+          description: Agreement not found
+
+  /agreements/{id}/submit:
+    post:
+      operationId: submitAgreementToTrainer
+      tags: [agreements]
+      summary: Vendor submits agreement for trainer acceptance (records vendor signature)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Agreement awaiting trainer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementAgreement"
+
+  /agreements/{id}/accept:
+    post:
+      operationId: acceptAgreement
+      tags: [agreements]
+      summary: Trainer accepts agreement (records trainer signature, finalizes & emails)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Accepted agreement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementAgreement"
+
+  /agreements/{id}/request-changes:
+    post:
+      operationId: requestAgreementChanges
+      tags: [agreements]
+      summary: Trainer requests changes (sends note back to vendor, status returns to draft)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestAgreementChangesBody"
+      responses:
+        "200":
+          description: Agreement back to draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementAgreement"
+
+  /agreements/{id}/cancel:
+    post:
+      operationId: cancelAgreement
+      tags: [agreements]
+      summary: Vendor or trainer cancels the agreement
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelAgreementBody"
+      responses:
+        "200":
+          description: Cancelled agreement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngagementAgreement"
+
+  /my-agreements:
+    get:
+      operationId: listMyAgreements
+      tags: [agreements]
+      summary: List engagement agreements for the current user (vendor or trainer)
+      responses:
+        "200":
+          description: My agreements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EngagementAgreementListItem"
+
 components:
   schemas:
     HealthStatus:
@@ -934,6 +1721,8 @@ components:
           format: email
         orgName:
           type: string
+        orgType:
+          type: string
 
     SkillCategory:
       type: object
@@ -947,6 +1736,15 @@ components:
           type: array
           items:
             type: string
+
+    SkillDemand:
+      type: object
+      required: [skill, count]
+      properties:
+        skill:
+          type: string
+        count:
+          type: integer
 
     Trainer:
       type: object
@@ -966,6 +1764,7 @@ components:
         - verified
         - avatarUrl
         - engagedDates
+        - endorsementCount
       properties:
         id:
           type: string
@@ -1005,10 +1804,16 @@ components:
           type: string
           enum: [trainer, developer, both]
           description: Whether the user is a full-time trainer, developer, or both
+        gender:
+          type: string
+          enum: [male, female]
         engagedDates:
           type: array
           items:
             $ref: "#/components/schemas/EngagedDateRange"
+        endorsementCount:
+          type: integer
+          description: Number of endorsements this trainer has received
 
     SavedTrainer:
       type: object
@@ -1136,6 +1941,9 @@ components:
             $ref: "#/components/schemas/Certification"
         resumeUrl:
           type: string
+        gender:
+          type: string
+          enum: [male, female]
         engagedDates:
           type: array
           items:
@@ -1157,6 +1965,8 @@ components:
         id:
           type: string
         companyName:
+          type: string
+        orgType:
           type: string
         industry:
           type: string
@@ -1283,6 +2093,18 @@ components:
         flaggedAt:
           type: string
           format: date-time
+        vendorVerified:
+          type: boolean
+        isUrgent:
+          type: boolean
+        isFeatured:
+          type: boolean
+        isPrivate:
+          type: boolean
+        hireThroughUs:
+          type: boolean
+        hidden:
+          type: boolean
 
     RequirementDetail:
       allOf:
@@ -1350,6 +2172,14 @@ components:
           type: integer
         feeType:
           $ref: "#/components/schemas/FeeType"
+        isUrgent:
+          type: boolean
+        isFeatured:
+          type: boolean
+        isPrivate:
+          type: boolean
+        hireThroughUs:
+          type: boolean
 
     UpdateRequirementBody:
       type: object
@@ -1391,6 +2221,14 @@ components:
           type: string
         startDate:
           type: string
+        isUrgent:
+          type: boolean
+        isFeatured:
+          type: boolean
+        isPrivate:
+          type: boolean
+        hireThroughUs:
+          type: boolean
 
     FlagRequirementBody:
       type: object
@@ -1400,9 +2238,25 @@ components:
         reason:
           type: string
 
+    WarnRequirementBody:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+
+    BulkRejectResult:
+      type: object
+      required: [rejectedCount]
+      properties:
+        rejectedCount:
+          type: integer
+
     ApplicationStatus:
       type: string
-      enum: [submitted, shortlisted, rejected, hired]
+      enum: [submitted, shortlisted, rejected, hired, withdrawn, completed]
 
     Application:
       type: object
@@ -1427,9 +2281,24 @@ components:
           type: string
         proposedRate:
           type: integer
+        withdrawnReason:
+          type: string
+        vendorNote:
+          type: string
+          description: Private note visible only to the owning vendor
+        completedAt:
+          type: string
+          format: date-time
+          description: When the training was marked as completed
         createdAt:
           type: string
           format: date-time
+
+    WithdrawApplicationBody:
+      type: object
+      properties:
+        reason:
+          type: string
 
     ApplicationWithTrainer:
       allOf:
@@ -1451,19 +2320,27 @@ components:
 
     ApplyBody:
       type: object
-      required: [message, proposedRate]
       properties:
         message:
           type: string
         proposedRate:
           type: integer
+          nullable: true
 
     UpdateApplicationBody:
       type: object
       required: [status]
+      description: Update application status. Note — the `completed` status is not accepted here; use `POST /applications/{id}/complete` instead.
       properties:
         status:
           $ref: "#/components/schemas/ApplicationStatus"
+
+    UpdateApplicationNoteBody:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
 
     Review:
       type: object
@@ -1517,6 +2394,68 @@ components:
           type: string
           format: date-time
 
+    Endorsement:
+      type: object
+      required: [id, trainerId, vendorId, vendorName, text, createdAt]
+      properties:
+        id:
+          type: string
+        trainerId:
+          type: string
+        vendorId:
+          type: string
+        vendorName:
+          type: string
+        vendorLogoUrl:
+          type: string
+        text:
+          type: string
+          maxLength: 300
+        createdAt:
+          type: string
+          format: date-time
+
+    EndorsementsListResponse:
+      type: object
+      required: [endorsements, canEndorse]
+      properties:
+        endorsements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Endorsement"
+        canEndorse:
+          type: boolean
+          description: True if the authenticated vendor has a completed engagement with this trainer AND has not yet endorsed them (always false for non-vendors or vendors who already endorsed)
+
+    VendorEndorsement:
+      type: object
+      required: [id, trainerId, vendorId, trainerName, trainerAvatarUrl, text, createdAt]
+      properties:
+        id:
+          type: string
+        trainerId:
+          type: string
+        vendorId:
+          type: string
+        trainerName:
+          type: string
+        trainerAvatarUrl:
+          type: string
+        text:
+          type: string
+          maxLength: 300
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateEndorsementBody:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          maxLength: 300
+
     Message:
       type: object
       required: [id, applicationId, senderUserId, body, createdAt]
@@ -1532,6 +2471,33 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    MessageThreadItem:
+      type: object
+      required: [applicationId, requirementId, requirementTitle, otherPartyName, otherPartyAvatarUrl, status]
+      properties:
+        applicationId:
+          type: string
+        requirementId:
+          type: string
+        requirementTitle:
+          type: string
+        otherPartyName:
+          type: string
+        otherPartyAvatarUrl:
+          type: string
+        status:
+          $ref: "#/components/schemas/ApplicationStatus"
+        lastMessageBody:
+          type: string
+          nullable: true
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastMessageSenderUserId:
+          type: string
+          nullable: true
 
     SendMessageBody:
       type: object
@@ -1569,6 +2535,23 @@ components:
           type: string
         engagementTitle:
           type: string
+
+    HiringStats:
+      type: object
+      required:
+        - hiredCount
+      properties:
+        hiredCount:
+          type: integer
+        avgDays:
+          type: integer
+          nullable: true
+        minDays:
+          type: integer
+          nullable: true
+        maxDays:
+          type: integer
+          nullable: true
 
     VendorStats:
       type: object
@@ -1668,6 +2651,34 @@ components:
         count:
           type: integer
 
+    AiMatch:
+      type: object
+      required: [trainerId, name, mainSkill, experienceYears, rating, reason, avatarUrl]
+      properties:
+        trainerId:
+          type: string
+        name:
+          type: string
+        mainSkill:
+          type: string
+        subSkills:
+          type: array
+          items:
+            type: string
+        experienceYears:
+          type: integer
+        rating:
+          type: number
+        avatarUrl:
+          type: string
+        location:
+          type: string
+        verified:
+          type: boolean
+        reason:
+          type: string
+          description: One-sentence AI-generated explanation of why this trainer fits
+
     ActivityItem:
       type: object
       required: [id, type, title, subtitle, createdAt]
@@ -1693,6 +2704,8 @@ components:
       properties:
         id:
           type: string
+        userId:
+          type: string
         companyName:
           type: string
         contactName:
@@ -1713,7 +2726,7 @@ components:
           type: string
         status:
           type: string
-          enum: [new, contacted, in_progress, closed]
+          enum: [new, contacted, in_progress, resolved, closed]
         createdAt:
           type: string
           format: date-time
@@ -1747,7 +2760,30 @@ components:
       properties:
         status:
           type: string
-          enum: [new, contacted, in_progress, closed]
+          enum: [new, contacted, in_progress, resolved, closed]
+
+    HireInquiryMessage:
+      type: object
+      required: [id, inquiryId, senderUserId, body, createdAt]
+      properties:
+        id:
+          type: string
+        inquiryId:
+          type: string
+        senderUserId:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    SendHireInquiryMessageBody:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
 
     AdminUser:
       type: object
@@ -1795,3 +2831,263 @@ components:
         role:
           type: string
           enum: [trainer, vendor]
+
+    AdminVendorItem:
+      type: object
+      required: [id, companyName, email, industry, location, verified, createdAt]
+      properties:
+        id:
+          type: string
+        companyName:
+          type: string
+        orgType:
+          type: string
+        email:
+          type: string
+        industry:
+          type: string
+        location:
+          type: string
+        verified:
+          type: boolean
+        logoUrl:
+          type: string
+        createdAt:
+          type: string
+
+    AdminVendorsPage:
+      type: object
+      required: [vendors, total, page, pageSize]
+      properties:
+        vendors:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminVendorItem"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    VerifyVendorBody:
+      type: object
+      required: [verified]
+      properties:
+        verified:
+          type: boolean
+
+    ResumeDownloadUrlResponse:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Presigned S3 GET URL (valid for 1 hour)
+
+    ResumeUploadRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Original filename (e.g. resume.pdf)
+        size:
+          type: integer
+          minimum: 1
+          description: File size in bytes (must be <= 10 MB)
+        contentType:
+          type: string
+          minLength: 1
+          description: MIME type — must be application/pdf, application/msword, or application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+    ResumeUploadResponse:
+      type: object
+      required: [uploadUrl, objectPath]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+          description: Presigned S3 PUT URL (valid for 15 minutes)
+        objectPath:
+          type: string
+          description: S3 object key to persist in trainers.resume_url (e.g. resumes/<uuid>)
+
+    EngagementAgreementStatus:
+      type: string
+      enum: [draft, awaiting_trainer, accepted, cancelled]
+
+    EngagementAgreement:
+      type: object
+      required:
+        - id
+        - applicationId
+        - requirementId
+        - vendorId
+        - trainerId
+        - status
+        - feeCurrency
+        - confidentialityClause
+        - governingLawCity
+        - createdAt
+        - updatedAt
+        - vendorName
+        - trainerName
+        - requirementTitle
+      properties:
+        id:
+          type: string
+        applicationId:
+          type: string
+        requirementId:
+          type: string
+        vendorId:
+          type: string
+        trainerId:
+          type: string
+        status:
+          $ref: "#/components/schemas/EngagementAgreementStatus"
+        agreedFee:
+          type: ["integer", "null"]
+        feeCurrency:
+          type: string
+        paymentSchedule:
+          type: ["string", "null"]
+        travelBoarding:
+          type: ["string", "null"]
+        cancellationNotice:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        sessionsCount:
+          type: ["integer", "null"]
+        locationOrMode:
+          type: ["string", "null"]
+        deliverables:
+          type: ["string", "null"]
+        confidentialityClause:
+          type: boolean
+        ipOwnership:
+          type: ["string", "null"]
+        governingLawCity:
+          type: string
+        specialClauses:
+          type: ["string", "null"]
+        vendorAcceptedAt:
+          type: ["string", "null"]
+          format: date-time
+        vendorAcceptedIp:
+          type: ["string", "null"]
+        trainerAcceptedAt:
+          type: ["string", "null"]
+          format: date-time
+        trainerAcceptedIp:
+          type: ["string", "null"]
+        changesRequestedNote:
+          type: ["string", "null"]
+        cancelledAt:
+          type: ["string", "null"]
+          format: date-time
+        cancellationReason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        vendorName:
+          type: string
+        trainerName:
+          type: string
+        requirementTitle:
+          type: string
+
+    EngagementAgreementListItem:
+      type: object
+      required:
+        - id
+        - applicationId
+        - requirementId
+        - requirementTitle
+        - counterpartyName
+        - role
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        applicationId:
+          type: string
+        requirementId:
+          type: string
+        requirementTitle:
+          type: string
+        counterpartyName:
+          type: string
+        role:
+          type: string
+          enum: [vendor, trainer]
+        status:
+          $ref: "#/components/schemas/EngagementAgreementStatus"
+        agreedFee:
+          type: ["integer", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdateAgreementTermsBody:
+      type: object
+      properties:
+        agreedFee:
+          type: ["integer", "null"]
+        paymentSchedule:
+          type: ["string", "null"]
+        travelBoarding:
+          type: ["string", "null"]
+        cancellationNotice:
+          type: ["string", "null"]
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        sessionsCount:
+          type: ["integer", "null"]
+        locationOrMode:
+          type: ["string", "null"]
+        deliverables:
+          type: ["string", "null"]
+        confidentialityClause:
+          type: boolean
+        ipOwnership:
+          type: ["string", "null"]
+        governingLawCity:
+          type: string
+        specialClauses:
+          type: ["string", "null"]
+
+    RequestAgreementChangesBody:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
+          minLength: 1
+
+    CancelAgreementBody:
+      type: object
+      properties:
+        reason:
+          type: string

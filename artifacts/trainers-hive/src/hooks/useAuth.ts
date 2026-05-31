@@ -1,8 +1,9 @@
 import React from "react";
 
 const AUTH_KEY = "th_auth";
+const AUTH_EVENT = "th-auth-change";
 
-export type UserRole = "trainer" | "vendor" | "college" | "admin";
+export type UserRole = "trainer" | "vendor" | "admin";
 
 export interface AuthState {
   signedIn: boolean;
@@ -10,6 +11,7 @@ export interface AuthState {
   email: string;
   role: UserRole;
   orgName?: string;
+  orgType?: string;
 }
 
 function getStoredAuth(): AuthState | null {
@@ -24,14 +26,26 @@ function getStoredAuth(): AuthState | null {
 
 export function clearAuthState() {
   localStorage.removeItem(AUTH_KEY);
+  window.dispatchEvent(new Event(AUTH_EVENT));
 }
 
 export function saveAuthState(state: AuthState) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(state));
+  window.dispatchEvent(new Event(AUTH_EVENT));
 }
 
 export function useAuth() {
   const [auth, setAuth] = React.useState<AuthState | null>(getStoredAuth);
+
+  React.useEffect(() => {
+    const sync = () => setAuth(getStoredAuth());
+    window.addEventListener(AUTH_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(AUTH_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   const signIn = React.useCallback((state: AuthState) => {
     saveAuthState(state);
@@ -62,11 +76,10 @@ export function isBusinessEmail(email: string): boolean {
 }
 
 export function roleRequiresBusinessEmail(role: UserRole): boolean {
-  return role === "vendor" || role === "college";
+  return role === "vendor";
 }
 
 export function getRoleSessionKey(role: UserRole): "vendor" | "trainer" | "admin" {
-  if (role === "college") return "vendor";
   if (role === "admin") return "admin";
   return role;
 }
@@ -74,8 +87,7 @@ export function getRoleSessionKey(role: UserRole): "vendor" | "trainer" | "admin
 export function getRoleLabel(role: UserRole): string {
   switch (role) {
     case "trainer": return "Trainer";
-    case "vendor": return "Vendor";
-    case "college": return "College / Company";
+    case "vendor": return "Organisation";
     case "admin": return "Admin";
   }
 }

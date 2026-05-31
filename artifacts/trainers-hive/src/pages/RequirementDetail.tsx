@@ -15,18 +15,26 @@ import {
   useUnflagRequirement,
   useListMyApplications,
   useGetSuggestedTrainers,
+  useGetRequirementAiMatches,
   useCreateTrainerReview,
+  useWithdrawApplication,
+  useBulkRejectRequirementApplications,
+  useUpdateApplicationNote,
+  useCompleteApplication,
   getListMyApplicationsQueryKey,
   getGetRequirementQueryKey,
   getGetTrainerQueryKey,
   getListRequirementApplicationsQueryKey,
   getListRequirementsQueryKey,
   getGetSuggestedTrainersQueryKey,
+  getGetRequirementAiMatchesQueryKey,
   getListTrainerReviewsQueryKey,
 } from "@workspace/api-client-react";
 import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { MessageThread } from "@/components/MessageThread";
+import AgreementSection from "@/components/agreements/AgreementSection";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TrainerAvatar } from "@/components/TrainerAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -36,7 +44,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX, Flag, AlertTriangle, MessageSquare, Star } from "lucide-react";
+import { Building, MapPin, Briefcase, BookOpen, Clock, Users, CheckCircle2, XCircle, ArrowRight, CalendarX, Flag, AlertTriangle, MessageSquare, Star, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Eye, LogOut, RotateCcw, StickyNote, ShieldCheck, Zap, Lock, Handshake, Sparkles } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDistanceToNow, format } from "date-fns";
 
 type EngagedRange = { startDate: string; endDate: string; note?: string };
@@ -103,12 +114,20 @@ export default function RequirementDetail() {
     query: { enabled: !!id && isVendorOrAdmin, queryKey: getGetSuggestedTrainersQueryKey(id) },
   });
 
+  const { data: aiMatches, isLoading: aiMatchesLoading, error: aiMatchesError } = useGetRequirementAiMatches(id, {
+    query: { enabled: !!id && isVendorOwner, queryKey: getGetRequirementAiMatchesQueryKey(id) },
+  });
+
   const applyMutation = useApplyToRequirement();
   const updateAppMutation = useUpdateApplicationStatus();
   const updateReqMutation = useUpdateRequirement();
   const flagMutation = useFlagRequirement();
   const unflagMutation = useUnflagRequirement();
   const createReview = useCreateTrainerReview();
+  const withdrawMutation = useWithdrawApplication();
+  const bulkRejectMutation = useBulkRejectRequirementApplications();
+  const updateNoteMutation = useUpdateApplicationNote();
+  const completeMutation = useCompleteApplication();
 
   const [message, setMessage] = useState("");
   const [proposedRate, setProposedRate] = useState<string>("");
@@ -118,6 +137,25 @@ export default function RequirementDetail() {
   const [customFlagReason, setCustomFlagReason] = useState("");
   const [messageAppId, setMessageAppId] = useState<string | null>(null);
   const [messageAppName, setMessageAppName] = useState<string>("");
+  const [isExtendOpen, setIsExtendOpen] = useState(false);
+  const [newDeadline, setNewDeadline] = useState("");
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState("");
+  const [isBulkRejectOpen, setIsBulkRejectOpen] = useState(false);
+  const [noteAppId, setNoteAppId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [completingAppId, setCompletingAppId] = useState<string | null>(null);
+  const [justCompletedTrainerId, setJustCompletedTrainerId] = useState<string | null>(null);
+  const [justCompletedTrainerName, setJustCompletedTrainerName] = useState<string>("");
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [vendorAboutExpanded, setVendorAboutExpanded] = useState(false);
+  const DESC_LIMIT = 300;
+
+  const [appStatusFilter, setAppStatusFilter] = useState<string>("all");
+  const [appPage, setAppPage] = useState(0);
+  const [appSearch, setAppSearch] = useState("");
+  const APP_PAGE_SIZE = 10;
 
   const [reviewTrainerId, setReviewTrainerId] = useState<string | null>(null);
   const [reviewTrainerName, setReviewTrainerName] = useState<string>("");
@@ -185,17 +223,19 @@ export default function RequirementDetail() {
     );
   };
 
+  const DEFAULT_APPLY_MSG = "I am interested in this requirement and believe my skills and experience make me a strong fit. I look forward to discussing further.";
+
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message || !proposedRate) return;
 
     applyMutation.mutate(
-      { id, data: { message, proposedRate: Number(proposedRate) } },
+      { id, data: { message: message.trim() || DEFAULT_APPLY_MSG, proposedRate: proposedRate ? Number(proposedRate) : undefined } },
       {
         onSuccess: () => {
           toast({ title: "Application submitted", description: "The vendor has been notified." });
           setIsApplyOpen(false);
           queryClient.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+          queryClient.invalidateQueries({ queryKey: getListMyApplicationsQueryKey() });
         },
         onError: (err) => {
           const anyErr = err as { response?: { status?: number; data?: { message?: string; error?: string } }; message?: string };
@@ -246,6 +286,25 @@ export default function RequirementDetail() {
     );
   };
 
+  const handleExtendDeadline = () => {
+    if (!newDeadline) return;
+    updateReqMutation.mutate(
+      { id, data: { status: "open", deadline: newDeadline } },
+      {
+        onSuccess: () => {
+          toast({ title: "Deadline extended", description: "Requirement is still open with a new deadline." });
+          setIsExtendOpen(false);
+          setNewDeadline("");
+          queryClient.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+          queryClient.invalidateQueries({ queryKey: getListRequirementsQueryKey() });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to extend deadline", variant: "destructive" });
+        }
+      }
+    );
+  };
+
   if (reqLoading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-5xl space-y-8">
@@ -286,16 +345,61 @@ export default function RequirementDetail() {
     }
   };
 
+  const now = new Date();
+  const deadlineDate = new Date(requirement.deadline);
+  const daysToDeadline = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const isExpired = deadlineDate < now;
+  const isExpiringSoon = !isExpired && daysToDeadline <= 7;
+
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 max-w-5xl">
+      {requirement.status === "open" && isExpired && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 mb-6">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            Application deadline has passed.{" "}
+            {isVendorOwner
+              ? "Extend the deadline or close this requirement."
+              : "This requirement may close soon."}
+          </span>
+        </div>
+      )}
+      {requirement.status === "open" && isExpiringSoon && (
+        <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-800 px-4 py-3 text-sm text-orange-800 dark:text-orange-300 mb-6">
+          <Clock className="h-4 w-4 shrink-0" />
+          <span>
+            Closes in <strong>{daysToDeadline} day{daysToDeadline === 1 ? "" : "s"}</strong>. Apply soon!
+          </span>
+        </div>
+      )}
       <Card className="overflow-hidden border-none shadow-md mb-8 bg-gradient-to-br from-card to-muted/20">
         <CardContent className="p-8 sm:p-10">
           <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
             <div className="flex-1 space-y-4">
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant={requirement.status === 'open' ? 'default' : requirement.status === 'vacant' ? 'destructive' : 'secondary'} className="capitalize">
                   {requirement.status}
                 </Badge>
+                {(requirement as any).isUrgent && (
+                  <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                    <Zap className="h-3 w-3" /> Urgent
+                  </span>
+                )}
+                {(requirement as any).isFeatured && (
+                  <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                    <Star className="h-3 w-3" /> Featured
+                  </span>
+                )}
+                {(requirement as any).isPrivate && (
+                  <span className="inline-flex items-center gap-1 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                    <Lock className="h-3 w-3" /> Private
+                  </span>
+                )}
+                {(requirement as any).hireThroughUs && (
+                  <span className="inline-flex items-center gap-1 bg-teal-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                    <Handshake className="h-3 w-3" /> Hire Through Us
+                  </span>
+                )}
                 {(requirement as any).flagged && (
                   <Badge variant="destructive" className="flex items-center gap-1">
                     <Flag className="h-3 w-3" />
@@ -336,6 +440,11 @@ export default function RequirementDetail() {
                 {requirement.subSkills.map((s) => (
                   <Badge key={s} variant="outline" className="font-normal text-muted-foreground">{s}</Badge>
                 ))}
+                {(requirement as any).audienceType && (
+                  <Badge variant="outline" className="font-normal capitalize border-amber-300 text-amber-700 dark:border-amber-700/50 dark:text-amber-400">
+                    Audience: {(requirement as any).audienceType === "both" ? "Freshers + Lateral" : (requirement as any).audienceType}
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -343,12 +452,12 @@ export default function RequirementDetail() {
               <p className="text-sm text-muted-foreground font-semibold uppercase tracking-wider mb-1">Deadline</p>
               <p className="text-xl font-bold">{format(new Date(requirement.deadline), 'MMM d, yyyy')}</p>
               
-              {isTrainer && requirement.status === 'open' && trainerLoading && (
+              {isTrainer && !myApplication && requirement.status === 'open' && trainerLoading && (
                 <Button size="lg" className="w-full mt-2" disabled aria-disabled="true">
                   Checking availability...
                 </Button>
               )}
-              {isTrainer && requirement.status === 'open' && !trainerLoading && conflict && (
+              {isTrainer && !myApplication && requirement.status === 'open' && !trainerLoading && conflict && (
                 <div className="w-full mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                   <div className="flex items-start gap-2 text-destructive">
                     <CalendarX className="h-4 w-4 mt-0.5 shrink-0" />
@@ -365,7 +474,7 @@ export default function RequirementDetail() {
                   </Button>
                 </div>
               )}
-              {isTrainer && requirement.status === 'open' && !trainerLoading && !conflict && (
+              {isTrainer && !myApplication && requirement.status === 'open' && !trainerLoading && !conflict && (
                 <Dialog open={isApplyOpen} onOpenChange={setIsApplyOpen}>
                   <DialogTrigger asChild>
                     <Button size="lg" className="w-full mt-2">Apply Now</Button>
@@ -377,25 +486,28 @@ export default function RequirementDetail() {
                     </DialogHeader>
                     <form onSubmit={handleApply} className="space-y-4 pt-4">
                       <div className="space-y-2">
-                        <Label htmlFor="proposedRate">Proposed Rate (Total)</Label>
+                        <Label htmlFor="proposedRate">
+                          Proposed Rate (Total) <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+                        </Label>
                         <Input
                           id="proposedRate"
                           type="number"
                           min={0}
+                          placeholder="Leave blank to discuss directly"
                           value={proposedRate}
                           onChange={(e) => setProposedRate(e.target.value)}
-                          required
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="message">Message</Label>
+                        <Label htmlFor="message">
+                          Message <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+                        </Label>
                         <Textarea
                           id="message"
-                          placeholder="Introduce yourself and explain why you're a good fit..."
+                          placeholder="Introduce yourself and explain why you're a good fit… (a default message will be used if left blank)"
                           rows={4}
                           value={message}
                           onChange={(e) => setMessage(e.target.value)}
-                          required
                         />
                       </div>
                       <Button type="submit" className="w-full" disabled={applyMutation.isPending}>
@@ -404,6 +516,26 @@ export default function RequirementDetail() {
                     </form>
                   </DialogContent>
                 </Dialog>
+              )}
+              {isTrainer && myApplication && (myApplication.status === 'submitted' || myApplication.status === 'rejected' || myApplication.status === 'withdrawn') && (
+                <div className={`w-full mt-2 rounded-md border p-3 text-sm ${myApplication.status === 'rejected' || myApplication.status === 'withdrawn' ? 'border-destructive/40 bg-destructive/10' : 'border-border bg-muted/50'}`}>
+                  <div className="flex items-center gap-2">
+                    {myApplication.status === 'rejected' || myApplication.status === 'withdrawn'
+                      ? <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                      : <CheckCircle2 className="h-4 w-4 text-muted-foreground shrink-0" />}
+                    <p className={`font-medium ${myApplication.status === 'rejected' || myApplication.status === 'withdrawn' ? 'text-destructive' : 'text-foreground'}`}>
+                      {myApplication.status === 'rejected' ? 'Application not selected'
+                        : myApplication.status === 'withdrawn' ? 'You withdrew this application'
+                        : 'Application submitted'}
+                    </p>
+                  </div>
+                  {myApplication.status === 'submitted' && (
+                    <p className="text-muted-foreground mt-1 ml-6 text-xs">The vendor will review and shortlist if you're a good fit.</p>
+                  )}
+                  {myApplication.status === 'withdrawn' && (myApplication as any).withdrawnReason && (
+                    <p className="text-muted-foreground mt-1 ml-6 text-xs italic">"{(myApplication as any).withdrawnReason}"</p>
+                  )}
+                </div>
               )}
               {isTrainer && myApplication && (myApplication.status === 'shortlisted' || myApplication.status === 'hired') && (
                 <Button
@@ -419,19 +551,98 @@ export default function RequirementDetail() {
                   Message {requirement.vendorName}
                 </Button>
               )}
+              {isTrainer && myApplication && (myApplication.status === 'hired' || myApplication.status === 'completed') && (
+                <div className="mt-3">
+                  <AgreementSection applicationId={myApplication.id} role="trainer" />
+                </div>
+              )}
+              {isTrainer && myApplication && myApplication.status !== 'rejected' && myApplication.status !== 'withdrawn' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full mt-2 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60"
+                  onClick={() => { setWithdrawReason(""); setIsWithdrawOpen(true); }}
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Withdraw Application
+                </Button>
+              )}
               {isVendorOwner && (
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-2 flex-wrap">
                   {requirement.status === 'open' && (
-                    <Button variant="outline" onClick={() => handleUpdateReqStatus('closed')} disabled={updateReqMutation.isPending}>Close</Button>
+                    <Button variant="outline" onClick={() => setIsCloseConfirmOpen(true)} disabled={updateReqMutation.isPending}>Close</Button>
                   )}
-                  {requirement.status === 'open' && (
-                    <Button variant="destructive" onClick={() => handleUpdateReqStatus('vacant')} disabled={updateReqMutation.isPending}>Mark Vacant</Button>
+                  {requirement.status === 'open' && new Date() > new Date(requirement.deadline) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setNewDeadline("");
+                        setIsExtendOpen(true);
+                      }}
+                      disabled={updateReqMutation.isPending}
+                    >
+                      Still Looking — Extend Deadline
+                    </Button>
                   )}
                   {requirement.status !== 'open' && (
                     <Button variant="outline" onClick={() => handleUpdateReqStatus('open')} disabled={updateReqMutation.isPending}>Reopen</Button>
                   )}
                 </div>
               )}
+
+              {/* Close Requirement confirmation dialog */}
+              <Dialog open={isCloseConfirmOpen} onOpenChange={setIsCloseConfirmOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Close this requirement?</DialogTitle>
+                    <DialogDescription>
+                      Closing will hide it from trainers and stop new applications. You can reopen it at any time.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setIsCloseConfirmOpen(false)}>Cancel</Button>
+                    <Button
+                      variant="destructive"
+                      disabled={updateReqMutation.isPending}
+                      onClick={() => {
+                        setIsCloseConfirmOpen(false);
+                        handleUpdateReqStatus('closed');
+                      }}
+                    >
+                      {updateReqMutation.isPending ? "Closing…" : "Yes, close it"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Extend Deadline dialog */}
+              <Dialog open={isExtendOpen} onOpenChange={setIsExtendOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Still Looking for a Trainer?</DialogTitle>
+                    <DialogDescription>
+                      Your application deadline has passed but no trainer has been hired yet.
+                      Set a new deadline to keep this requirement open and visible to trainers.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3 py-2">
+                    <Label htmlFor="new-deadline">New Application Deadline</Label>
+                    <Input
+                      id="new-deadline"
+                      type="date"
+                      min={new Date().toISOString().split("T")[0]}
+                      value={newDeadline}
+                      onChange={(e) => setNewDeadline(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setIsExtendOpen(false)}>Cancel</Button>
+                    <Button onClick={handleExtendDeadline} disabled={!newDeadline || updateReqMutation.isPending}>
+                      {updateReqMutation.isPending ? "Saving…" : "Extend Deadline"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
               {isAdmin && (
                 <div className="mt-2">
                   <AdminRemoveButton
@@ -533,92 +744,325 @@ export default function RequirementDetail() {
               <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="prose prose-slate dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap">
-                {requirement.description}
-              </div>
+              {(() => {
+                const full = requirement.description ?? "";
+                const needsTruncation = full.length > DESC_LIMIT;
+                const shown = needsTruncation && !descExpanded ? full.slice(0, DESC_LIMIT).trimEnd() + "…" : full;
+                return (
+                  <>
+                    <div className="prose prose-slate dark:prose-invert max-w-none text-muted-foreground whitespace-pre-wrap">
+                      {shown}
+                    </div>
+                    {needsTruncation && (
+                      <button
+                        type="button"
+                        onClick={() => setDescExpanded((v) => !v)}
+                        className="mt-3 flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        {descExpanded ? (
+                          <><ChevronUp className="h-4 w-4" /> Show less</>
+                        ) : (
+                          <><ChevronDown className="h-4 w-4" /> Read more</>
+                        )}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 
-          {isVendorOwner && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold">Applications ({requirement.applicationCount})</h2>
-              {appsLoading ? (
-                <Skeleton className="h-32 w-full" />
-              ) : applications?.length ? (
-                applications.map((app) => (
-                  <Card key={app.id}>
-                    <CardContent className="p-6">
-                      <div className="flex gap-4">
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage src={app.trainer.avatarUrl} />
-                          <AvatarFallback>{app.trainer.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 space-y-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <Link href={`/trainers/${app.trainer.id}`} className="font-semibold text-lg hover:underline">
-                                {app.trainer.name}
-                              </Link>
-                              <p className="text-sm text-muted-foreground">{app.trainer.headline}</p>
-                            </div>
-                            <Badge variant="outline" className="capitalize">{app.status}</Badge>
-                          </div>
-                          <p className="text-sm font-medium">Proposed Rate: ${app.proposedRate}</p>
-                          <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md italic">"{app.message}"</p>
-                          
-                          <div className="flex gap-2 pt-2 flex-wrap">
-                            {app.status === 'submitted' && (
-                              <>
-                                <Button size="sm" onClick={() => handleUpdateStatus(app.id, 'shortlisted')}>Shortlist</Button>
-                                <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleUpdateStatus(app.id, 'rejected')}>Reject</Button>
-                              </>
-                            )}
-                            {app.status === 'shortlisted' && (
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleUpdateStatus(app.id, 'hired')}>Hire</Button>
-                            )}
-                            {(app.status === 'shortlisted' || app.status === 'hired') && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5"
-                                onClick={() => {
-                                  setMessageAppId(app.id);
-                                  setMessageAppName(app.trainer.name);
-                                }}
-                              >
-                                <MessageSquare className="h-3.5 w-3.5" />
-                                Message
-                              </Button>
-                            )}
-                            {app.status === 'hired' && isVendorOwner && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5"
-                                onClick={() => {
-                                  setReviewTrainerId(app.trainer.id);
-                                  setReviewTrainerName(app.trainer.name);
-                                }}
-                              >
-                                <Star className="h-3.5 w-3.5" />
-                                Review
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+          {isVendorOwner && (() => {
+            const STATUS_TABS = ["all", "submitted", "shortlisted", "hired", "completed", "rejected", "withdrawn"] as const;
+            const STATUS_COLORS: Record<string, string> = {
+              submitted: "text-blue-600 bg-blue-50 border-blue-200",
+              shortlisted: "text-amber-600 bg-amber-50 border-amber-200",
+              hired: "text-green-600 bg-green-50 border-green-200",
+              completed: "text-teal-600 bg-teal-50 border-teal-200",
+              rejected: "text-red-600 bg-red-50 border-red-200",
+              withdrawn: "text-orange-600 bg-orange-50 border-orange-200",
+            };
+            const allApps = applications ?? [];
+            const nameFiltered = appSearch.trim()
+              ? allApps.filter(a => a.trainer.name.toLowerCase().includes(appSearch.trim().toLowerCase()))
+              : allApps;
+            const counts = STATUS_TABS.reduce<Record<string, number>>((acc, s) => {
+              acc[s] = s === "all" ? nameFiltered.length : nameFiltered.filter(a => a.status === s).length;
+              return acc;
+            }, {});
+            const filtered = appStatusFilter === "all" ? nameFiltered : nameFiltered.filter(a => a.status === appStatusFilter);
+            const totalPages = Math.ceil(filtered.length / APP_PAGE_SIZE);
+            const pageApps = filtered.slice(appPage * APP_PAGE_SIZE, (appPage + 1) * APP_PAGE_SIZE);
+            const hasWithdrawn = allApps.some(a => a.status === "withdrawn");
+
+            return (
+              <div className="space-y-3">
+                {hasWithdrawn && requirement.status !== "open" && (
+                  <div className="flex items-start gap-3 rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-800 px-4 py-3 text-sm text-orange-800 dark:text-orange-300">
+                    <RotateCcw className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-medium">A trainer has withdrawn their application.</p>
+                      <p className="mt-0.5 text-orange-700/80 dark:text-orange-400/80">You may want to reopen this requirement to find a replacement.</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-orange-300 text-orange-700 hover:bg-orange-100 hover:border-orange-400"
+                      disabled={updateReqMutation.isPending}
+                      onClick={() => handleUpdateReqStatus("open")}
+                    >
+                      Reopen
+                    </Button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="text-2xl font-bold">Applications ({requirement.applicationCount})</h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(() => {
+                      const hasHired = allApps.some(a => a.status === "hired");
+                      const remainingCount = allApps.filter(a => a.status === "submitted" || a.status === "shortlisted").length;
+                      if (!hasHired || remainingCount === 0) return null;
+                      return (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                            onClick={() => setIsBulkRejectOpen(true)}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Reject remaining ({remainingCount})
+                          </Button>
+                          <Dialog open={isBulkRejectOpen} onOpenChange={setIsBulkRejectOpen}>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Reject remaining applicants?</DialogTitle>
+                                <DialogDescription>
+                                  This will reject all <strong>{remainingCount}</strong> submitted or shortlisted applicant{remainingCount === 1 ? "" : "s"} for this requirement. Each trainer will receive an email notification. This cannot be undone.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="flex justify-end gap-2 pt-2">
+                                <Button variant="outline" onClick={() => setIsBulkRejectOpen(false)}>Cancel</Button>
+                                <Button
+                                  variant="destructive"
+                                  disabled={bulkRejectMutation.isPending}
+                                  onClick={() => {
+                                    bulkRejectMutation.mutate(
+                                      { id },
+                                      {
+                                        onSuccess: (result) => {
+                                          toast({ title: "Done", description: `${result.rejectedCount} applicant${result.rejectedCount === 1 ? "" : "s"} rejected.` });
+                                          setIsBulkRejectOpen(false);
+                                          queryClient.invalidateQueries({ queryKey: getListRequirementApplicationsQueryKey(id) });
+                                          queryClient.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+                                        },
+                                        onError: () => {
+                                          toast({ title: "Error", description: "Failed to reject applicants.", variant: "destructive" });
+                                        },
+                                      }
+                                    );
+                                  }}
+                                >
+                                  {bulkRejectMutation.isPending ? "Rejecting…" : `Yes, reject ${remainingCount}`}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </>
+                      );
+                    })()}
+                    <div className="w-full sm:w-64">
+                      <Input
+                        placeholder="Search by trainer name..."
+                        value={appSearch}
+                        onChange={(e) => { setAppSearch(e.target.value); setAppPage(0); }}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {appsLoading ? (
+                  <Skeleton className="h-32 w-full" />
+                ) : allApps.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-12 text-center text-muted-foreground">
+                      No applications yet.
                     </CardContent>
                   </Card>
-                ))
-              ) : (
-                <Card>
-                  <CardContent className="p-12 text-center text-muted-foreground">
-                    No applications yet.
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
+                ) : (
+                  <>
+                    <Tabs value={appStatusFilter} onValueChange={(v) => { setAppStatusFilter(v); setAppPage(0); }}>
+                      <TabsList className="flex-wrap h-auto gap-1 bg-muted/50 p-1">
+                        {STATUS_TABS.map(s => (
+                          <TabsTrigger key={s} value={s} className="capitalize text-xs gap-1.5">
+                            {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                            <span className="bg-background/70 text-muted-foreground rounded-full px-1.5 py-0 text-[10px] font-medium leading-4">
+                              {counts[s]}
+                            </span>
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+
+                    {justCompletedTrainerId && (
+                      <div className="flex items-center gap-3 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-950/30 dark:border-teal-800 px-4 py-3 text-sm">
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-teal-800 dark:text-teal-300">Training marked as completed!</p>
+                          <p className="text-teal-700/80 dark:text-teal-400/80 mt-0.5">How did {justCompletedTrainerName} perform? A review helps other vendors make informed decisions.</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white"
+                          onClick={() => {
+                            setReviewTrainerId(justCompletedTrainerId);
+                            setReviewTrainerName(justCompletedTrainerName);
+                            setJustCompletedTrainerId(null);
+                          }}
+                        >
+                          Leave a review
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="shrink-0 text-teal-700 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/40"
+                          onClick={() => setJustCompletedTrainerId(null)}
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                    )}
+
+                    <Card>
+                      <div className="divide-y divide-border">
+                        {pageApps.length === 0 ? (
+                          <div className="p-8 text-center text-sm text-muted-foreground">No {appStatusFilter} applications.</div>
+                        ) : pageApps.map((app) => (
+                          <div key={app.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
+                            <TrainerAvatar name={app.trainer.name} avatarUrl={app.trainer.avatarUrl} className="h-9 w-9 shrink-0" fallbackClassName="text-xs" />
+
+                            <div className="flex-1 min-w-0">
+                              <Link href={`/trainers/${app.trainer.id}`} className="font-medium text-sm hover:underline leading-tight line-clamp-1">
+                                {app.trainer.name}
+                              </Link>
+                              <p className="text-xs text-muted-foreground line-clamp-1">{app.trainer.headline}</p>
+                            </div>
+
+                            <div className="hidden sm:flex items-center gap-1 shrink-0">
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 gap-1 text-xs text-muted-foreground hover:text-foreground">
+                                    <Eye className="h-3.5 w-3.5" />
+                                    Note
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent side="left" className="w-72 p-3 text-sm text-muted-foreground italic">
+                                  "{app.message}"
+                                  {app.proposedRate != null && (
+                                    <p className="mt-2 not-italic text-xs font-medium text-foreground">Rate: ₹{app.proposedRate}</p>
+                                  )}
+                                  {app.status === "withdrawn" && (app as any).withdrawnReason && (
+                                    <p className="mt-2 not-italic text-xs text-orange-600">
+                                      <span className="font-medium">Withdrawal reason:</span> {(app as any).withdrawnReason}
+                                    </p>
+                                  )}
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+
+                            <Badge variant="outline" className={`capitalize text-xs shrink-0 hidden xs:inline-flex ${STATUS_COLORS[app.status] ?? ""}`}>
+                              {app.status}
+                            </Badge>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                title={app.vendorNote ? "Edit note" : "Add note"}
+                                onClick={() => {
+                                  setNoteAppId(app.id);
+                                  setNoteDraft(app.vendorNote ?? "");
+                                }}
+                              >
+                                <StickyNote className={`h-3.5 w-3.5 ${app.vendorNote ? "text-amber-500 fill-amber-200" : "text-muted-foreground"}`} />
+                              </Button>
+                              {app.status === "submitted" && (
+                                <>
+                                  <Button size="sm" className="h-7 px-2 text-xs" onClick={() => handleUpdateStatus(app.id, "shortlisted")}>Shortlist</Button>
+                                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-destructive hover:text-destructive" onClick={() => handleUpdateStatus(app.id, "rejected")}>Reject</Button>
+                                </>
+                              )}
+                              {app.status === "shortlisted" && (
+                                <Button size="sm" className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700" onClick={() => handleUpdateStatus(app.id, "hired")}>Hire</Button>
+                              )}
+                              {(app.status === "shortlisted" || app.status === "hired") && (
+                                <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => { setMessageAppId(app.id); setMessageAppName(app.trainer.name); }}>
+                                  <MessageSquare className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              {app.status === "hired" && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-xs gap-1 text-teal-700 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700 dark:hover:bg-teal-950/40"
+                                    onClick={() => setCompletingAppId(app.id)}
+                                  >
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Complete
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => { setReviewTrainerId(app.trainer.id); setReviewTrainerName(app.trainer.name); }}>
+                                    <Star className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+
+                    {(() => {
+                      const hiredApps = allApps.filter(a => a.status === 'hired' || a.status === 'completed');
+                      if (hiredApps.length === 0) return null;
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 mt-2">
+                            <Handshake className="h-4 w-4 text-primary" />
+                            <h3 className="font-semibold text-sm">Engagement Agreements</h3>
+                          </div>
+                          {hiredApps.map(app => (
+                            <div key={`ag-${app.id}`}>
+                              <p className="text-xs text-muted-foreground mb-1">With {app.trainer.name}</p>
+                              <AgreementSection applicationId={app.id} role="vendor" />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between text-sm text-muted-foreground px-1">
+                        <span>
+                          {appPage * APP_PAGE_SIZE + 1}–{Math.min((appPage + 1) * APP_PAGE_SIZE, filtered.length)} of {filtered.length}
+                        </span>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="outline" className="h-7 w-7 p-0" disabled={appPage === 0} onClick={() => setAppPage(p => p - 1)}>
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-7 w-7 p-0" disabled={appPage >= totalPages - 1} onClick={() => setAppPage(p => p + 1)}>
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="space-y-6">
@@ -633,20 +1077,108 @@ export default function RequirementDetail() {
                   <AvatarFallback className="rounded-md"><Building /></AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-semibold">{requirement.vendor.companyName}</h3>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="font-semibold">{requirement.vendor.companyName}</h3>
+                    {requirement.vendorVerified && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center text-primary cursor-default">
+                            <ShieldCheck className="h-4 w-4" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>This company is verified by Trainers Hive</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground">{requirement.vendor.industry}</p>
                 </div>
               </div>
-              {requirement.vendor.about && (
-                <p className="text-sm text-muted-foreground">{requirement.vendor.about}</p>
-              )}
+              {requirement.vendor.about && (() => {
+                const full = requirement.vendor.about;
+                const needsTruncation = full.length > DESC_LIMIT;
+                const shown = needsTruncation && !vendorAboutExpanded ? full.slice(0, DESC_LIMIT).trimEnd() + "…" : full;
+                return (
+                  <div>
+                    <p className="text-sm text-muted-foreground">{shown}</p>
+                    {needsTruncation && (
+                      <button
+                        type="button"
+                        onClick={() => setVendorAboutExpanded((v) => !v)}
+                        className="mt-2 flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        {vendorAboutExpanded ? (
+                          <><ChevronUp className="h-4 w-4" /> Show less</>
+                        ) : (
+                          <><ChevronDown className="h-4 w-4" /> Read more</>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="space-y-2 text-sm pt-2 border-t">
-                <p><strong>Contact:</strong> {requirement.vendor.contactName}</p>
                 <p><strong>Role:</strong> {requirement.vendor.contactDesignation}</p>
                 <p><strong>Location:</strong> {requirement.vendor.location}</p>
               </div>
             </CardContent>
           </Card>
+
+          {isVendorOwner && (aiMatchesLoading || (aiMatches && aiMatches.length > 0)) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-violet-500" />
+                  AI Best Matches
+                </CardTitle>
+                <CardDescription>Top trainers ranked by AI for this requirement</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {aiMatchesLoading && (
+                  <div className="space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-3.5 w-28" />
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-3 w-full" />
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground text-center pt-1">AI is analysing trainer profiles…</p>
+                  </div>
+                )}
+                {aiMatches && aiMatches.length > 0 && aiMatches.map((match, idx) => (
+                  <div key={match.trainerId} className="flex items-start gap-3 group">
+                    <div className="relative shrink-0">
+                      <TrainerAvatar name={match.name} avatarUrl={match.avatarUrl} className="h-9 w-9" />
+                      <span className="absolute -top-1 -left-1 bg-violet-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                        {idx + 1}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{match.name}</p>
+                        {match.verified && <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                        <span className="text-xs font-medium text-amber-600 ml-auto shrink-0">★ {match.rating.toFixed(1)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {match.mainSkill}
+                        {match.experienceYears > 0 ? ` · ${match.experienceYears}y exp` : ""}
+                        {match.location ? ` · ${match.location}` : ""}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 italic">"{match.reason}"</p>
+                    </div>
+                    <Link href={`/trainers/${match.trainerId}`} className="shrink-0 self-start pt-1">
+                      <Button variant="outline" size="sm" className="h-7 text-xs px-2 gap-1">
+                        View Profile <ArrowRight className="h-3 w-3" />
+                      </Button>
+                    </Link>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {isVendorOrAdmin && (suggestedLoading || (suggestedTrainers && suggestedTrainers.length > 0)) && (
             <Card>
@@ -668,10 +1200,7 @@ export default function RequirementDetail() {
                 ) : (
                   suggestedTrainers?.map((trainer) => (
                     <div key={trainer.id} className="flex items-center gap-3 group">
-                      <Avatar className="h-9 w-9 shrink-0">
-                        <AvatarImage src={trainer.avatarUrl} />
-                        <AvatarFallback>{trainer.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
+                      <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-9 w-9 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{trainer.name}</p>
                         <p className="text-xs text-muted-foreground truncate">{trainer.mainSkill}</p>
@@ -692,6 +1221,160 @@ export default function RequirementDetail() {
           )}
         </div>
       </div>
+
+      {/* Mark Completed confirmation dialog */}
+      <Dialog open={!!completingAppId} onOpenChange={(open) => { if (!open) setCompletingAppId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark training as completed?</DialogTitle>
+            <DialogDescription>
+              This will record the engagement as complete, close the requirement, and update the trainer's completed training count. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2 my-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div>
+              Please confirm the engagement agreement with this trainer is signed by both parties before marking complete.
+              You can review or sign it in the <strong>Engagement Agreements</strong> section above.
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setCompletingAppId(null)}>Cancel</Button>
+            <Button
+              disabled={completeMutation.isPending}
+              onClick={() => {
+                if (!completingAppId) return;
+                const app = applications?.find(a => a.id === completingAppId);
+                completeMutation.mutate(
+                  { id: completingAppId },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Training completed", description: "The requirement has been closed." });
+                      const trainerName = app?.trainer.name ?? "";
+                      const trainerId = app?.trainer.id ?? "";
+                      setCompletingAppId(null);
+                      if (trainerId) {
+                        setJustCompletedTrainerId(trainerId);
+                        setJustCompletedTrainerName(trainerName);
+                      }
+                      queryClient.invalidateQueries({ queryKey: getListRequirementApplicationsQueryKey(id) });
+                      queryClient.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+                      queryClient.invalidateQueries({ queryKey: getListRequirementsQueryKey() });
+                      if (trainerId) {
+                        queryClient.invalidateQueries({ queryKey: getGetTrainerQueryKey(trainerId) });
+                      }
+                    },
+                    onError: () => {
+                      toast({ title: "Error", description: "Could not mark as completed.", variant: "destructive" });
+                      setCompletingAppId(null);
+                    },
+                  }
+                );
+              }}
+            >
+              {completeMutation.isPending ? "Completing…" : "Yes, mark completed"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Trainer withdraw dialog */}
+      <Dialog open={isWithdrawOpen} onOpenChange={(open) => { if (!open) setIsWithdrawOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw your application?</DialogTitle>
+            <DialogDescription>
+              This will notify the vendor. If you were already hired, they will be alerted immediately. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Label htmlFor="rd-withdraw-reason">Reason <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+            <Textarea
+              id="rd-withdraw-reason"
+              placeholder="e.g. Schedule conflict, personal reasons…"
+              rows={3}
+              value={withdrawReason}
+              onChange={(e) => setWithdrawReason(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setIsWithdrawOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={withdrawMutation.isPending}
+              onClick={() => {
+                if (!myApplication) return;
+                withdrawMutation.mutate(
+                  { id: myApplication.id, data: { reason: withdrawReason.trim() || undefined } },
+                  {
+                    onSuccess: () => {
+                      setIsWithdrawOpen(false);
+                      toast({ title: "Application withdrawn" });
+                      queryClient.invalidateQueries({ queryKey: getListMyApplicationsQueryKey() });
+                    },
+                    onError: () => {
+                      setIsWithdrawOpen(false);
+                      toast({ title: "Error", description: "Could not withdraw application.", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+            >
+              {withdrawMutation.isPending ? "Withdrawing…" : "Yes, withdraw"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Vendor note dialog */}
+      <Dialog open={!!noteAppId} onOpenChange={(open) => { if (!open) setNoteAppId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <StickyNote className="h-4 w-4 text-amber-500" />
+              Private Note
+            </DialogTitle>
+            <DialogDescription>
+              Only you can see this note. It persists across sessions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Textarea
+              placeholder="e.g. Strong React background, budget too high…"
+              rows={4}
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              disabled={updateNoteMutation.isPending}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setNoteAppId(null)} disabled={updateNoteMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              disabled={updateNoteMutation.isPending}
+              onClick={() => {
+                if (!noteAppId) return;
+                updateNoteMutation.mutate(
+                  { id: noteAppId, data: { note: noteDraft } },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "Note saved" });
+                      setNoteAppId(null);
+                      queryClient.invalidateQueries({ queryKey: getListRequirementApplicationsQueryKey(id) });
+                    },
+                    onError: () => {
+                      toast({ title: "Error", description: "Could not save note.", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+            >
+              {updateNoteMutation.isPending ? "Saving…" : "Save Note"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {messageAppId && user?.id && (
         <MessageThread

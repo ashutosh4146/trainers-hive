@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { db, requirementsTable } from "@workspace/db";
+import { eq, desc, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -96,6 +98,19 @@ const SKILLS = [
 
 router.get("/skills", (_req, res) => {
   res.json(SKILLS);
+});
+
+router.get("/skills/demand", async (_req, res) => {
+  const rows = await db
+    .select({
+      skill: requirementsTable.skill,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(requirementsTable)
+    .where(eq(requirementsTable.status, "open"))
+    .groupBy(requirementsTable.skill)
+    .orderBy(desc(sql`COUNT(*)`));
+  res.json(rows);
 });
 
 export default router;

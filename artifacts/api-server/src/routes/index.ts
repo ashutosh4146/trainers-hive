@@ -11,6 +11,8 @@ import authRouter from "./auth";
 import hireInquiriesRouter from "./hire-inquiries";
 import verificationRequestsRouter from "./verification-requests";
 import adminUsersRouter from "./admin-users";
+import adminExportsRouter from "./admin-exports";
+import engagementAgreementsRouter from "./engagement-agreements";
 
 const router: IRouter = Router();
 
@@ -26,5 +28,7 @@ router.use(statsRouter);
 router.use(hireInquiriesRouter);
 router.use(verificationRequestsRouter);
 router.use(adminUsersRouter);
+router.use(adminExportsRouter);
+router.use(engagementAgreementsRouter);
 
 export default router;

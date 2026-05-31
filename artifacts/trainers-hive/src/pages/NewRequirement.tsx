@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -69,6 +70,30 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { SubSkillTagInput } from "@/components/SubSkillTagInput";
 import { SkillCombobox } from "@/components/SkillCombobox";
+import { SuggestionInput } from "@/components/SuggestionInput";
+
+const INDIAN_STATES = [
+  "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh",
+  "Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka",
+  "Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram",
+  "Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana",
+  "Tripura","Uttar Pradesh","Uttarakhand","West Bengal",
+  "Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry",
+];
+
+const INDIAN_CITIES = [
+  "Agra","Ahmedabad","Ajmer","Aligarh","Allahabad","Ambala","Amritsar",
+  "Aurangabad","Bangalore","Bareilly","Bhopal","Bhubaneswar","Chandigarh",
+  "Chennai","Coimbatore","Dehradun","Delhi","Dhanbad","Faridabad",
+  "Ghaziabad","Gurgaon","Guwahati","Gwalior","Hyderabad","Indore",
+  "Jabalpur","Jaipur","Jalandhar","Jammu","Jamshedpur","Jodhpur",
+  "Kanpur","Kochi","Kolkata","Kozhikode","Lucknow","Ludhiana","Madurai",
+  "Mangalore","Meerut","Mumbai","Mysore","Nagpur","Nashik","Navi Mumbai",
+  "Noida","Patna","Pune","Raipur","Rajkot","Ranchi","Srinagar","Surat",
+  "Thane","Thiruvananthapuram","Udaipur","Vadodara","Varanasi","Vijayawada",
+  "Visakhapatnam","Warangal",
+];
 
 const TRAINING_TYPES = [
   { value: "technical", label: "Technical / IT" },
@@ -92,10 +117,14 @@ const requirementSchema = z.object({
   skill: z.string().min(1, "Please select a primary skill"),
   subSkills: z.string(),
   trainingType: z.string().min(1, "Please select a training type"),
+  audienceType: z.enum(["freshers", "lateral", "both"], {
+    required_error: "Please select an audience type",
+  }),
   trainingMode: z.enum(["remote", "in-person", "hybrid"], {
     required_error: "Please select a delivery mode",
   }),
-  location: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
   trainerCount: z.coerce.number().min(1, "At least 1 trainer required"),
   trainerType: z.enum(["part-time", "full-time", "mentor"], {
     required_error: "Please select an engagement type",
@@ -120,6 +149,10 @@ const requirementSchema = z.object({
     }),
   certifications: z.string().optional(),
   language: z.string().optional(),
+  isUrgent: z.boolean().default(false),
+  isFeatured: z.boolean().default(false),
+  isPrivate: z.boolean().default(false),
+  hireThroughUs: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof requirementSchema>;
@@ -223,8 +256,10 @@ export default function NewRequirement() {
       skill: "",
       subSkills: "",
       trainingType: "",
+      audienceType: undefined,
       trainingMode: undefined,
-      location: "",
+      city: "",
+      state: "",
       trainerCount: 1,
       trainerType: undefined,
       trainerScope: undefined,
@@ -238,6 +273,10 @@ export default function NewRequirement() {
       description: "",
       certifications: "",
       language: "",
+      isUrgent: false,
+      isFeatured: false,
+      isPrivate: false,
+      hireThroughUs: false,
     },
   });
 
@@ -259,7 +298,8 @@ export default function NewRequirement() {
       trainingMode:
         ((template as any).trainingMode as FormValues["trainingMode"]) ??
         (template.remote ? "remote" : "in-person"),
-      location: template.location ?? "",
+      city: template.location ? template.location.split(",")[0]?.trim() ?? "" : "",
+      state: template.location ? template.location.split(",").slice(1).join(",").trim() ?? "" : "",
       trainerCount: (template as any).trainerCount ?? 1,
       trainerType:
         ((template as any).trainerType as FormValues["trainerType"]) ??
@@ -296,13 +336,15 @@ export default function NewRequirement() {
 
     createRequirement.mutate(
       {
-        data: {
+        data: ({
           title: data.title,
           skill: data.skill,
           subSkills: subSkillsArray,
           trainingType: data.trainingType,
+          // audienceType is not yet in the OpenAPI spec; passed through as an extra field.
+          audienceType: data.audienceType,
           trainingMode: data.trainingMode,
-          location: data.location || undefined,
+          location: [data.city, data.state].filter(Boolean).join(", ") || undefined,
           trainerCount: data.trainerCount,
           trainerType: data.trainerType,
           trainerScope: data.trainerScope,
@@ -316,7 +358,11 @@ export default function NewRequirement() {
           description: data.description,
           certifications: data.certifications || undefined,
           language: data.language || undefined,
-        },
+          isUrgent: data.isUrgent,
+          isFeatured: data.isFeatured,
+          isPrivate: data.isPrivate,
+          hireThroughUs: data.hireThroughUs,
+        } as any),
       },
       {
         onSuccess: (newReq) => {
@@ -472,6 +518,40 @@ export default function NewRequirement() {
 
                 <FormField
                   control={form.control}
+                  name="audienceType"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Audience Type</FormLabel>
+                      <div className="grid grid-cols-3 gap-3 mt-1">
+                        <IconCard
+                          selected={field.value === "freshers"}
+                          onClick={() => field.onChange("freshers")}
+                          icon={<Users />}
+                          label="Freshers"
+                          sub="0–1 yrs experience"
+                        />
+                        <IconCard
+                          selected={field.value === "lateral"}
+                          onClick={() => field.onChange("lateral")}
+                          icon={<Briefcase />}
+                          label="Lateral"
+                          sub="Experienced hires"
+                        />
+                        <IconCard
+                          selected={field.value === "both"}
+                          onClick={() => field.onChange("both")}
+                          icon={<LayoutGrid />}
+                          label="Both"
+                          sub="Mixed audience"
+                        />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="skill"
                   render={({ field }) => (
                     <FormItem>
@@ -560,22 +640,46 @@ export default function NewRequirement() {
               />
 
               {(trainingMode === "in-person" || trainingMode === "hybrid") && (
-                <FormField
-                  control={form.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Training Location / City</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. Mumbai, Maharashtra"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <SuggestionInput
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            suggestions={INDIAN_CITIES}
+                            placeholder="e.g. Mumbai"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <FormControl>
+                          <SuggestionInput
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            suggestions={INDIAN_STATES}
+                            placeholder="e.g. Maharashtra"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               )}
             </CardContent>
           </Card>
@@ -827,7 +931,6 @@ export default function NewRequirement() {
                       <FormControl>
                         <Input type="date" {...field} />
                       </FormControl>
-                      <FormDescription>Optional</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -978,6 +1081,67 @@ export default function NewRequirement() {
                   )}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* ── SECTION: Post Options ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">6</Badge>
+                Post Options
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Choose how to feature this requirement.</p>
+            </CardHeader>
+            <CardContent className="divide-y px-6 pb-2">
+              {(
+                [
+                  {
+                    name: "isUrgent" as const,
+                    label: "URGENT",
+                    labelClass: "bg-red-500 text-white text-xs font-bold px-3 py-0.5 rounded-full",
+                    desc: "Make your requirement stand out and let trainers know the need is time-sensitive.",
+                  },
+                  {
+                    name: "isFeatured" as const,
+                    label: "FEATURED",
+                    labelClass: "bg-orange-500 text-white text-xs font-bold px-3 py-0.5 rounded-full",
+                    desc: "Attract more trainers with a prominent placement at the top of the listings page.",
+                  },
+                  {
+                    name: "isPrivate" as const,
+                    label: "PRIVATE",
+                    labelClass: "bg-yellow-500 text-white text-xs font-bold px-3 py-0.5 rounded-full",
+                    desc: "Hide this requirement from users who are not logged in — keep it confidential.",
+                  },
+                  {
+                    name: "hireThroughUs" as const,
+                    label: "HIRE THROUGH US",
+                    labelClass: "bg-teal-600 text-white text-xs font-bold px-3 py-0.5 rounded-full",
+                    desc: "Let the Trainers Hive team manage shortlisting and outreach on your behalf.",
+                  },
+                ] as const
+              ).map((opt) => (
+                <FormField
+                  key={opt.name}
+                  control={form.control}
+                  name={opt.name}
+                  render={({ field }) => (
+                    <div className="flex items-start gap-4 py-4">
+                      <Checkbox
+                        id={opt.name}
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        className="mt-0.5"
+                      />
+                      <label htmlFor={opt.name} className="flex-1 cursor-pointer space-y-1">
+                        <span className={opt.labelClass}>{opt.label}</span>
+                        <p className="text-sm text-muted-foreground">{opt.desc}</p>
+                      </label>
+                    </div>
+                  )}
+                />
+              ))}
             </CardContent>
           </Card>
 

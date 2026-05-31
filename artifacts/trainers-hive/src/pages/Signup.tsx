@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-import { Activity, Building2, GraduationCap, Users, Mail, ArrowLeft } from "lucide-react";
+import { Activity, Building2, Users, Mail, ArrowLeft, GraduationCap, Briefcase } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,29 @@ import {
 import { cn } from "@/lib/utils";
 import { sendEmailSignInLink, savePendingAuth, signInWithGoogle } from "@/lib/firebase";
 
+type OrgType = "corporate" | "college" | "educational";
+
+const ORG_TYPES: { id: OrgType; label: string; subtitle: string; icon: React.ReactNode }[] = [
+  {
+    id: "corporate",
+    label: "Corporate Company",
+    subtitle: "Business or enterprise",
+    icon: <Briefcase className="h-5 w-5" />,
+  },
+  {
+    id: "college",
+    label: "College / University",
+    subtitle: "Higher education institution",
+    icon: <GraduationCap className="h-5 w-5" />,
+  },
+  {
+    id: "educational",
+    label: "Educational Institute",
+    subtitle: "School, training centre, or institute",
+    icon: <GraduationCap className="h-5 w-5" />,
+  },
+];
+
 const ROLES: {
   id: UserRole;
   label: string;
@@ -36,17 +59,10 @@ const ROLES: {
   },
   {
     id: "vendor",
-    label: "Vendor",
-    subtitle: "My business needs trainers",
+    label: "Organisation",
+    subtitle: "My organisation needs trainers",
     icon: <Building2 className="h-7 w-7" />,
-    description: "Post training requirements and connect with verified trainers for your teams and employees.",
-  },
-  {
-    id: "college",
-    label: "College / Company",
-    subtitle: "Institution or corporate entity",
-    icon: <GraduationCap className="h-7 w-7" />,
-    description: "Find specialised trainers for your students, faculty, or employees. Business email required.",
+    description: "Post training requirements and connect with verified trainers — whether you're a company, college, or institute.",
   },
 ];
 
@@ -55,6 +71,7 @@ type View = "role" | "details" | "sent";
 export default function Signup() {
   const [view, setView] = useState<View>("role");
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [selectedOrgType, setSelectedOrgType] = useState<OrgType | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [orgName, setOrgName] = useState("");
@@ -83,8 +100,9 @@ export default function Signup() {
     } else if (selectedRole && roleRequiresBusinessEmail(selectedRole) && !isBusinessEmail(email)) {
       errs.email = "A business email address is required for this role. Personal addresses like Gmail or Yahoo are not accepted.";
     }
-    if (selectedRole && selectedRole !== "trainer" && !orgName.trim()) {
-      errs.orgName = "Organisation name is required.";
+    if (selectedRole === "vendor") {
+      if (!selectedOrgType) errs.orgType = "Please select your organisation type.";
+      if (!orgName.trim()) errs.orgName = "Organisation name is required.";
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -101,6 +119,7 @@ export default function Signup() {
         email: email.trim(),
         name: name.trim(),
         orgName: orgName.trim() || undefined,
+        orgType: selectedOrgType ?? undefined,
       });
       await sendEmailSignInLink(email.trim());
       setView("sent");
@@ -121,6 +140,7 @@ export default function Signup() {
         email: email.trim(),
         name: name.trim(),
         orgName: orgName.trim() || undefined,
+        orgType: selectedOrgType ?? undefined,
       });
       await sendEmailSignInLink(email.trim());
       toast({ title: "New link sent", description: "Check your inbox for a fresh sign-in link." });
@@ -143,6 +163,7 @@ export default function Signup() {
             name: user.displayName || user.email?.split("@")[0] || "User",
             email: user.email || "",
             orgName: orgName.trim() || undefined,
+            orgType: selectedOrgType ?? undefined,
           },
         },
         {
@@ -153,6 +174,7 @@ export default function Signup() {
               name: user.displayName || user.email?.split("@")[0] || "User",
               email: user.email || "",
               role: selectedRole,
+              orgType: selectedOrgType ?? undefined,
             });
             toast({ title: "Account created!", description: `Welcome to Trainers Hive as a ${getRoleLabel(selectedRole)}.` });
             navigate("/dashboard");
@@ -275,11 +297,40 @@ export default function Signup() {
               <Card className="border-2">
                 <CardContent className="p-6">
                   <form onSubmit={handleDetailsContinue} className="space-y-5">
+
+                    {/* Organisation type selector — vendor only */}
+                    {selectedRole === "vendor" && (
+                      <div className="space-y-2">
+                        <Label>Organisation Type</Label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {ORG_TYPES.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => setSelectedOrgType(t.id)}
+                              className={cn(
+                                "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs font-medium transition-all text-center",
+                                selectedOrgType === t.id
+                                  ? "border-primary bg-primary/5 text-primary"
+                                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                              )}
+                            >
+                              {t.icon}
+                              <span>{t.label}</span>
+                              <span className="text-[10px] font-normal text-muted-foreground">{t.subtitle}</span>
+                            </button>
+                          ))}
+                        </div>
+                        {errors.orgType && <p className="text-sm text-destructive">{errors.orgType}</p>}
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <Label htmlFor="name">Full Name</Label>
                       <Input id="name" placeholder="e.g. Arav Mehta" value={name} onChange={(e) => setName(e.target.value)} />
                       {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
                     </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="email">
                         Email Address
@@ -296,25 +347,34 @@ export default function Signup() {
                       />
                       {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                     </div>
-                    {selectedRole !== "trainer" && (
+
+                    {selectedRole === "vendor" && (
                       <div className="space-y-2">
                         <Label htmlFor="orgName">
-                          {selectedRole === "college" ? "Institution / Company Name" : "Company Name"}
+                          {selectedOrgType === "college" || selectedOrgType === "educational"
+                            ? "Institution Name"
+                            : "Company / Organisation Name"}
                         </Label>
                         <Input
                           id="orgName"
-                          placeholder={selectedRole === "college" ? "e.g. MIT Bengaluru" : "e.g. Northwind Corp"}
+                          placeholder={
+                            selectedOrgType === "college" ? "e.g. MIT Bengaluru" :
+                            selectedOrgType === "educational" ? "e.g. Apex Training Centre" :
+                            "e.g. Northwind Corp"
+                          }
                           value={orgName}
                           onChange={(e) => setOrgName(e.target.value)}
                         />
                         {errors.orgName && <p className="text-sm text-destructive">{errors.orgName}</p>}
                       </div>
                     )}
+
                     {roleRequiresBusinessEmail(selectedRole) && (
                       <div className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground border">
                         Business email only. Personal email domains (Gmail, Yahoo, Outlook, etc.) are not accepted for this role.
                       </div>
                     )}
+
                     <div className="flex flex-col gap-3 pt-1">
                       <Button type="submit" size="lg" className="w-full gap-2" disabled={isSending || isGoogleLoading}>
                         <Mail className="h-4 w-4" />

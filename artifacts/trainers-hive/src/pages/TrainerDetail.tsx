@@ -11,26 +11,127 @@ import {
   useListSavedTrainers,
   useSaveTrainer,
   useUnsaveTrainer,
+  useListRequirements,
+  useListTrainerEndorsements,
+  useCreateTrainerEndorsement,
+  useUpdateTrainerEndorsement,
+  useDeleteTrainerEndorsement,
   getGetTrainerQueryKey,
   getListTrainerReviewsQueryKey,
   getListTrainersQueryKey,
   getListSavedTrainersQueryKey,
+  getListRequirementsQueryKey,
+  getListTrainerEndorsementsQueryKey,
 } from "@workspace/api-client-react";
 import { AdminRemoveButton } from "@/components/AdminRemoveButton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TrainerAvatar } from "@/components/TrainerAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2, CalendarDays, Bookmark, Code2, UserCog, FileText } from "lucide-react";
+import { Star, MapPin, Briefcase, Award, Languages, GraduationCap, Clock, MessageSquare, CheckCircle2, ShieldCheck, Loader2, CalendarDays, Bookmark, Code2, UserCog, FileText, Send, ThumbsUp, Pencil, Trash2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDistanceToNow, format } from "date-fns";
 
 type EngagedRange = { startDate: string; endDate: string; note?: string };
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+function AvailabilityCalendar({ engagedDates }: { engagedDates: EngagedRange[] }) {
+  const today = new Date();
+  const months: { year: number; month: number }[] = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth() });
+  }
+
+  function isEngaged(dateStr: string): boolean {
+    for (const r of engagedDates) {
+      const s = r.startDate.slice(0, 10);
+      const e = r.endDate.slice(0, 10);
+      if (dateStr >= s && dateStr <= e) return true;
+    }
+    return false;
+  }
+
+  if (!engagedDates || engagedDates.length === 0) {
+    return (
+      <section className="space-y-4">
+        <h3 className="text-xl font-semibold flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-muted-foreground" /> Availability
+        </h3>
+        <p className="text-sm text-muted-foreground">No booked dates — fully available over the next 3 months.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      <h3 className="text-xl font-semibold flex items-center gap-2">
+        <CalendarDays className="h-5 w-5 text-muted-foreground" /> Availability
+      </h3>
+      <div className="flex gap-4 text-xs text-muted-foreground mb-2">
+        <div className="flex items-center gap-1.5">
+          <div className="h-3 w-3 rounded bg-muted border border-border" />
+          Available
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-3 w-3 rounded bg-destructive/20 border border-destructive/40" />
+          Engaged
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {months.map(({ year, month }) => {
+          const firstDay = new Date(year, month, 1).getDay();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const cells: (number | null)[] = Array(firstDay).fill(null);
+          for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+          while (cells.length % 7 !== 0) cells.push(null);
+          return (
+            <div key={`${year}-${month}`} className="space-y-2">
+              <p className="text-xs font-semibold text-center text-muted-foreground uppercase tracking-wide">
+                {MONTH_NAMES[month]} {year}
+              </p>
+              <div className="grid grid-cols-7 gap-px">
+                {DAY_NAMES.map(d => (
+                  <div key={d} className="text-[10px] font-medium text-muted-foreground text-center pb-1">{d}</div>
+                ))}
+                {cells.map((day, i) => {
+                  if (day === null) return <div key={i} />;
+                  const mm = String(month + 1).padStart(2, "0");
+                  const dd = String(day).padStart(2, "0");
+                  const dateStr = `${year}-${mm}-${dd}`;
+                  const engaged = isEngaged(dateStr);
+                  const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+                  return (
+                    <div
+                      key={i}
+                      className={`text-[11px] text-center rounded py-0.5 leading-5 ${
+                        engaged
+                          ? "bg-destructive/15 text-destructive font-medium"
+                          : "text-muted-foreground"
+                      } ${isToday ? "ring-1 ring-primary font-bold" : ""}`}
+                    >
+                      {day}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 export default function TrainerDetail() {
   const params = useParams<{ id: string }>();
@@ -45,6 +146,12 @@ export default function TrainerDetail() {
   const { data: reviews, isLoading: reviewsLoading } = useListTrainerReviews(id, {
     query: { enabled: !!id, queryKey: getListTrainerReviewsQueryKey(id) },
   });
+  const { data: endorsements, isLoading: endorsementsLoading } = useListTrainerEndorsements(id, {
+    query: { enabled: !!id, queryKey: getListTrainerEndorsementsQueryKey(id) },
+  });
+  const createEndorsement = useCreateTrainerEndorsement();
+  const updateEndorsement = useUpdateTrainerEndorsement();
+  const deleteEndorsement = useDeleteTrainerEndorsement();
 
   const createReview = useCreateTrainerReview();
 
@@ -68,6 +175,67 @@ export default function TrainerDetail() {
   const isSaved = savedTrainers?.some((s) => s.trainerId === id) ?? false;
   const saveTrainer = useSaveTrainer();
   const unsaveTrainer = useUnsaveTrainer();
+
+  const [endorseText, setEndorseText] = useState("");
+  const [endorseOpen, setEndorseOpen] = useState(false);
+  const [editingEndorseId, setEditingEndorseId] = useState<string | null>(null);
+  const [editEndorseText, setEditEndorseText] = useState("");
+
+  const myEndorsement = endorsements?.endorsements?.find((e) => e.vendorId === vendorId);
+  const canEndorse = endorsements?.canEndorse ?? false;
+
+  const handleSubmitEndorsement = () => {
+    if (!endorseText.trim()) return;
+    createEndorsement.mutate(
+      { id, data: { text: endorseText.trim() } },
+      {
+        onSuccess: () => {
+          toast({ title: "Endorsement added!" });
+          setEndorseText("");
+          setEndorseOpen(false);
+          queryClient.invalidateQueries({ queryKey: getListTrainerEndorsementsQueryKey(id) });
+        },
+        onError: (err) => {
+          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          toast({ title: "Could not add endorsement", description: msg ?? "Please try again.", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const handleUpdateEndorsement = (endorsementId: string) => {
+    if (!editEndorseText.trim()) return;
+    updateEndorsement.mutate(
+      { id, endorsementId, data: { text: editEndorseText.trim() } },
+      {
+        onSuccess: () => {
+          toast({ title: "Endorsement updated" });
+          setEditingEndorseId(null);
+          queryClient.invalidateQueries({ queryKey: getListTrainerEndorsementsQueryKey(id) });
+        },
+        onError: () => toast({ title: "Could not update endorsement", variant: "destructive" }),
+      }
+    );
+  };
+
+  const handleDeleteEndorsement = (endorsementId: string) => {
+    deleteEndorsement.mutate(
+      { id, endorsementId },
+      {
+        onSuccess: () => {
+          toast({ title: "Endorsement removed" });
+          queryClient.invalidateQueries({ queryKey: getListTrainerEndorsementsQueryKey(id) });
+        },
+        onError: () => toast({ title: "Could not remove endorsement", variant: "destructive" }),
+      }
+    );
+  };
+
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const { data: vendorRequirements } = useListRequirements(
+    { vendorId: vendorId ?? "", status: "open" },
+    { query: { enabled: !!vendorId && showInviteDialog, queryKey: getListRequirementsQueryKey({ vendorId: vendorId ?? "", status: "open" }) } },
+  );
 
   const handleToggleSave = () => {
     if (!vendorId) return;
@@ -96,7 +264,7 @@ export default function TrainerDetail() {
     }
   };
 
-  const [vreq, setVreq] = useState<{ id: string; status: string } | null | undefined>(undefined);
+  const [vreq, setVreq] = useState<{ id: string; status: string; adminNote?: string | null } | null | undefined>(undefined);
   const [isSubmittingVreq, setIsSubmittingVreq] = useState(false);
   const [vreqMessage, setVreqMessage] = useState("");
   const [showVreqForm, setShowVreqForm] = useState(false);
@@ -182,14 +350,52 @@ export default function TrainerDetail() {
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 max-w-5xl">
+      {/* Invite to Requirement dialog — vendor-only */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-primary" /> Invite {trainer.name.split(" ")[0]} to a Requirement
+            </DialogTitle>
+            <DialogDescription>
+              Select one of your open requirements. {trainer.name.split(" ")[0]} will be able to apply directly from the requirement page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-2 max-h-80 overflow-y-auto">
+            {!vendorRequirements ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading requirements…
+              </div>
+            ) : vendorRequirements.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-8">
+                You have no open requirements at the moment.{" "}
+                <Link href="/requirements/new" className="text-primary hover:underline">Post one now.</Link>
+              </div>
+            ) : (
+              vendorRequirements.map((req) => (
+                <button
+                  key={req.id}
+                  type="button"
+                  onClick={() => {
+                    setShowInviteDialog(false);
+                    navigate(`/requirements/${req.id}`);
+                  }}
+                  className="w-full text-left rounded-lg border px-4 py-3 hover:bg-accent transition-colors"
+                >
+                  <p className="font-medium text-sm leading-snug">{req.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{req.skill}{req.location ? ` · ${req.location}` : ""}</p>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Hero Section */}
       <Card className="overflow-hidden border-none shadow-md mb-8 bg-gradient-to-br from-card to-muted/20">
         <CardContent className="p-8 sm:p-10">
           <div className="flex flex-col md:flex-row gap-8 items-start md:items-center">
-            <Avatar className="h-32 w-32 border-4 border-background shadow-lg shrink-0">
-              <AvatarImage src={trainer.avatarUrl} alt={trainer.name} />
-              <AvatarFallback className="bg-primary/10 text-primary text-4xl">{trainer.name.charAt(0)}</AvatarFallback>
-            </Avatar>
+            <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-32 w-32 border-4 border-background shadow-lg shrink-0" fallbackClassName="text-4xl" />
             <div className="flex-1 min-w-0 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">{trainer.name}</h1>
@@ -210,11 +416,10 @@ export default function TrainerDetail() {
                   <Briefcase className="h-4 w-4" />
                   <span>{trainer.experienceYears}y Training</span>
                 </div>
-                {(trainer as typeof trainer & { developmentExperienceYears?: number }).developmentExperienceYears != null &&
-                  (trainer as typeof trainer & { developmentExperienceYears?: number }).developmentExperienceYears! > 0 && (
+                {trainer.developmentExperienceYears != null && trainer.developmentExperienceYears > 0 && (
                   <div className="flex items-center gap-2">
                     <Code2 className="h-4 w-4" />
-                    <span>{(trainer as typeof trainer & { developmentExperienceYears?: number }).developmentExperienceYears}y Development</span>
+                    <span>{trainer.developmentExperienceYears}y Development</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-amber-500 font-medium">
@@ -235,10 +440,6 @@ export default function TrainerDetail() {
               </div>
             </div>
             <div className="flex flex-col items-start md:items-end gap-4 shrink-0 md:pl-6 md:border-l md:border-border/50 self-stretch justify-center">
-              <div className="text-left md:text-right">
-                <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold mb-1">Hourly Rate</p>
-                <p className="text-3xl font-bold text-foreground">${trainer.hourlyRate}</p>
-              </div>
               {isTrainerSelf ? (
                 <>
                   <Link href="/profile" className="w-full md:w-auto">
@@ -272,6 +473,18 @@ export default function TrainerDetail() {
                           Apply for Verification
                         </Button>
                       )
+                    ) : vreq.status === "needs_info" ? (
+                      <div className="w-full space-y-2">
+                        <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 space-y-1">
+                          <p className="font-medium">Admin needs more info before verifying you.</p>
+                          {vreq.adminNote && <p className="italic">"{vreq.adminNote}"</p>}
+                        </div>
+                        <Link href="/profile" className="block">
+                          <Button variant="outline" size="sm" className="w-full gap-2 border-amber-300 text-amber-800 hover:bg-amber-50">
+                            Update &amp; resubmit
+                          </Button>
+                        </Link>
+                      </div>
                     ) : vreq.status === "pending" ? (
                       <div className="w-full text-center py-1.5 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm flex items-center justify-center gap-2">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -282,9 +495,6 @@ export default function TrainerDetail() {
                 </>
               ) : user?.role === "vendor" ? (
                 <div className="flex flex-col gap-2 w-full md:w-auto">
-                  <Link href="/requirements" className="w-full md:w-auto">
-                    <Button className="w-full md:w-auto">Invite to Requirement</Button>
-                  </Link>
                   <Button
                     variant="outline"
                     className={`w-full gap-2 ${isSaved ? "border-primary text-primary bg-primary/5" : ""}`}
@@ -293,6 +503,14 @@ export default function TrainerDetail() {
                   >
                     <Bookmark className={`h-4 w-4 ${isSaved ? "fill-primary" : ""}`} />
                     {isSaved ? "Saved" : "Save Trainer"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => setShowInviteDialog(true)}
+                  >
+                    <Send className="h-4 w-4" />
+                    Invite to Requirement
                   </Button>
                 </div>
               ) : null}
@@ -381,6 +599,8 @@ export default function TrainerDetail() {
                   </section>
                 )}
               </div>
+
+              <AvailabilityCalendar engagedDates={trainer.engagedDates ?? []} />
             </TabsContent>
 
             <TabsContent value="reviews" className="space-y-8 mt-0 focus-visible:outline-none">
@@ -526,7 +746,170 @@ export default function TrainerDetail() {
                 )}
               </div>
             </TabsContent>
+
           </Tabs>
+
+          {/* Endorsements section — below reviews, outside the tab panel */}
+          <section className="space-y-5">
+            <h3 className="text-xl font-semibold flex items-center gap-2">
+              <ThumbsUp className="h-5 w-5 text-muted-foreground" />
+              Endorsements
+              <span className="text-base font-normal text-muted-foreground">({endorsements?.endorsements?.length ?? 0})</span>
+            </h3>
+
+            {/* Vendor: eligible → collapsible write form; ineligible → disabled button with tooltip */}
+            {isVendor && !isTrainerSelf && !myEndorsement && (
+              canEndorse ? (
+                <Card className="bg-muted/30 border-dashed">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <ThumbsUp className="h-4 w-4 text-primary" /> Endorse {trainer.name.split(" ")[0]}
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Share a brief endorsement (max 300 characters).
+                    </CardDescription>
+                  </CardHeader>
+                  {endorseOpen ? (
+                    <CardContent className="space-y-3">
+                      <Textarea
+                        placeholder={`Write a short endorsement for ${trainer.name.split(" ")[0]}…`}
+                        rows={3}
+                        maxLength={300}
+                        value={endorseText}
+                        onChange={(e) => setEndorseText(e.target.value)}
+                        disabled={createEndorsement.isPending}
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">{endorseText.length}/300</span>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => { setEndorseOpen(false); setEndorseText(""); }}>Cancel</Button>
+                          <Button size="sm" onClick={handleSubmitEndorsement} disabled={!endorseText.trim() || createEndorsement.isPending}>
+                            {createEndorsement.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit"}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  ) : (
+                    <CardContent>
+                      <Button variant="outline" size="sm" onClick={() => setEndorseOpen(true)}>
+                        <ThumbsUp className="h-4 w-4 mr-2" /> Write an endorsement
+                      </Button>
+                    </CardContent>
+                  )}
+                </Card>
+              ) : (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-block">
+                        <Button variant="outline" size="sm" disabled>
+                          <ThumbsUp className="h-4 w-4 mr-2" /> Write an endorsement
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      You need a completed engagement with this trainer to endorse them.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            )}
+
+            {/* Vendor's own endorsement with edit/delete */}
+            {isVendor && myEndorsement && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-primary flex items-center gap-2">
+                    <ThumbsUp className="h-4 w-4" /> Your endorsement
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {editingEndorseId === myEndorsement.id ? (
+                    <>
+                      <Textarea
+                        rows={3}
+                        maxLength={300}
+                        value={editEndorseText}
+                        onChange={(e) => setEditEndorseText(e.target.value)}
+                        disabled={updateEndorsement.isPending}
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">{editEndorseText.length}/300</span>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setEditingEndorseId(null)}>Cancel</Button>
+                          <Button size="sm" onClick={() => handleUpdateEndorsement(myEndorsement.id)} disabled={!editEndorseText.trim() || updateEndorsement.isPending}>
+                            {updateEndorsement.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{myEndorsement.text}&rdquo;</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => { setEditingEndorseId(myEndorsement.id); setEditEndorseText(myEndorsement.text); }}>
+                          <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleDeleteEndorsement(myEndorsement.id)} disabled={deleteEndorsement.isPending}>
+                          <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* All endorsements list */}
+            <div className="space-y-4">
+              {endorsementsLoading ? (
+                Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="flex gap-4 p-4 rounded-xl border bg-card">
+                    <div className="h-10 w-10 rounded-full bg-muted animate-pulse shrink-0" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 w-1/4 bg-muted animate-pulse rounded" />
+                      <div className="h-12 w-full bg-muted animate-pulse rounded" />
+                    </div>
+                  </div>
+                ))
+              ) : endorsements?.endorsements && endorsements.endorsements.length > 0 ? (
+                endorsements.endorsements.map((endorsement, i) => (
+                  <motion.div
+                    key={endorsement.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.07 }}
+                    className="p-5 rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex gap-4">
+                      <Avatar className="h-10 w-10 border shrink-0">
+                        <AvatarImage src={endorsement.vendorLogoUrl} />
+                        <AvatarFallback className="bg-muted text-muted-foreground">{endorsement.vendorName.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{endorsement.vendorName}</span>
+                            <Badge variant="secondary" className="text-xs px-1.5 py-0 gap-1 bg-green-100 text-green-800 border-green-200">
+                              <ThumbsUp className="h-2.5 w-2.5" /> Endorsed
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground">{format(new Date(endorsement.createdAt), "MMMM yyyy")}</span>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{endorsement.text}&rdquo;</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="text-center py-12 border border-dashed rounded-xl bg-muted/20">
+                  <ThumbsUp className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+                  <h3 className="text-lg font-medium">No endorsements yet</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Vendors who have completed an engagement with this trainer can leave endorsements.</p>
+                </div>
+              )}
+            </div>
+          </section>
         </div>
 
         <div className="space-y-6">
@@ -554,7 +937,7 @@ export default function TrainerDetail() {
                 </div>
               </div>
               {(() => {
-                const trainerType = (trainer as typeof trainer & { trainerType?: string }).trainerType;
+                const trainerType = trainer.trainerType;
                 if (!trainerType) return null;
                 const labels: Record<string, string> = {
                   trainer: "Full-time Trainer",
@@ -574,7 +957,7 @@ export default function TrainerDetail() {
                 );
               })()}
               {(() => {
-                const engaged = ((trainer as { engagedDates?: EngagedRange[] }).engagedDates ?? [])
+                const engaged = (trainer.engagedDates ?? [])
                   .filter((r) => r?.endDate && r.endDate >= new Date().toISOString().slice(0, 10))
                   .sort((a, b) => a.startDate.localeCompare(b.startDate));
                 return (
@@ -626,13 +1009,13 @@ export default function TrainerDetail() {
               </CardContent>
             </Card>
           )}
-          {(trainer as typeof trainer & { resumeUrl?: string }).resumeUrl && (
+          {trainer.resumeUrl && (
             <Card>
               <CardContent className="p-6">
                 <button
                   type="button"
                   onClick={async () => {
-                    const resumeUrl = (trainer as typeof trainer & { resumeUrl?: string }).resumeUrl!;
+                    const resumeUrl = trainer.resumeUrl!;
                     const isS3Key = /^resumes\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resumeUrl);
                     try {
                       if (isS3Key) {

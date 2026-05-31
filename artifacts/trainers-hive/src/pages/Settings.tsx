@@ -1,14 +1,40 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useGetCurrentUser } from "@workspace/api-client-react";
+import { useGetCurrentUser, customFetch } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "next-themes";
-import { Bell, Moon, Sun, Lock, User, Monitor, KeyRound, Eye, EyeOff } from "lucide-react";
+import { Bell, Moon, Sun, Lock, User, Monitor, KeyRound, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+interface TrainerEmailPrefs {
+  endorsements: boolean;
+  applicationStatus: boolean;
+  newRequirementMatch: boolean;
+  messages: boolean;
+}
+
+interface VendorEmailPrefs {
+  newApplication: boolean;
+  trainerWithdrew: boolean;
+  messages: boolean;
+}
+
+const DEFAULT_TRAINER_PREFS: TrainerEmailPrefs = {
+  endorsements: true,
+  applicationStatus: true,
+  newRequirementMatch: true,
+  messages: true,
+};
+
+const DEFAULT_VENDOR_PREFS: VendorEmailPrefs = {
+  newApplication: true,
+  trainerWithdrew: true,
+  messages: true,
+};
 
 export default function Settings() {
   const { data: user } = useGetCurrentUser();
@@ -19,6 +45,78 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  const [trainerEmailPrefs, setTrainerEmailPrefs] = useState<TrainerEmailPrefs>(DEFAULT_TRAINER_PREFS);
+  const [vendorEmailPrefs, setVendorEmailPrefs] = useState<VendorEmailPrefs>(DEFAULT_VENDOR_PREFS);
+  const [isLoadingPrefs, setIsLoadingPrefs] = useState(false);
+  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+
+  const isTrainer = user?.role === "trainer";
+  const isVendor = user?.role === "vendor";
+  const trainerId = user?.trainerId;
+  const vendorId = user?.vendorId;
+
+  useEffect(() => {
+    if (isTrainer && trainerId) {
+      setIsLoadingPrefs(true);
+      customFetch(`/api/trainers/${trainerId}/email-prefs`)
+        .then((data: unknown) => {
+          if (data && typeof data === "object") {
+            setTrainerEmailPrefs({ ...DEFAULT_TRAINER_PREFS, ...(data as Partial<TrainerEmailPrefs>) });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingPrefs(false));
+    } else if (isVendor && vendorId) {
+      setIsLoadingPrefs(true);
+      customFetch(`/api/vendors/${vendorId}/email-prefs`)
+        .then((data: unknown) => {
+          if (data && typeof data === "object") {
+            setVendorEmailPrefs({ ...DEFAULT_VENDOR_PREFS, ...(data as Partial<VendorEmailPrefs>) });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingPrefs(false));
+    }
+  }, [isTrainer, isVendor, trainerId, vendorId]);
+
+  const handleToggleTrainerPref = async (key: keyof TrainerEmailPrefs, value: boolean) => {
+    if (!trainerId) return;
+    const prev = trainerEmailPrefs;
+    const updated = { ...prev, [key]: value };
+    setTrainerEmailPrefs(updated);
+    setIsSavingPrefs(true);
+    try {
+      await customFetch(`/api/trainers/${trainerId}/email-prefs`, {
+        method: "PATCH",
+        body: JSON.stringify({ [key]: value }),
+      });
+    } catch {
+      setTrainerEmailPrefs(prev);
+      toast({ title: "Error", description: "Could not save notification preference.", variant: "destructive" });
+    } finally {
+      setIsSavingPrefs(false);
+    }
+  };
+
+  const handleToggleVendorPref = async (key: keyof VendorEmailPrefs, value: boolean) => {
+    if (!vendorId) return;
+    const prev = vendorEmailPrefs;
+    const updated = { ...prev, [key]: value };
+    setVendorEmailPrefs(updated);
+    setIsSavingPrefs(true);
+    try {
+      await customFetch(`/api/vendors/${vendorId}/email-prefs`, {
+        method: "PATCH",
+        body: JSON.stringify({ [key]: value }),
+      });
+    } catch {
+      setVendorEmailPrefs(prev);
+      toast({ title: "Error", description: "Could not save notification preference.", variant: "destructive" });
+    } finally {
+      setIsSavingPrefs(false);
+    }
+  };
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,15 +130,10 @@ export default function Settings() {
     }
     setIsSavingPassword(true);
     try {
-      const res = await fetch("/api/auth/set-password", {
+      await customFetch("/api/auth/set-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(data.error ?? "Failed to set password.");
-      }
       toast({ title: "Password saved", description: "You can now sign in with your email and password." });
       setPassword("");
       setConfirmPassword("");
@@ -93,32 +186,113 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-primary" /> Notifications
+                <Bell className="h-5 w-5 text-primary" /> Email Notifications
+                {isSavingPrefs && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
               </CardTitle>
-              <CardDescription>Choose what updates you want to receive.</CardDescription>
+              <CardDescription>
+                {isTrainer
+                  ? "Choose which email notifications you want to receive."
+                  : isVendor
+                  ? "Choose which email notifications you want to receive."
+                  : "Choose what updates you want to receive."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="email-digest">Daily Email Digest</Label>
-                  <p className="text-sm text-muted-foreground">Receive a daily summary of platform activity.</p>
+              {isLoadingPrefs ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading preferences…
                 </div>
-                <Switch id="email-digest" defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="app-updates">Application Updates</Label>
-                  <p className="text-sm text-muted-foreground">Get notified when status changes on your applications.</p>
-                </div>
-                <Switch id="app-updates" defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="new-opps">New Opportunities</Label>
-                  <p className="text-sm text-muted-foreground">Alerts for new requirements matching your skills.</p>
-                </div>
-                <Switch id="new-opps" />
-              </div>
+              ) : isTrainer ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="pref-endorsements">Endorsement Emails</Label>
+                      <p className="text-sm text-muted-foreground">Get notified when a vendor endorses your profile.</p>
+                    </div>
+                    <Switch
+                      id="pref-endorsements"
+                      checked={trainerEmailPrefs.endorsements}
+                      onCheckedChange={(v) => handleToggleTrainerPref("endorsements", v)}
+                      disabled={isSavingPrefs}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="pref-appstatus">Application Status Emails</Label>
+                      <p className="text-sm text-muted-foreground">Get notified when you are shortlisted, hired, or not selected.</p>
+                    </div>
+                    <Switch
+                      id="pref-appstatus"
+                      checked={trainerEmailPrefs.applicationStatus}
+                      onCheckedChange={(v) => handleToggleTrainerPref("applicationStatus", v)}
+                      disabled={isSavingPrefs}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="pref-newreq">New Requirement Match Emails</Label>
+                      <p className="text-sm text-muted-foreground">Alerts for new requirements that match your skills.</p>
+                    </div>
+                    <Switch
+                      id="pref-newreq"
+                      checked={trainerEmailPrefs.newRequirementMatch}
+                      onCheckedChange={(v) => handleToggleTrainerPref("newRequirementMatch", v)}
+                      disabled={isSavingPrefs}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="pref-messages">Message Emails</Label>
+                      <p className="text-sm text-muted-foreground">Get notified by email when you receive a new message.</p>
+                    </div>
+                    <Switch
+                      id="pref-messages"
+                      checked={trainerEmailPrefs.messages}
+                      onCheckedChange={(v) => handleToggleTrainerPref("messages", v)}
+                      disabled={isSavingPrefs}
+                    />
+                  </div>
+                </>
+              ) : isVendor ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="pref-newapp">New Application Emails</Label>
+                      <p className="text-sm text-muted-foreground">Get notified when a trainer applies to one of your requirements.</p>
+                    </div>
+                    <Switch
+                      id="pref-newapp"
+                      checked={vendorEmailPrefs.newApplication}
+                      onCheckedChange={(v) => handleToggleVendorPref("newApplication", v)}
+                      disabled={isSavingPrefs}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="pref-withdrew">Trainer Withdrawal Emails</Label>
+                      <p className="text-sm text-muted-foreground">Get notified when a trainer withdraws their application.</p>
+                    </div>
+                    <Switch
+                      id="pref-withdrew"
+                      checked={vendorEmailPrefs.trainerWithdrew}
+                      onCheckedChange={(v) => handleToggleVendorPref("trainerWithdrew", v)}
+                      disabled={isSavingPrefs}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="pref-vendor-messages">Message Emails</Label>
+                      <p className="text-sm text-muted-foreground">Get notified by email when you receive a new message from a trainer.</p>
+                    </div>
+                    <Switch
+                      id="pref-vendor-messages"
+                      checked={vendorEmailPrefs.messages}
+                      onCheckedChange={(v) => handleToggleVendorPref("messages", v)}
+                      disabled={isSavingPrefs}
+                    />
+                  </div>
+                </>
+              ) : null}
             </CardContent>
           </Card>
         </motion.div>
@@ -150,7 +324,7 @@ export default function Settings() {
           </Card>
         </motion.div>
 
-        {user?.role === "trainer" && (
+        {(user?.role === "trainer" || user?.role === "vendor") && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
             <Card>
               <CardHeader>

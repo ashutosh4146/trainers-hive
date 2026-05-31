@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -43,7 +44,7 @@ const HEADCOUNT_OPTIONS = ["1–10", "11–30", "31–100", "100+"];
 
 export default function HireUs() {
   const { toast } = useToast();
-  const [submitted, setSubmitted] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
   const createInquiry = useCreateHireInquiry();
 
   const form = useForm<FormValues>({
@@ -58,7 +59,7 @@ export default function HireUs() {
     createInquiry.mutate(
       { data },
       {
-        onSuccess: () => setSubmitted(true),
+        onSuccess: (created) => setSubmittedId(created?.id ?? "new"),
         onError: () => toast({ title: "Submission failed", description: "Please try again.", variant: "destructive" }),
       }
     );
@@ -132,7 +133,7 @@ export default function HireUs() {
 
           {/* Right — Form */}
           <div className="lg:col-span-3">
-            {submitted ? (
+            {submittedId ? (
               <Card className="border-primary/20 bg-primary/5">
                 <CardContent className="p-10 flex flex-col items-center text-center gap-4">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -140,11 +141,18 @@ export default function HireUs() {
                   </div>
                   <h2 className="text-2xl font-bold">Inquiry Received!</h2>
                   <p className="text-muted-foreground max-w-sm">
-                    Thanks! Our team will review your requirement and reach out within <strong>24 hours</strong> with next steps.
+                    Thanks! Our team will review your requirement and reach out within <strong>24 hours</strong>. You can also chat with us right here.
                   </p>
-                  <Button variant="outline" onClick={() => { form.reset(); setSubmitted(false); }}>
-                    Submit Another Inquiry
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                    {submittedId !== "new" && (
+                      <Button asChild>
+                        <Link href={`/inquiries/${submittedId}`}>Open conversation →</Link>
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={() => { form.reset(); setSubmittedId(null); }}>
+                      Submit Another Inquiry
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ) : (

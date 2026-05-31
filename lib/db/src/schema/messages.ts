@@ -1,7 +1,7 @@
 import { pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
 import { applicationsTable } from "./applications";
 
-export const messagesTable = pgTable(
+export const legacyMessagesTable = pgTable(
   "messages",
   {
     id: text("id").primaryKey(),
@@ -19,4 +19,4 @@ export const messagesTable = pgTable(
   }),
 );
 
-export type Message = typeof messagesTable.$inferSelect;
+export type LegacyMessage = typeof legacyMessagesTable.$inferSelect;

@@ -13,9 +13,11 @@ import {
   getGetVendorQueryKey,
   getGetTrainerQueryKey,
   getGetCurrentUserQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Command,
   CommandEmpty,
@@ -37,6 +40,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   CheckCircle2,
   ShieldAlert,
+  ShieldCheck,
+  Loader2,
   CalendarPlus,
   Trash2,
   CalendarDays,
@@ -45,6 +50,9 @@ import {
   Plus,
   X,
   ExternalLink,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -127,9 +135,14 @@ function VendorProfile({ vendorId }: { vendorId: string }) {
             <CardDescription>Manage your company's information and public presence.</CardDescription>
           </div>
           {vendor?.verified && (
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-              <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
-            </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="secondary" className="gap-1.5 bg-primary/10 text-primary border-primary/20 cursor-default">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Verified by Trainers Hive
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>This company is verified by Trainers Hive</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </CardHeader>
@@ -153,7 +166,25 @@ function VendorProfile({ vendorId }: { vendorId: string }) {
                 <FormItem><FormLabel>Headquarters Location</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="websiteUrl" render={({ field }) => (
-                <FormItem><FormLabel>Website URL</FormLabel><FormControl><Input type="url" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Website URL</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="url"
+                      placeholder="https://www.yourcompany.com"
+                      {...field}
+                      onBlur={e => {
+                        let val = e.target.value.trim();
+                        if (val && !val.startsWith("http://") && !val.startsWith("https://")) {
+                          val = "https://" + (val.startsWith("www.") ? val : "www." + val);
+                          field.onChange(val);
+                        }
+                        field.onBlur();
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
             </div>
 
@@ -493,8 +524,17 @@ const trainerSchema = z.object({
   developmentExperienceYears: z.coerce.number().int().min(0).max(80),
   location: z.string().min(2, "Location is required"),
   bio: z.string().optional(),
-  trainerType: z.enum(["trainer", "developer", "both"]).optional(),
-  resumeUrl: z.string().url("Resume URL must be a valid link").optional().or(z.literal("")),
+  trainerType: z.enum(["trainer", "developer", "both"], {
+    required_error: "Please select your primary engagement type",
+    invalid_type_error: "Please select your primary engagement type",
+  }),
+  resumeUrl: z
+    .string()
+    .trim()
+    .url("Enter a valid URL (e.g. https://...)")
+    .max(2000, "URL is too long")
+    .or(z.literal(""))
+    .optional(),
 });
 
 type TrainerFormValues = z.infer<typeof trainerSchema>;
@@ -514,6 +554,51 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
   const [languages, setLanguages] = React.useState<string[]>([]);
   const [certifications, setCertifications] = React.useState<Cert[]>([]);
 
+  // Verification request state
+  const [vreq, setVreq] = React.useState<{ id: string; status: string; adminNote?: string | null } | null | undefined>(undefined);
+  const [isSubmittingVreq, setIsSubmittingVreq] = React.useState(false);
+  const [showVreqForm, setShowVreqForm] = React.useState(false);
+  const [vreqAadhaar, setVreqAadhaar] = React.useState("");
+  const [vreqPan, setVreqPan] = React.useState("");
+  const [vreqDob, setVreqDob] = React.useState("");
+  const [vreqQualification, setVreqQualification] = React.useState("");
+  const [vreqMessage, setVreqMessage] = React.useState("");
+
+  React.useEffect(() => {
+    fetch("/api/verification-requests/my")
+      .then(r => r.json())
+      .then(data => setVreq(data))
+      .catch(() => setVreq(null));
+  }, [trainerId]);
+
+  const handleApplyVerification = async () => {
+    setIsSubmittingVreq(true);
+    try {
+      const res = await fetch("/api/verification-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          aadhaarNumber: vreqAadhaar.trim() || undefined,
+          panNumber: vreqPan.trim() || undefined,
+          dateOfBirth: vreqDob || undefined,
+          qualification: vreqQualification.trim() || undefined,
+          message: vreqMessage.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVreq(data);
+        setShowVreqForm(false);
+        toast({ title: "Request submitted!", description: "Your verification request has been sent to the admin." });
+      } else {
+        const err = await res.json();
+        toast({ title: "Could not submit", description: err.error || "Please try again.", variant: "destructive" });
+      }
+    } finally {
+      setIsSubmittingVreq(false);
+    }
+  };
+
   const form = useForm<TrainerFormValues>({
     resolver: zodResolver(trainerSchema),
     defaultValues: {
@@ -523,32 +608,26 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
       developmentExperienceYears: 0,
       location: "",
       bio: "",
-      trainerType: undefined,
+      trainerType: undefined as unknown as "trainer" | "developer" | "both",
       resumeUrl: "",
     },
   });
 
   React.useEffect(() => {
     if (trainer) {
-      const t = trainer as typeof trainer & {
-        developmentExperienceYears?: number;
-        trainerType?: "trainer" | "developer" | "both";
-        resumeUrl?: string;
-        certifications?: Cert[];
-      };
       form.reset({
-        name: t.name || "",
-        mainSkill: t.mainSkill || "",
-        experienceYears: t.experienceYears ?? 0,
-        developmentExperienceYears: t.developmentExperienceYears ?? 0,
-        location: t.location || "",
-        bio: t.bio || "",
-        trainerType: t.trainerType,
-        resumeUrl: t.resumeUrl || "",
+        name: trainer.name || "",
+        mainSkill: trainer.mainSkill || "",
+        experienceYears: trainer.experienceYears ?? 0,
+        developmentExperienceYears: trainer.developmentExperienceYears ?? 0,
+        location: trainer.location || "",
+        bio: trainer.bio || "",
+        trainerType: trainer.trainerType as "trainer" | "developer" | "both" | undefined,
+        resumeUrl: trainer.resumeUrl || "",
       });
-      setSubSkills(t.subSkills ?? []);
-      setLanguages(t.languages ?? []);
-      setCertifications(Array.isArray(t.certifications) ? t.certifications : []);
+      setSubSkills(trainer.subSkills ?? []);
+      setLanguages(trainer.languages ?? []);
+      setCertifications(Array.isArray(trainer.certifications) ? trainer.certifications : []);
     }
   }, [trainer, form]);
 
@@ -588,14 +667,37 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
     [],
   );
 
+  const isProfileComplete = React.useMemo(() => {
+    if (!trainer) return false;
+    const t = trainer as typeof trainer & { trainerType?: string; languages?: string[] };
+    return !!(
+      t.name?.trim() &&
+      t.mainSkill?.trim() &&
+      t.location?.trim() &&
+      t.trainerType &&
+      (t.languages ?? []).length > 0
+    );
+  }, [trainer]);
+
   const onSubmit = (data: TrainerFormValues) => {
-    const payload = {
+    if (languages.length === 0) {
+      toast({
+        title: "Language required",
+        description: "Add at least one language you train in.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const payload: typeof data & {
+      subSkills: string[];
+      languages: string[];
+      certifications: { name: string; url?: string }[];
+    } = {
       ...data,
+      resumeUrl: (data.resumeUrl ?? "").trim(),
       subSkills,
       languages,
       certifications,
-      // Send "" intentionally when cleared so the backend can null it out.
-      resumeUrl: data.resumeUrl ?? "",
     };
 
     updateTrainer.mutate(
@@ -621,6 +723,91 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
   if (isLoading) return <ProfileSkeleton />;
 
   return (
+    <>
+    <Dialog open={showVreqForm} onOpenChange={setShowVreqForm}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-blue-600" /> Apply for Verification
+          </DialogTitle>
+          <DialogDescription>
+            Provide your identity and qualification details. This information is only visible to admins for review.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="vreq-aadhaar">Aadhaar Number</Label>
+            <Input
+              id="vreq-aadhaar"
+              placeholder="12-digit Aadhaar number"
+              maxLength={12}
+              value={vreqAadhaar}
+              onChange={e => setVreqAadhaar(e.target.value.replace(/\D/g, ""))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vreq-pan">PAN Card Number</Label>
+            <Input
+              id="vreq-pan"
+              placeholder="e.g. ABCDE1234F"
+              maxLength={10}
+              value={vreqPan}
+              onChange={e => setVreqPan(e.target.value.toUpperCase())}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vreq-dob">Date of Birth</Label>
+            <Input
+              id="vreq-dob"
+              type="date"
+              value={vreqDob}
+              onChange={e => setVreqDob(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vreq-qual">Highest Qualification</Label>
+            <Input
+              id="vreq-qual"
+              placeholder="e.g. B.Tech, MBA, PhD, Certified Trainer..."
+              value={vreqQualification}
+              onChange={e => setVreqQualification(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vreq-msg">Additional Note <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Textarea
+              id="vreq-msg"
+              placeholder="Describe your expertise, certifications, or anything else that supports your application..."
+              value={vreqMessage}
+              onChange={e => setVreqMessage(e.target.value)}
+              className="resize-none text-sm"
+              rows={3}
+            />
+          </div>
+          {vreq?.status === "rejected" && (
+            <div className="text-xs bg-red-50 border border-red-100 rounded px-3 py-2 space-y-1">
+              <p className="text-red-700 font-medium">Your previous request was rejected.</p>
+              {vreq.adminNote && <p className="text-red-700">Admin note: <span className="italic">"{vreq.adminNote}"</span></p>}
+              <p className="text-red-600">Fill in the details again to re-apply.</p>
+            </div>
+          )}
+          {vreq?.status === "needs_info" && (
+            <div className="text-xs bg-amber-50 border border-amber-200 rounded px-3 py-2 space-y-1">
+              <p className="text-amber-800 font-medium">Admin needs more info before verifying you.</p>
+              {vreq.adminNote && <p className="text-amber-800">Note: <span className="italic">"{vreq.adminNote}"</span></p>}
+              <p className="text-amber-700">Update the details below and resubmit. Your status will stay pending.</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setShowVreqForm(false)} disabled={isSubmittingVreq}>Cancel</Button>
+          <Button onClick={handleApplyVerification} disabled={isSubmittingVreq}>
+            {isSubmittingVreq ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Submit Request
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -628,20 +815,53 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
             <CardTitle>Trainer Profile</CardTitle>
             <CardDescription>Manage your professional identity and public profile.</CardDescription>
           </div>
-          {trainer?.verified && (
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-              <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
-            </Badge>
-          )}
+          <div className="flex flex-col items-end gap-2 min-w-[160px]">
+            {trainer?.verified ? (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
+              </Badge>
+            ) : vreq === undefined ? null : vreq === null || vreq.status === "rejected" ? (
+              <Button variant="outline" size="sm" className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => setShowVreqForm(true)}>
+                <ShieldCheck className="h-4 w-4" />
+                {vreq?.status === "rejected" ? "Re-apply for Verification" : "Apply for Verification"}
+              </Button>
+            ) : vreq.status === "needs_info" ? (
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="text-center py-1 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs flex items-center gap-1.5">
+                  <ShieldCheck className="h-3 w-3" />
+                  More info requested
+                </div>
+                <Button variant="outline" size="sm" className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50" onClick={() => setShowVreqForm(true)}>
+                  Update & resubmit
+                </Button>
+              </div>
+            ) : vreq.status === "pending" ? (
+              <div className="text-center py-1 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Verification pending review
+              </div>
+            ) : null}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
+        {!isProfileComplete && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3">
+            <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Complete your profile to start applying</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                The fields marked <span className="font-semibold">Required</span> below must be filled and saved before you can access your dashboard.
+              </p>
+            </div>
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* 1. Full name */}
             <FormField control={form.control} name="name" render={({ field }) => (
               <FormItem>
-                <FormLabel>Full name</FormLabel>
+                <FormLabel>Full name <span className="text-destructive">*</span></FormLabel>
                 <FormControl><Input {...field} placeholder="As you'd like it shown to vendors" /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -660,7 +880,7 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField control={form.control} name="mainSkill" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Primary skill</FormLabel>
+                  <FormLabel>Primary skill <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <SkillCombobox
                       value={field.value || ""}
@@ -706,37 +926,18 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
               )} />
             </div>
 
-            {/* 5 + 10. Location and trainer type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField control={form.control} name="location" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location</FormLabel>
-                  <FormControl><Input {...field} placeholder="City, Country" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+            {/* 6. Location */}
+            <FormField control={form.control} name="location" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Location <span className="text-destructive">*</span></FormLabel>
+                <FormControl><Input {...field} placeholder="City, Country" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
 
-              <FormField control={form.control} name="trainerType" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Are you a full-time trainer or developer?</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || undefined}>
-                    <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Select your primary engagement" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="trainer">Full-time trainer</SelectItem>
-                      <SelectItem value="developer">Full-time developer</SelectItem>
-                      <SelectItem value="both">Both — trainer and developer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            </div>
-
-            {/* 6. Languages */}
+            {/* 7. Languages */}
             <div className="space-y-2">
-              <Label>Languages</Label>
+              <Label>Languages <span className="text-destructive">*</span></Label>
               <TagInput
                 value={languages}
                 onChange={setLanguages}
@@ -745,7 +946,7 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
               />
             </div>
 
-            {/* 7. Certifications */}
+            {/* 8. Certifications */}
             <div className="space-y-2">
               <Label>Certifications</Label>
               <p className="text-sm text-muted-foreground">
@@ -754,23 +955,54 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
               <CertificationsEditor value={certifications} onChange={setCertifications} />
             </div>
 
-            {/* 8. Resume URL */}
-            <FormField control={form.control} name="resumeUrl" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Resume link (optional)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="url"
-                    placeholder="Paste a Google Drive, Dropbox, or any shareable link to your resume"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>Paste a publicly accessible link. (File upload coming soon.)</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )} />
+            {/* 9. Resume URL */}
+            <FormField
+              control={form.control}
+              name="resumeUrl"
+              render={({ field }) => {
+                const v = (field.value ?? "").trim();
+                let isHttp = false;
+                try {
+                  if (v) {
+                    const u = new URL(v);
+                    isHttp = u.protocol === "http:" || u.protocol === "https:";
+                  }
+                } catch {
+                  isHttp = false;
+                }
+                return (
+                  <FormItem>
+                    <FormLabel>Resume URL (optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="url"
+                        inputMode="url"
+                        placeholder="https://drive.google.com/... or https://yoursite.com/resume.pdf"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Paste a public link to your resume (Drive, Dropbox, personal site, etc.).
+                      Leave blank to remove.
+                    </FormDescription>
+                    {isHttp && (
+                      <a
+                        href={v}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        <ExternalLink className="h-3 w-3" /> Preview link
+                      </a>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
+            />
 
-            {/* 9. About / bio */}
+            {/* 10. About / bio */}
             <FormField control={form.control} name="bio" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tell us more about you</FormLabel>
@@ -785,6 +1017,24 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
               </FormItem>
             )} />
 
+            {/* 11. Trainer type */}
+            <FormField control={form.control} name="trainerType" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Are you a full-time trainer or developer? <span className="text-destructive">*</span></FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                  <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Select your primary engagement" /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="trainer">Full-time trainer</SelectItem>
+                    <SelectItem value="developer">Full-time developer</SelectItem>
+                    <SelectItem value="both">Both — trainer and developer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+
             <div className="flex justify-end pt-4">
               <Button type="submit" disabled={updateTrainer.isPending}>
                 {updateTrainer.isPending ? "Saving..." : "Save Changes"}
@@ -794,6 +1044,7 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
         </Form>
       </CardContent>
     </Card>
+    </>
   );
 }
 
@@ -983,6 +1234,94 @@ function TrainerAvailability({ trainerId }: { trainerId: string }) {
 // Common Components
 // =========================
 
+function SetPasswordCard() {
+  const { toast } = useToast();
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast({ title: "Password too short", description: "Must be at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast({ title: "Passwords don't match", description: "Please re-enter the same password.", variant: "destructive" });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await customFetch("/api/auth/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      toast({ title: "Password saved", description: "You can now sign in with your email and password." });
+      setPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to set password.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <KeyRound className="h-5 w-5 text-primary" /> Password Login
+        </CardTitle>
+        <CardDescription>
+          Set a password so you can sign in with your email and password instead of a magic link every time.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-sm">
+          <div className="space-y-1.5">
+            <Label htmlFor="new-password">New Password</Label>
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Min. 6 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm-password">Confirm Password</Label>
+            <Input
+              id="confirm-password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Re-enter password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <Button type="submit" disabled={isSaving || !password || !confirmPassword}>
+            {isSaving ? "Saving…" : "Save Password"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProfileSkeleton() {
   return (
     <Card>
@@ -1021,7 +1360,12 @@ export default function Profile() {
       </div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        {user.role === "vendor" && user.vendorId && <VendorProfile vendorId={user.vendorId} />}
+        {user.role === "vendor" && user.vendorId && (
+          <>
+            <VendorProfile vendorId={user.vendorId} />
+            <SetPasswordCard />
+          </>
+        )}
         {user.role === "trainer" && user.trainerId && (
           <>
             <TrainerProfile trainerId={user.trainerId} registeredEmail={user.email} />

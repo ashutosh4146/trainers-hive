@@ -5,6 +5,8 @@ import {
   useSendApplicationMessage,
   getListApplicationMessagesQueryKey,
 } from "@workspace/api-client-react";
+import { markRead } from "@/hooks/useUnreadMessages";
+import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +31,7 @@ export function MessageThread({
   title = "Message Thread",
 }: MessageThreadProps) {
   const queryClient = useQueryClient();
+  const { auth } = useAuth();
   const [body, setBody] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -37,8 +40,19 @@ export function MessageThread({
       enabled: open && !!applicationId,
       queryKey: getListApplicationMessagesQueryKey(applicationId),
       refetchOnWindowFocus: true,
+      refetchInterval: open ? 15_000 : false,
     },
   });
+
+  // Mark messages as read whenever the thread is open AND messages load/refresh.
+  // This covers: initial open, 15-second poll delivering new messages while reading,
+  // and re-opens. markRead() updates localStorage + fires a window event that
+  // updates `since` inside useUnreadMessages, which is part of the queryKey —
+  // guaranteeing a fresh fetch with the new timestamp.
+  useEffect(() => {
+    if (!open || !auth?.email) return;
+    markRead(auth.email);
+  }, [open, auth?.email, messages]);
 
   const sendMutation = useSendApplicationMessage();
 

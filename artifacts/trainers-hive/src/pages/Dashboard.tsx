@@ -1,3 +1,4 @@
+import { useAuth } from "@/hooks/useAuth";
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -10,11 +11,12 @@ import {
   useListRequirements,
   useListMyApplications,
   useListRecentRequirements,
-  useListFeaturedTrainers,
   useListHireInquiries,
-  useUpdateHireInquiryStatus,
   useDeleteRequirement,
   useUnflagRequirement,
+  useHideRequirement,
+  useUnhideRequirement,
+  useWarnRequirementVendor,
   useGetVendorHiringStats,
   useListSavedTrainers,
   useUnsaveTrainer,
@@ -26,7 +28,6 @@ import {
   useListAdminUsers,
   useDeactivateUser,
   useReactivateUser,
-  useChangeUserRole,
   useWithdrawApplication,
   useListAdminVendors,
   useVerifyVendor,
@@ -48,6 +49,7 @@ import { TrainerAvatar } from "@/components/TrainerAvatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +80,7 @@ import {
   Clock,
   Star,
   Eye,
+  EyeOff,
   TrendingUp,
   FileText,
   ClipboardList,
@@ -95,6 +98,9 @@ import {
   LogOut,
   ThumbsUp,
   Pencil,
+  Mail,
+  Phone,
+  UserPlus,
 } from "lucide-react";
 import {
   Dialog,
@@ -816,14 +822,15 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
 }
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  new:         { label: "New",         className: "bg-blue-100 text-blue-700 border-blue-200" },
-  contacted:   { label: "Contacted",   className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-  in_progress: { label: "In Progress", className: "bg-purple-100 text-purple-700 border-purple-200" },
-  closed:      { label: "Closed",      className: "bg-green-100 text-green-700 border-green-200" },
+  new:         { label: "New",          className: "bg-blue-100 text-blue-700 border-blue-200" },
+  contacted:   { label: "Contacted",    className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  in_progress: { label: "In Progress",  className: "bg-purple-100 text-purple-700 border-purple-200" },
+  resolved:    { label: "Resolved",     className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  closed:      { label: "Closed",       className: "bg-gray-100 text-gray-700 border-gray-200" },
 };
 
 const STATUS_NEXT: Record<string, string> = {
-  new: "contacted", contacted: "in_progress", in_progress: "closed", closed: "new",
+  new: "contacted", contacted: "in_progress", in_progress: "resolved", resolved: "closed", closed: "new",
 };
 
 type AdminUser = {
@@ -837,8 +844,7 @@ type AdminUser = {
 
 type ConfirmAction =
   | { type: "deactivate"; user: AdminUser }
-  | { type: "reactivate"; user: AdminUser }
-  | { type: "role"; user: AdminUser; newRole: "trainer" | "vendor" };
+  | { type: "reactivate"; user: AdminUser };
 
 function AdminUsersSection() {
   const queryClient = useQueryClient();
@@ -855,7 +861,7 @@ function AdminUsersSection() {
     role: (roleFilter !== "all" ? roleFilter : undefined) as "trainer" | "vendor" | "admin" | undefined,
     status: (statusFilter !== "all" ? statusFilter : undefined) as "active" | "deactivated" | undefined,
     page,
-    pageSize: 20,
+    pageSize: 10,
   };
 
   const { data, isLoading, refetch } = useListAdminUsers(params, {
@@ -864,7 +870,6 @@ function AdminUsersSection() {
 
   const deactivate = useDeactivateUser();
   const reactivate = useReactivateUser();
-  const changeRole = useChangeUserRole();
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
@@ -879,9 +884,6 @@ function AdminUsersSection() {
       } else if (confirm.type === "reactivate") {
         await reactivate.mutateAsync({ id: confirm.user.id });
         toast({ title: "Account reactivated", description: `${confirm.user.name}'s account is now active.` });
-      } else if (confirm.type === "role") {
-        await changeRole.mutateAsync({ id: confirm.user.id, data: { role: confirm.newRole } });
-        toast({ title: "Role updated", description: `${confirm.user.name} is now a ${confirm.newRole}.` });
       }
       invalidate();
     } catch {
@@ -893,7 +895,7 @@ function AdminUsersSection() {
 
   const users: AdminUser[] = (data?.users as AdminUser[] | undefined) ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / 20));
+  const totalPages = Math.max(1, Math.ceil(total / 10));
 
   const ROLE_COLORS: Record<string, string> = {
     admin: "bg-purple-100 text-purple-800 border-purple-200",
@@ -1023,20 +1025,6 @@ function AdminUsersSection() {
                                     <UserX className="h-3 w-3" /> Deactivate
                                   </Button>
                                 )}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-xs text-muted-foreground"
-                                  onClick={() =>
-                                    setConfirm({
-                                      type: "role",
-                                      user: u,
-                                      newRole: u.role === "trainer" ? "vendor" : "trainer",
-                                    })
-                                  }
-                                >
-                                  → {u.role === "trainer" ? "Vendor" : "Trainer"}
-                                </Button>
                               </>
                             )}
                           </div>
@@ -1069,15 +1057,12 @@ function AdminUsersSection() {
             <AlertDialogTitle>
               {confirm?.type === "deactivate" && "Deactivate account?"}
               {confirm?.type === "reactivate" && "Reactivate account?"}
-              {confirm?.type === "role" && "Change role?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm?.type === "deactivate" &&
                 `${confirm.user.name} (${confirm.user.email}) will no longer be able to sign in. You can reactivate at any time.`}
               {confirm?.type === "reactivate" &&
                 `${confirm.user.name} (${confirm.user.email}) will regain full access to the platform.`}
-              {confirm?.type === "role" &&
-                `${confirm.user.name} will be changed from ${confirm.user.role} to ${confirm.newRole}. This affects what they can see and do in the platform.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1088,7 +1073,6 @@ function AdminUsersSection() {
             >
               {confirm?.type === "deactivate" && "Deactivate"}
               {confirm?.type === "reactivate" && "Reactivate"}
-              {confirm?.type === "role" && `Change to ${confirm?.newRole}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1104,7 +1088,7 @@ function AdminVendorsSection() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
 
-  const params = { q: q || undefined, page, pageSize: 20 };
+  const params = { q: q || undefined, page, pageSize: 10 };
 
   const { data, isLoading, refetch } = useListAdminVendors(params, {
     query: { queryKey: getListAdminVendorsQueryKey(params) },
@@ -1112,22 +1096,64 @@ function AdminVendorsSection() {
 
   const verifyVendor = useVerifyVendor();
 
+  const [vendorNoteTarget, setVendorNoteTarget] = useState<{ id: string; companyName: string } | null>(null);
+  const [vendorNoteText, setVendorNoteText] = useState("");
+  const [vendorNoteSubmitting, setVendorNoteSubmitting] = useState(false);
+
   const handleToggleVerify = async (id: string, currentlyVerified: boolean, name: string) => {
     try {
       await verifyVendor.mutateAsync({ id, data: { verified: !currentlyVerified } });
       queryClient.invalidateQueries({ queryKey: getListAdminVendorsQueryKey() });
       toast({
         title: currentlyVerified ? "Verification removed" : "Vendor verified",
-        description: `${name} has been ${currentlyVerified ? "unverified" : "verified"}.`,
+        description: currentlyVerified
+          ? `${name} has been unverified.`
+          : `${name} has been verified and notified by email.`,
       });
     } catch {
       toast({ title: "Error", description: "Could not update verification.", variant: "destructive" });
     }
   };
 
+  const submitVendorNote = async () => {
+    if (!vendorNoteTarget) return;
+    const message = vendorNoteText.trim();
+    if (!message) return;
+    setVendorNoteSubmitting(true);
+    try {
+      const token = localStorage.getItem("th_token");
+      const res = await fetch(`/api/admin/vendors/${vendorNoteTarget.id}/request-verification-info`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed");
+      }
+      toast({
+        title: "Info request sent",
+        description: `${vendorNoteTarget.companyName} has been emailed with your note. They'll stay pending until verified.`,
+      });
+      setVendorNoteTarget(null);
+      setVendorNoteText("");
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Could not send the request.",
+        variant: "destructive",
+      });
+    } finally {
+      setVendorNoteSubmitting(false);
+    }
+  };
+
   const vendors = data?.vendors ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / 20));
+  const totalPages = Math.max(1, Math.ceil(total / 10));
 
   return (
     <Card>
@@ -1199,16 +1225,41 @@ function AdminVendorsSection() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className={`text-xs gap-1 ${v.verified ? "text-destructive border-destructive/30 hover:bg-destructive/10" : "text-primary border-primary/30 hover:bg-primary/10"}`}
-                        disabled={verifyVendor.isPending}
-                        onClick={() => handleToggleVerify(v.id, v.verified, v.companyName)}
-                      >
-                        <ShieldCheck className="h-3 w-3" />
-                        {v.verified ? "Remove" : "Verify"}
-                      </Button>
+                      <div className="flex justify-end gap-1.5 flex-wrap">
+                        {v.verified ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                            disabled={verifyVendor.isPending}
+                            onClick={() => handleToggleVerify(v.id, true, v.companyName)}
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            Remove
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs gap-1 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-300 dark:border-amber-700/40 dark:hover:bg-amber-900/20"
+                              onClick={() => { setVendorNoteTarget({ id: v.id, companyName: v.companyName }); setVendorNoteText(""); }}
+                            >
+                              Request info
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs gap-1 text-primary border-primary/30 hover:bg-primary/10"
+                              disabled={verifyVendor.isPending}
+                              onClick={() => handleToggleVerify(v.id, false, v.companyName)}
+                            >
+                              <ShieldCheck className="h-3 w-3" />
+                              Verify
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1227,6 +1278,36 @@ function AdminVendorsSection() {
           </div>
         )}
       </CardContent>
+
+      <Dialog open={!!vendorNoteTarget} onOpenChange={(open) => { if (!open) { setVendorNoteTarget(null); setVendorNoteText(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request more information</DialogTitle>
+            <DialogDescription>
+              Tell <span className="font-medium">{vendorNoteTarget?.companyName}</span> what's missing or needs to be corrected before you can verify them. They'll get this note by email and stay <span className="font-medium">unverified</span> until you verify them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="vendor-note">Your message to the vendor</Label>
+            <Textarea
+              id="vendor-note"
+              rows={5}
+              value={vendorNoteText}
+              onChange={(e) => setVendorNoteText(e.target.value)}
+              placeholder="e.g. Please add a company logo and a working website URL. The contact designation looks incorrect — please update."
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setVendorNoteTarget(null); setVendorNoteText(""); }}>Cancel</Button>
+            <Button
+              disabled={vendorNoteSubmitting || vendorNoteText.trim().length === 0}
+              onClick={submitVendorNote}
+            >
+              Send request
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
@@ -1234,18 +1315,25 @@ function AdminVendorsSection() {
 function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats();
   const { data: requirements, isLoading: reqsLoading } = useListRecentRequirements();
-  const { data: trainers, isLoading: trainersLoading } = useListFeaturedTrainers();
-  const { data: inquiries, isLoading: inqLoading, refetch: refetchInquiries } = useListHireInquiries();
+  const { data: recentUsers, isLoading: recentUsersLoading } = useListAdminUsers({ page: 1, pageSize: 5 } as any);
+  const { data: inquiries, isLoading: inqLoading } = useListHireInquiries();
   const { data: hireThroughUsReqs, isLoading: hireThroughUsLoading } = useListHireThroughUsRequirements();
   const { data: flaggedReqs, isLoading: flaggedLoading } = useListRequirements({ flagged: true } as any);
-  const updateStatus = useUpdateHireInquiryStatus();
   const deleteRequirement = useDeleteRequirement();
   const unflagRequirement = useUnflagRequirement();
+  const hideRequirement = useHideRequirement();
+  const unhideRequirement = useUnhideRequirement();
+  const warnRequirement = useWarnRequirementVendor();
+  const [warnTarget, setWarnTarget] = useState<{ id: string; title: string } | null>(null);
+  const [warnMessage, setWarnMessage] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
   const [vreqLoading, setVreqLoading] = useState(true);
+  const [vreqNoteTarget, setVreqNoteTarget] = useState<{ id: string; trainerName: string; status: "rejected" | "needs_info" } | null>(null);
+  const [vreqNoteText, setVreqNoteText] = useState("");
+  const [vreqNoteSubmitting, setVreqNoteSubmitting] = useState(false);
 
   type AnalyticsTrend = { week: string; count: number }[];
   const [analytics, setAnalytics] = useState<{
@@ -1272,15 +1360,39 @@ function AdminDashboard() {
       .catch(() => {});
   }, []);
 
-  const handleVerificationAction = async (id: string, status: "approved" | "rejected", adminNote?: string) => {
+  const handleVerificationAction = async (id: string, status: "approved" | "rejected" | "needs_info", adminNote?: string) => {
     const res = await fetch(`/api/verification-requests/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, adminNote }),
     });
     if (res.ok) {
-      toast({ title: status === "approved" ? "Trainer verified!" : "Request rejected", description: status === "approved" ? "The trainer now has a verified badge." : "The request has been declined." });
+      const titles = {
+        approved: "Trainer verified!",
+        rejected: "Request rejected",
+        needs_info: "Trainer notified",
+      } as const;
+      const descriptions = {
+        approved: "The trainer now has a verified badge.",
+        rejected: "The request has been declined.",
+        needs_info: "We've sent the trainer your notes. Status stays pending until they resubmit.",
+      } as const;
+      toast({ title: titles[status], description: descriptions[status] });
       fetchVerificationRequests();
+    } else {
+      toast({ title: "Could not update request", description: "Please try again.", variant: "destructive" });
+    }
+  };
+
+  const submitVreqNote = async () => {
+    if (!vreqNoteTarget || vreqNoteText.trim().length === 0) return;
+    setVreqNoteSubmitting(true);
+    try {
+      await handleVerificationAction(vreqNoteTarget.id, vreqNoteTarget.status, vreqNoteText.trim());
+      setVreqNoteTarget(null);
+      setVreqNoteText("");
+    } finally {
+      setVreqNoteSubmitting(false);
     }
   };
 
@@ -1297,23 +1409,79 @@ function AdminDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Skill Demand</CardTitle>
-            <CardDescription>Top skills currently requested in open requirements</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Briefcase className="h-5 w-5 text-primary" /> New Hire Us Inquiries
+              </CardTitle>
+              <CardDescription>Companies awaiting your response — act on them now</CardDescription>
+            </div>
+            <Badge variant="default" className="text-xs">
+              {inqLoading ? "…" : `${inquiries?.filter(i => i.status === "new").length ?? 0} new`}
+            </Badge>
           </CardHeader>
-          <CardContent className="h-[350px]">
-            {stats?.skillBreakdown && stats.skillBreakdown.length > 0 ? (
-               <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={stats.skillBreakdown} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                   <XAxis dataKey="skill" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }} cursor={{ fill: 'hsl(var(--muted))' }} />
-                   <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={60} />
-                 </BarChart>
-               </ResponsiveContainer>
+          <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
+            {inqLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : !inquiries?.filter(i => i.status === "new").length ? (
+              <div className="flex flex-col items-center justify-center text-center py-10 gap-2">
+                <CheckCircle className="h-8 w-8 text-green-500" />
+                <p className="text-sm text-muted-foreground">All caught up — no new inquiries waiting.</p>
+                <button
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => document.getElementById("hire-inquiries")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >
+                  View all inquiries →
+                </button>
+              </div>
             ) : (
-              <div className="flex h-full items-center justify-center text-muted-foreground">No data available</div>
+              inquiries
+                .filter(i => i.status === "new")
+                .slice(0, 5)
+                .map((inq) => (
+                  <div key={inq.id} className="border rounded-lg p-3 space-y-2 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{inq.companyName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {inq.contactName} · {inq.email}
+                          {inq.headcount && ` · ${inq.headcount} ppl`}
+                        </p>
+                        <p className="text-xs mt-1 line-clamp-2 text-foreground/80">{inq.trainingNeed}</p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                        {formatDistanceToNow(new Date(inq.createdAt), { addSuffix: true })}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                      <Button size="sm" className="h-7 px-3 gap-1 text-xs" asChild>
+                        <Link href={`/inquiries/${inq.id}`}>
+                          Open enquiry →
+                        </Link>
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" asChild>
+                        <a href={`mailto:${inq.email}?subject=Re: Your training inquiry with Trainers Hive`}>
+                          <Mail className="h-3 w-3" /> Email
+                        </a>
+                      </Button>
+                      {inq.phone && (
+                        <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" asChild>
+                          <a href={`tel:${inq.phone}`}>
+                            <Phone className="h-3 w-3" /> Call
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))
+            )}
+            {!inqLoading && (inquiries?.filter(i => i.status === "new").length ?? 0) > 5 && (
+              <button
+                className="w-full text-xs text-primary hover:underline pt-1"
+                onClick={() => document.getElementById("hire-inquiries")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              >
+                View all {inquiries?.filter(i => i.status === "new").length} new inquiries →
+              </button>
             )}
           </CardContent>
         </Card>
@@ -1341,15 +1509,9 @@ function AdminDashboard() {
               },
               {
                 icon: <Briefcase className="h-4 w-4 text-amber-500" />,
-                label: "New hire inquiries",
-                count: inqLoading ? null : (inquiries?.filter(i => i.status === "new").length ?? 0),
+                label: "Hire enquiries",
+                count: (inqLoading || hireThroughUsLoading) ? null : ((inquiries?.filter(i => i.status === "new").length ?? 0) + (hireThroughUsReqs?.length ?? 0)),
                 target: "hire-inquiries",
-              },
-              {
-                icon: <Eye className="h-4 w-4 text-violet-500" />,
-                label: "Hire Through Us requests",
-                count: hireThroughUsLoading ? null : (hireThroughUsReqs?.length ?? 0),
-                target: "hire-through-us",
               },
             ].map(item => (
               <button
@@ -1416,28 +1578,48 @@ function AdminDashboard() {
         </Card>
         
         <Card>
-          <CardHeader>
-            <CardTitle>Featured Trainers</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-primary" /> Recent Sign-ups
+              </CardTitle>
+              <CardDescription>Newest people on the platform</CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => document.getElementById("user-management")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              Manage
+            </Button>
           </CardHeader>
           <CardContent>
-            {trainersLoading ? <Skeleton className="h-[200px] w-full" /> : trainers?.length ? (
-              <div className="space-y-4">
-                {trainers.slice(0, 5).map(trainer => (
-                  <Link key={trainer.id} href={`/trainers/${trainer.id}`} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-8 w-8" />
-                      <div>
-                        <p className="font-medium text-sm">{trainer.name}</p>
-                        <p className="text-xs text-muted-foreground truncate max-w-[150px]">{trainer.headline}</p>
+            {recentUsersLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : (recentUsers as any)?.users?.length ? (
+              <div className="space-y-3">
+                {((recentUsers as any).users as any[]).slice(0, 5).map((u) => (
+                  <div key={u.id} className="flex items-center justify-between p-2 rounded-lg border hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                        {(u.name || u.email || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{u.name || u.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {u.email} · joined {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 text-xs font-medium text-amber-500">
-                      <Star className="h-3 w-3 fill-amber-500"/> {trainer.rating.toFixed(1)}
-                    </div>
-                  </Link>
+                    <Badge variant="outline" className="text-[10px] capitalize shrink-0 ml-2">
+                      {u.role}
+                    </Badge>
+                  </div>
                 ))}
               </div>
-            ) : <p className="text-muted-foreground text-sm">No trainers found</p>}
+            ) : (
+              <p className="text-muted-foreground text-sm">No users yet</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1507,17 +1689,17 @@ function AdminDashboard() {
         </div>
       )}
 
-      {/* Hire Us Inquiries */}
+      {/* Hire Enquiries (combined: Hire Us inquiries + Hire Through Us requirements) */}
       <Card id="hire-inquiries">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-primary" /> Hire Us Inquiries
+              <Briefcase className="h-5 w-5 text-primary" /> Hire Enquiries
             </CardTitle>
-            <CardDescription>Companies that requested managed trainer sourcing</CardDescription>
+            <CardDescription>All managed-sourcing requests — from the Hire Us form and from requirements flagged "Hire Through Us"</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">{inquiries?.length ?? 0} total</Badge>
+            <Badge variant="outline" className="text-xs">{(inquiries?.length ?? 0) + (hireThroughUsReqs?.length ?? 0)} total</Badge>
             <Button
               size="sm"
               variant="outline"
@@ -1531,6 +1713,20 @@ function AdminDashboard() {
           </div>
         </CardHeader>
         <CardContent>
+          <Tabs defaultValue="hire-us" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="hire-us" className="gap-1.5">
+                <Briefcase className="h-3.5 w-3.5" />
+                Hire Us form
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{inquiries?.length ?? 0}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="hire-through-us" className="gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Hire Through Us
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{hireThroughUsReqs?.length ?? 0}</Badge>
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="hire-us">
           {inqLoading ? (
             <Skeleton className="h-[200px] w-full" />
           ) : !inquiries?.length ? (
@@ -1553,7 +1749,9 @@ function AdminDashboard() {
                     return (
                       <tr key={inq.id} className="hover:bg-muted/30 transition-colors">
                         <td className="py-3 pr-4">
-                          <p className="font-medium">{inq.companyName}</p>
+                          <Link href={`/inquiries/${inq.id}`} className="font-medium hover:underline">
+                            {inq.companyName}
+                          </Link>
                           {inq.location && <p className="text-xs text-muted-foreground">{inq.location}</p>}
                         </td>
                         <td className="py-3 pr-4">
@@ -1570,18 +1768,14 @@ function AdminDashboard() {
                           {inq.timeline && <p className="text-muted-foreground">{inq.timeline}</p>}
                         </td>
                         <td className="py-3">
-                          <button
-                            title="Click to advance status"
-                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${s.className}`}
-                            onClick={() =>
-                              updateStatus.mutate(
-                                { id: inq.id, data: { status: STATUS_NEXT[inq.status] as any } },
-                                { onSuccess: () => refetchInquiries() }
-                              )
-                            }
-                          >
-                            {s.label}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${s.className}`}>
+                              {s.label}
+                            </span>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
+                              <Link href={`/inquiries/${inq.id}`}>Open →</Link>
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1590,21 +1784,8 @@ function AdminDashboard() {
               </table>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Hire Through Us Requirements */}
-      <Card id="hire-through-us">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" /> Hire Through Us Requirements
-            </CardTitle>
-            <CardDescription>Requirements submitted with managed-sourcing request — not visible publicly</CardDescription>
-          </div>
-          <Badge variant="outline" className="text-xs">{hireThroughUsReqs?.length ?? 0} total</Badge>
-        </CardHeader>
-        <CardContent>
+            </TabsContent>
+            <TabsContent value="hire-through-us">
           {hireThroughUsLoading ? (
             <Skeleton className="h-[120px] w-full" />
           ) : !hireThroughUsReqs?.length ? (
@@ -1650,6 +1831,8 @@ function AdminDashboard() {
               </table>
             </div>
           )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
@@ -1690,7 +1873,10 @@ function AdminDashboard() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    {(req as any).hidden && (
+                      <Badge variant="secondary" className="text-[10px]">Hidden</Badge>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -1708,6 +1894,54 @@ function AdminDashboard() {
                     >
                       Unflag
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                      onClick={() => { setWarnTarget({ id: req.id, title: req.title }); setWarnMessage(""); }}
+                    >
+                      <Mail className="h-3.5 w-3.5" />
+                      Warn vendor
+                    </Button>
+                    {(req as any).hidden ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs gap-1"
+                        disabled={unhideRequirement.isPending}
+                        onClick={async () => {
+                          try {
+                            await unhideRequirement.mutateAsync({ id: req.id });
+                            queryClient.invalidateQueries({ queryKey: getListRequirementsQueryKey() });
+                            toast({ title: "Requirement restored", description: `"${req.title}" is visible publicly again.` });
+                          } catch {
+                            toast({ title: "Error", description: "Could not unhide.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Unhide
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs gap-1"
+                        disabled={hideRequirement.isPending}
+                        onClick={async () => {
+                          try {
+                            await hideRequirement.mutateAsync({ id: req.id });
+                            queryClient.invalidateQueries({ queryKey: getListRequirementsQueryKey() });
+                            toast({ title: "Requirement hidden", description: `"${req.title}" is hidden from public listings.` });
+                          } catch {
+                            toast({ title: "Error", description: "Could not hide.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <EyeOff className="h-3.5 w-3.5" />
+                        Hide
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -1736,7 +1970,9 @@ function AdminDashboard() {
       </Card>
 
       {/* User Management */}
-      <AdminUsersSection />
+      <div id="user-management">
+        <AdminUsersSection />
+      </div>
 
       {/* Vendor Verification */}
       <AdminVendorsSection />
@@ -1771,13 +2007,31 @@ function AdminDashboard() {
                         <p className="text-xs text-muted-foreground truncate">{req.trainer?.mainSkill}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {req.status === "pending" ? (
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                      {req.status === "pending" || req.status === "needs_info" ? (
                         <>
+                          {req.status === "needs_info" && (
+                            <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50">
+                              Awaiting resubmission
+                            </Badge>
+                          )}
                           <Button size="sm" variant="outline" className="text-xs text-green-700 border-green-200 hover:bg-green-50" onClick={() => handleVerificationAction(req.id, "approved")}>
                             Approve
                           </Button>
-                          <Button size="sm" variant="outline" className="text-xs text-red-700 border-red-200 hover:bg-red-50" onClick={() => handleVerificationAction(req.id, "rejected")}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs text-amber-700 border-amber-200 hover:bg-amber-50"
+                            onClick={() => { setVreqNoteTarget({ id: req.id, trainerName: req.trainer?.name ?? "Trainer", status: "needs_info" }); setVreqNoteText(""); }}
+                          >
+                            Request changes
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs text-red-700 border-red-200 hover:bg-red-50"
+                            onClick={() => { setVreqNoteTarget({ id: req.id, trainerName: req.trainer?.name ?? "Trainer", status: "rejected" }); setVreqNoteText(""); }}
+                          >
                             Reject
                           </Button>
                         </>
@@ -1807,6 +2061,12 @@ function AdminDashboard() {
                     {!req.aadhaarNumber && !req.panNumber && !req.dateOfBirth && !req.qualification && !req.message && (
                       <div className="col-span-2 text-muted-foreground italic">No verification details provided.</div>
                     )}
+                    {req.status === "needs_info" && req.adminNote && (
+                      <div className="col-span-2 mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1.5">
+                        <span className="text-amber-800 font-medium">Your last note: </span>
+                        <span className="text-amber-900">{req.adminNote}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1814,6 +2074,83 @@ function AdminDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!vreqNoteTarget} onOpenChange={(open) => { if (!open) { setVreqNoteTarget(null); setVreqNoteText(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {vreqNoteTarget?.status === "needs_info" ? "Request more information" : "Reject verification request"}
+            </DialogTitle>
+            <DialogDescription>
+              {vreqNoteTarget?.status === "needs_info"
+                ? <>Tell <span className="font-medium">{vreqNoteTarget?.trainerName}</span> what's missing or needs to be corrected. They'll see this note and can resubmit. Status stays <span className="font-medium">pending</span> until they do.</>
+                : <>Explain why you're rejecting <span className="font-medium">{vreqNoteTarget?.trainerName}</span>'s request. They'll be notified.</>
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="vreq-note">Your message to the trainer</Label>
+            <Textarea
+              id="vreq-note"
+              rows={5}
+              value={vreqNoteText}
+              onChange={(e) => setVreqNoteText(e.target.value)}
+              placeholder={vreqNoteTarget?.status === "needs_info"
+                ? "e.g. Aadhaar number unclear — please re-enter. Add a recent qualification certificate."
+                : "e.g. Documents could not be verified."}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setVreqNoteTarget(null); setVreqNoteText(""); }}>Cancel</Button>
+            <Button
+              disabled={vreqNoteSubmitting || vreqNoteText.trim().length === 0}
+              onClick={submitVreqNote}
+              className={vreqNoteTarget?.status === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            >
+              {vreqNoteTarget?.status === "needs_info" ? "Send & keep pending" : "Reject"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!warnTarget} onOpenChange={(open) => { if (!open) setWarnTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Warn vendor</DialogTitle>
+            <DialogDescription>
+              Send the vendor an email about <span className="font-medium">"{warnTarget?.title}"</span>. They'll see your message in their inbox.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="warn-message">Your message</Label>
+            <Textarea
+              id="warn-message"
+              rows={5}
+              value={warnMessage}
+              onChange={(e) => setWarnMessage(e.target.value)}
+              placeholder="Explain what needs to change in this requirement…"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setWarnTarget(null)}>Cancel</Button>
+            <Button
+              disabled={warnRequirement.isPending || warnMessage.trim().length === 0}
+              onClick={async () => {
+                if (!warnTarget) return;
+                try {
+                  await warnRequirement.mutateAsync({ id: warnTarget.id, data: { message: warnMessage.trim() } });
+                  toast({ title: "Warning sent", description: `Vendor for "${warnTarget.title}" has been emailed.` });
+                  setWarnTarget(null);
+                } catch {
+                  toast({ title: "Error", description: "Could not send warning.", variant: "destructive" });
+                }
+              }}
+            >
+              <Mail className="h-3.5 w-3.5 mr-1.5" /> Send warning
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1935,14 +2272,17 @@ function Building2(props: any) {
 import { Building } from "lucide-react";
 
 export default function Dashboard() {
-  const { data: user, isLoading } = useGetCurrentUser();
+  const { isSignedIn } = useAuth();
+  const { data: user, isLoading } = useGetCurrentUser({
+    query: { enabled: isSignedIn },
+  });
 
   if (isLoading) {
     return <div className="container mx-auto px-4 py-8"><DashboardSkeleton /></div>;
   }
 
   if (!user) {
-    return <div className="container mx-auto px-4 py-8">Please log in to view the dashboard.</div>;
+    return <div className="container mx-auto px-4 py-8"><DashboardSkeleton /></div>;
   }
 
   return (

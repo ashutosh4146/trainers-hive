@@ -9,7 +9,7 @@ import {
   activityTable,
   usersTable,
 } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, gte } from "drizzle-orm";
 import { getActiveUserId } from "../lib/session";
 
 const router: IRouter = Router();
@@ -155,7 +155,57 @@ router.get("/stats/platform", async (_req, res) => {
   void reviewsTable;
 });
 
-router.get("/activity", async (_req, res) => {
+function weeklyBuckets(rows: { createdAt: Date }[], weeksBack = 12) {
+  const result: { week: string; count: number }[] = [];
+  const now = new Date();
+  for (let i = weeksBack - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i * 7);
+    result.push({ week: d.toISOString().slice(0, 10), count: 0 });
+  }
+  const startMs = new Date(result[0].week + "T00:00:00Z").getTime();
+  for (const row of rows) {
+    const ms = row.createdAt.getTime() - startMs;
+    if (ms < 0) continue;
+    const idx = Math.floor(ms / (7 * 24 * 60 * 60 * 1000));
+    if (idx < weeksBack) result[idx].count += 1;
+  }
+  return result;
+}
+
+router.get("/admin/analytics", async (req, res) => {
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active || active.role !== "admin") {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 84); // 12 weeks
+
+  const [trainerRows, appRows, reqRows] = await Promise.all([
+    db.select({ createdAt: trainersTable.createdAt }).from(trainersTable).where(gte(trainersTable.createdAt, cutoff)),
+    db.select({ createdAt: applicationsTable.createdAt }).from(applicationsTable).where(gte(applicationsTable.createdAt, cutoff)),
+    db.select({ createdAt: requirementsTable.createdAt }).from(requirementsTable).where(gte(requirementsTable.createdAt, cutoff)),
+  ]);
+
+  res.json({
+    trainerSignupsTrend: weeklyBuckets(trainerRows),
+    applicationsTrend: weeklyBuckets(appRows),
+    requirementsTrend: weeklyBuckets(reqRows),
+  });
+});
+
+router.get("/activity", async (req, res) => {
+  const userId = await getActiveUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to view platform activity" });
+    return;
+  }
   const rows = await db
     .select()
     .from(activityTable)

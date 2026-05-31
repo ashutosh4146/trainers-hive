@@ -249,6 +249,7 @@ export interface Requirement {
   isFeatured?: boolean;
   isPrivate?: boolean;
   hireThroughUs?: boolean;
+  hidden?: boolean;
 }
 
 export type RequirementDetail = Requirement & {
@@ -307,6 +308,11 @@ export interface UpdateRequirementBody {
 
 export interface FlagRequirementBody {
   reason: string;
+}
+
+export interface WarnRequirementBody {
+  /** @minLength 1 */
+  message: string;
 }
 
 export interface BulkRejectResult {
@@ -577,11 +583,13 @@ export const HireInquiryStatus = {
   new: "new",
   contacted: "contacted",
   in_progress: "in_progress",
+  resolved: "resolved",
   closed: "closed",
 } as const;
 
 export interface HireInquiry {
   id: string;
+  userId?: string;
   companyName: string;
   contactName: string;
   email: string;
@@ -614,11 +622,24 @@ export const UpdateHireInquiryStatusBodyStatus = {
   new: "new",
   contacted: "contacted",
   in_progress: "in_progress",
+  resolved: "resolved",
   closed: "closed",
 } as const;
 
 export interface UpdateHireInquiryStatusBody {
   status: UpdateHireInquiryStatusBodyStatus;
+}
+
+export interface HireInquiryMessage {
+  id: string;
+  inquiryId: string;
+  senderUserId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface SendHireInquiryMessageBody {
+  body: string;
 }
 
 export interface AdminUser {
@@ -706,6 +727,131 @@ export interface ResumeUploadResponse {
   objectPath: string;
 }
 
+export type EngagementAgreementStatus =
+  (typeof EngagementAgreementStatus)[keyof typeof EngagementAgreementStatus];
+
+export const EngagementAgreementStatus = {
+  draft: "draft",
+  awaiting_trainer: "awaiting_trainer",
+  accepted: "accepted",
+  cancelled: "cancelled",
+} as const;
+
+export interface EngagementAgreement {
+  id: string;
+  applicationId: string;
+  requirementId: string;
+  vendorId: string;
+  trainerId: string;
+  status: EngagementAgreementStatus;
+  /** @nullable */
+  agreedFee?: number | null;
+  feeCurrency: string;
+  /** @nullable */
+  paymentSchedule?: string | null;
+  /** @nullable */
+  travelBoarding?: string | null;
+  /** @nullable */
+  cancellationNotice?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  /** @nullable */
+  sessionsCount?: number | null;
+  /** @nullable */
+  locationOrMode?: string | null;
+  /** @nullable */
+  deliverables?: string | null;
+  confidentialityClause: boolean;
+  /** @nullable */
+  ipOwnership?: string | null;
+  governingLawCity: string;
+  /** @nullable */
+  specialClauses?: string | null;
+  /** @nullable */
+  vendorAcceptedAt?: string | null;
+  /** @nullable */
+  vendorAcceptedIp?: string | null;
+  /** @nullable */
+  trainerAcceptedAt?: string | null;
+  /** @nullable */
+  trainerAcceptedIp?: string | null;
+  /** @nullable */
+  changesRequestedNote?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  /** @nullable */
+  cancellationReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  vendorName: string;
+  trainerName: string;
+  requirementTitle: string;
+}
+
+export type EngagementAgreementListItemRole =
+  (typeof EngagementAgreementListItemRole)[keyof typeof EngagementAgreementListItemRole];
+
+export const EngagementAgreementListItemRole = {
+  vendor: "vendor",
+  trainer: "trainer",
+} as const;
+
+export interface EngagementAgreementListItem {
+  id: string;
+  applicationId: string;
+  requirementId: string;
+  requirementTitle: string;
+  counterpartyName: string;
+  role: EngagementAgreementListItemRole;
+  status: EngagementAgreementStatus;
+  /** @nullable */
+  agreedFee?: number | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateAgreementTermsBody {
+  /** @nullable */
+  agreedFee?: number | null;
+  /** @nullable */
+  paymentSchedule?: string | null;
+  /** @nullable */
+  travelBoarding?: string | null;
+  /** @nullable */
+  cancellationNotice?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  /** @nullable */
+  sessionsCount?: number | null;
+  /** @nullable */
+  locationOrMode?: string | null;
+  /** @nullable */
+  deliverables?: string | null;
+  confidentialityClause?: boolean;
+  /** @nullable */
+  ipOwnership?: string | null;
+  governingLawCity?: string;
+  /** @nullable */
+  specialClauses?: string | null;
+}
+
+export interface RequestAgreementChangesBody {
+  /** @minLength 1 */
+  note: string;
+}
+
+export interface CancelAgreementBody {
+  reason?: string;
+}
+
 export type ListTrainersParams = {
   q?: string;
   skill?: string;
@@ -770,6 +916,10 @@ export const ListRequirementsSort = {
   deadline: "deadline",
   budget: "budget",
 } as const;
+
+export type WarnRequirementVendor200 = {
+  ok: boolean;
+};
 
 export type ListAdminUsersParams = {
   q?: string;

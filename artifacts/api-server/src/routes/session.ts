@@ -32,7 +32,7 @@ router.post("/session/switch", async (req, res) => {
     res.status(400).json({ error: "invalid body", details: parsed.error.issues });
     return;
   }
-  const { role, name, email, orgName } = parsed.data;
+  const { role, name, email, orgName, orgType } = parsed.data;
 
   if (email) {
     const existing = await db
@@ -87,10 +87,11 @@ router.post("/session/switch", async (req, res) => {
       const vid = newId("vendor");
       await db.insert(vendorsTable).values({
         id: vid,
-        companyName: orgName || displayName,
+        companyName: orgName || "",
+        orgType: orgType ?? null,
         industry: "",
         location: "",
-        contactName: displayName,
+        contactName: name || "",
         contactDesignation: "",
         email: email,
         logoUrl: "",

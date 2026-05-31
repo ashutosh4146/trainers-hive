@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-import { Activity, Building2, GraduationCap, Users, Mail, ArrowLeft, KeyRound, Eye, EyeOff } from "lucide-react";
+import { Activity, Building2, Users, Mail, ArrowLeft, KeyRound, Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,12 +19,11 @@ import {
   type UserRole,
 } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
-import { sendEmailSignInLink, savePendingAuth, signInWithGoogle, signInWithAdminToken } from "@/lib/firebase";
+import { sendEmailSignInLink, savePendingAuth, signInWithGoogle } from "@/lib/firebase";
 
 const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
-  { id: "trainer",  label: "Trainer",          icon: <Users className="h-5 w-5" /> },
-  { id: "vendor",   label: "Vendor",            icon: <Building2 className="h-5 w-5" /> },
-  { id: "college",  label: "College / Company", icon: <GraduationCap className="h-5 w-5" /> },
+  { id: "trainer", label: "Trainer",      icon: <Users className="h-5 w-5" /> },
+  { id: "vendor",  label: "Organisation", icon: <Building2 className="h-5 w-5" /> },
 ];
 
 type View = "select" | "sent";
@@ -162,18 +161,14 @@ export default function Login() {
         return;
       }
 
-      const { customToken, user } = await res.json() as {
-        customToken: string | null;
+      const { sessionToken, user } = await res.json() as {
+        sessionToken: string;
         user: { name: string; email: string; role: string };
       };
 
-      if (customToken) {
-        try {
-          const firebaseUser = await signInWithAdminToken(customToken);
-          setAuthTokenGetter(async () => await firebaseUser.getIdToken());
-        } catch (firebaseErr) {
-          console.warn("Firebase sign-in failed, falling back to session auth:", firebaseErr);
-        }
+      if (sessionToken) {
+        localStorage.setItem("th_session_token", sessionToken);
+        setAuthTokenGetter(() => Promise.resolve(sessionToken));
       }
 
       switchUser.mutate(
@@ -212,30 +207,6 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md space-y-6">
 
-          {/* Step indicator */}
-          <div className="flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
-            {(["select", "sent"] as View[]).map((step, i) => {
-              const steps = ["select", "sent"];
-              const idx = steps.indexOf(view);
-              const isActive = view === step;
-              const isDone = steps.indexOf(step) < idx;
-              return (
-                <React.Fragment key={step}>
-                  {i > 0 && <div className={cn("h-px w-8", isDone ? "bg-primary" : "bg-border")} />}
-                  <div className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full",
-                    isActive ? "bg-primary text-primary-foreground" : isDone ? "text-primary" : "text-muted-foreground"
-                  )}>
-                    <span>{i + 1}</span>
-                    <span className="hidden sm:inline">
-                      {step === "sent" ? "Check Email" : "Your Details"}
-                    </span>
-                  </div>
-                </React.Fragment>
-              );
-            })}
-          </div>
-
           {/* Step: Select role + login */}
           {view === "select" && (
             <>
@@ -248,7 +219,7 @@ export default function Login() {
                   {/* Role selector */}
                   <div className="space-y-2">
                     <Label>Sign in as</Label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {ROLES.map((r) => (
                         <button
                           key={r.id}
@@ -287,8 +258,8 @@ export default function Login() {
                     {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                   </div>
 
-                  {/* Trainer: toggle between link and password */}
-                  {selectedRole === "trainer" && (
+                  {/* Toggle between link and password */}
+                  {selectedRole && (
                     <div className="flex rounded-lg border overflow-hidden">
                       <button
                         type="button"
@@ -313,9 +284,10 @@ export default function Login() {
                     </div>
                   )}
 
-                  {/* Password field (trainer + password method) */}
-                  {selectedRole === "trainer" && loginMethod === "password" ? (
+                  {/* Password field */}
+                  {selectedRole && loginMethod === "password" ? (
                     <form onSubmit={handlePasswordLogin} className="space-y-4">
+                      <input type="email" name="username" autoComplete="username" value={email} onChange={() => {}} className="sr-only" tabIndex={-1} aria-hidden="true" />
                       <div className="space-y-2">
                         <Label htmlFor="password">Password</Label>
                         <div className="relative">
@@ -352,7 +324,7 @@ export default function Login() {
                     </form>
                   )}
 
-                  {/* Google option for trainers using link method */}
+                  {/* Google option: trainers only */}
                   {selectedRole === "trainer" && loginMethod === "link" && (
                     <>
                       <div className="relative">

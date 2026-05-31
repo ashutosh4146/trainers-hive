@@ -34,11 +34,19 @@ export const requirementsTable = pgTable("requirements", {
   language: text("language"),               // specific language required (optional)
   trainerScope: text("trainer_scope"),      // "local" | "pan-india"
   startDate: text("start_date"),            // expected start date (ISO string)
+  audienceType: text("audience_type"),      // "freshers" | "lateral" | "both"
+  // Posting options / upgrade flags
+  isUrgent: boolean("is_urgent").notNull().default(false),
+  isFeatured: boolean("is_featured").notNull().default(false),
+  isPrivate: boolean("is_private").notNull().default(false),
+  hireThroughUs: boolean("hire_through_us").notNull().default(false),
   // Flagging
   flagged: boolean("flagged").notNull().default(false),
   flagReason: text("flag_reason"),
   flaggedBy: text("flagged_by"),            // trainer id
   flaggedAt: timestamp("flagged_at", { withTimezone: true }),
+  // Admin moderation: hide from public listing (still visible to vendor & admin)
+  hidden: boolean("hidden").notNull().default(false),
 });
 
 export type Requirement = typeof requirementsTable.$inferSelect;

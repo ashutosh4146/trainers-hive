@@ -31,6 +31,7 @@ export interface PendingAuth {
   email: string;
   name?: string;
   orgName?: string;
+  orgType?: string;
 }
 
 export function savePendingAuth(data: PendingAuth): void {

@@ -8,7 +8,7 @@ import {
   activityTable,
   usersTable,
 } from "@workspace/db";
-import { eq, and, desc, asc, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, type SQL } from "drizzle-orm";
 import {
   ListRequirementsQueryParams,
   CreateRequirementBody,
@@ -22,10 +22,15 @@ import {
   FlagRequirementParams,
   FlagRequirementBody,
   UnflagRequirementParams,
+  HideRequirementParams,
+  WarnRequirementVendorParams,
+  WarnRequirementVendorBody,
 } from "@workspace/api-zod";
 import { newId } from "../lib/ids";
 import { getActiveUserId } from "../lib/session";
-import { notifyVendorNewApplication } from "../lib/mailer";
+import { notifyVendorNewApplication, notifyTrainerNewRequirementMatch, notifyVendorWarning } from "../lib/mailer";
+import { resolveVendorEmailPrefs } from "../lib/vendor-email-prefs";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
@@ -60,10 +65,17 @@ async function buildRequirementCard(
     language: r.language ?? undefined,
     trainerScope: r.trainerScope ?? undefined,
     startDate: r.startDate ?? undefined,
+    audienceType: r.audienceType ?? undefined,
     flagged: r.flagged ?? false,
     flagReason: r.flagReason ?? undefined,
     flaggedBy: r.flaggedBy ?? undefined,
     flaggedAt: r.flaggedAt?.toISOString() ?? undefined,
+    vendorVerified: vendor?.verified ?? false,
+    isUrgent: r.isUrgent ?? false,
+    isFeatured: r.isFeatured ?? false,
+    isPrivate: r.isPrivate ?? false,
+    hireThroughUs: r.hireThroughUs ?? false,
+    hidden: r.hidden ?? false,
   };
 }
 
@@ -98,19 +110,23 @@ router.get("/requirements", async (req, res) => {
     res.status(400).json({ error: "invalid query", details: parsed.error.issues });
     return;
   }
-  const { q, skill, location, remote, status, vendorId, sort, flagged } = parsed.data;
+  const { q, skill, location, remote, status, vendorId, sort, flagged, skills } = parsed.data as typeof parsed.data & { skills?: string };
 
-  // Detect trainer session — used to filter and rank by skill relevance
+  // Detect session — used for private gating and trainer relevance ranking
+  let isAuthenticated = false;
+  let isAdmin = false;
   let trainerMainSkill: string | null = null;
   let trainerSubSkills: string[] = [];
   try {
     const activeId = await getActiveUserId(req);
     if (activeId) {
+      isAuthenticated = true;
       const [activeUser] = await db
         .select()
         .from(usersTable)
         .where(eq(usersTable.id, activeId))
         .limit(1);
+      if (activeUser?.role === "admin") isAdmin = true;
       if (activeUser?.role === "trainer" && activeUser.trainerId) {
         const [trainerRow] = await db
           .select({ mainSkill: trainersTable.mainSkill, subSkills: trainersTable.subSkills })
@@ -124,7 +140,7 @@ router.get("/requirements", async (req, res) => {
       }
     }
   } catch {
-    // not authenticated — show all (non-trainer visitor)
+    // not authenticated — hide private requirements
   }
 
   const isTrainerSession = trainerMainSkill !== null;
@@ -136,16 +152,29 @@ router.get("/requirements", async (req, res) => {
       sql`(${requirementsTable.title} ILIKE ${like} OR ${requirementsTable.description} ILIKE ${like})`,
     );
   }
-  if (skill) {
-    conds.push(
-      sql`(${requirementsTable.skill} = ${skill} OR ${requirementsTable.subSkills} @> ${JSON.stringify([skill])}::jsonb)`,
+  // Single legacy param OR new comma-separated multi-skills
+  const skillList = skills
+    ? skills.split(",").map((s) => s.trim()).filter(Boolean)
+    : skill
+      ? [skill]
+      : [];
+  if (skillList.length > 0) {
+    const orClauses = skillList.map(
+      (s) => sql`(${requirementsTable.skill} ILIKE ${`%${s}%`} OR ${requirementsTable.subSkills} @> ${JSON.stringify([s])}::jsonb)`,
     );
+    conds.push(sql`(${sql.join(orClauses, sql` OR `)})`);
   }
   if (location) conds.push(eq(requirementsTable.location, location));
   if (remote !== undefined) conds.push(eq(requirementsTable.remote, remote));
   if (status) conds.push(eq(requirementsTable.status, status));
   if (vendorId) conds.push(eq(requirementsTable.vendorId, vendorId));
   if (flagged !== undefined) conds.push(eq(requirementsTable.flagged, flagged));
+  // Hide private requirements from guests
+  if (!isAuthenticated) conds.push(eq(requirementsTable.isPrivate, false));
+  // Always hide "hire through us" requirements from the public listing
+  conds.push(eq(requirementsTable.hireThroughUs, false));
+  // Hide admin-hidden requirements from non-admins
+  if (!isAdmin) conds.push(eq(requirementsTable.hidden, false));
 
   // For trainer sessions, restrict to requirements where at least one skill overlaps
   if (isTrainerSession) {
@@ -189,9 +218,10 @@ router.get("/requirements", async (req, res) => {
           : desc(requirementsTable.createdAt);
   }
 
+  // Featured requirements always surface first, then apply the secondary sort
   const rows = where
-    ? await db.select().from(requirementsTable).where(where).orderBy(orderBy)
-    : await db.select().from(requirementsTable).orderBy(orderBy);
+    ? await db.select().from(requirementsTable).where(where).orderBy(desc(requirementsTable.isFeatured), orderBy)
+    : await db.select().from(requirementsTable).orderBy(desc(requirementsTable.isFeatured), orderBy);
   res.json(await fetchListWithCounts(rows));
 });
 
@@ -199,8 +229,8 @@ router.get("/requirements/recent", async (_req, res) => {
   const rows = await db
     .select()
     .from(requirementsTable)
-    .where(eq(requirementsTable.status, "open"))
-    .orderBy(desc(requirementsTable.createdAt))
+    .where(and(eq(requirementsTable.status, "open"), eq(requirementsTable.hireThroughUs, false)))
+    .orderBy(desc(requirementsTable.isFeatured), desc(requirementsTable.createdAt))
     .limit(8);
   res.json(await fetchListWithCounts(rows));
 });
@@ -211,6 +241,14 @@ router.post("/requirements", async (req, res) => {
     res.status(400).json({ error: "invalid body", details: parsed.error.issues });
     return;
   }
+  const rawAudience = typeof (req.body as { audienceType?: unknown })?.audienceType === "string"
+    ? ((req.body as { audienceType: string }).audienceType.trim().toLowerCase())
+    : "";
+  if (rawAudience !== "freshers" && rawAudience !== "lateral" && rawAudience !== "both") {
+    res.status(400).json({ error: "audienceType is required and must be 'freshers', 'lateral' or 'both'" });
+    return;
+  }
+  const audienceType = rawAudience;
   const activeId = await getActiveUserId(req);
   const [active] = await db
     .select()
@@ -225,6 +263,17 @@ router.post("/requirements", async (req, res) => {
   const deadline = parsed.data.deadline instanceof Date
     ? parsed.data.deadline
     : new Date(parsed.data.deadline);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (deadline < today) {
+    res.status(400).json({ error: "Deadline cannot be in the past" });
+    return;
+  }
+  const startDate = parsed.data.startDate ? new Date(parsed.data.startDate) : null;
+  if (startDate && startDate < today) {
+    res.status(400).json({ error: "Training start date cannot be in the past" });
+    return;
+  }
   const isRemote = parsed.data.trainingMode === "remote";
   await db.insert(requirementsTable).values({
     id,
@@ -249,6 +298,11 @@ router.post("/requirements", async (req, res) => {
     language: parsed.data.language ?? null,
     trainerScope: parsed.data.trainerScope,
     startDate: parsed.data.startDate ?? null,
+    audienceType,
+    isUrgent: parsed.data.isUrgent ?? false,
+    isFeatured: parsed.data.isFeatured ?? false,
+    isPrivate: parsed.data.isPrivate ?? false,
+    hireThroughUs: parsed.data.hireThroughUs ?? false,
   });
   await db.insert(activityTable).values({
     id: newId("act"),
@@ -267,6 +321,59 @@ router.post("/requirements", async (req, res) => {
     .from(requirementsTable)
     .where(eq(requirementsTable.id, id))
     .limit(1);
+
+  // Fire-and-forget: notify matching trainers who have opted in
+  (async () => {
+    try {
+      const reqSkill = parsed.data.skill;
+      const reqSubSkills = parsed.data.subSkills ?? [];
+      const allReqSkills = [reqSkill, ...reqSubSkills];
+      const skillJsonb = JSON.stringify(allReqSkills);
+      const matchingTrainers = await db
+        .select({
+          id: trainersTable.id,
+          name: trainersTable.name,
+          emailPrefs: trainersTable.emailPrefs,
+        })
+        .from(trainersTable)
+        .where(
+          sql`(
+            ${trainersTable.mainSkill} = ANY(ARRAY(SELECT jsonb_array_elements_text(${skillJsonb}::jsonb)))
+            OR ${trainersTable.subSkills} ?| ARRAY(SELECT jsonb_array_elements_text(${skillJsonb}::jsonb))
+          )`,
+        );
+
+      const domain = process.env.APP_DOMAIN?.trim() ?? "";
+      const requirementUrl = domain
+        ? `https://${domain}/requirements/${id}`
+        : `/requirements/${id}`;
+
+      await Promise.allSettled(
+        matchingTrainers.map(async (trainer) => {
+          const prefs = trainer.emailPrefs ?? { endorsements: true, applicationStatus: true, newRequirementMatch: true, messages: true };
+          if (prefs.newRequirementMatch === false) return;
+          const [trainerUser] = await db
+            .select({ email: usersTable.email })
+            .from(usersTable)
+            .where(eq(usersTable.trainerId, trainer.id))
+            .limit(1);
+          if (!trainerUser?.email) return;
+          return notifyTrainerNewRequirementMatch({
+            trainerEmail: trainerUser.email,
+            trainerName: trainer.name,
+            requirementTitle: parsed.data.title,
+            vendorName: vendor?.companyName ?? "a vendor",
+            skill: reqSkill,
+            requirementUrl,
+            trainerId: trainer.id,
+          });
+        }),
+      );
+    } catch {
+      // swallow — email notification is best-effort
+    }
+  })();
+
   res.status(201).json(await buildRequirementCard(created!, vendor ?? null, 0));
 });
 
@@ -322,6 +429,31 @@ router.patch("/requirements/:id", async (req, res) => {
     res.status(400).json({ error: "invalid params" });
     return;
   }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+
+  const [existing] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "requirement not found" });
+    return;
+  }
+
+  const isAdmin = active?.role === "admin";
+  const isOwner = active?.role === "vendor" && active.vendorId === existing.vendorId;
+  if (!isAdmin && !isOwner) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+
   const body = UpdateRequirementBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "invalid body", details: body.error.issues });
@@ -481,6 +613,10 @@ router.post("/requirements/:id/apply", async (req, res) => {
     }
   }
 
+  const DEFAULT_MSG = "I am interested in this requirement and believe my skills and experience make me a strong fit. I look forward to discussing further.";
+  const finalMessage = body.data.message?.trim() || DEFAULT_MSG;
+  const finalRate = body.data.proposedRate ?? undefined;
+
   const id = newId("app");
   try {
     await db.insert(applicationsTable).values({
@@ -488,8 +624,8 @@ router.post("/requirements/:id/apply", async (req, res) => {
       requirementId: params.data.id,
       trainerId: active.trainerId,
       status: "submitted",
-      message: body.data.message,
-      proposedRate: body.data.proposedRate,
+      message: finalMessage,
+      proposedRate: finalRate,
     });
   } catch {
     res.status(409).json({ error: "already applied" });
@@ -513,14 +649,15 @@ router.post("/requirements/:id/apply", async (req, res) => {
       .from(vendorsTable)
       .where(eq(vendorsTable.id, r.vendorId))
       .limit(1);
-    if (vendor?.email) {
+    const vendorEmailPrefs = resolveVendorEmailPrefs(vendor?.emailPrefs);
+    if (vendor?.email && vendorEmailPrefs.newApplication !== false) {
       notifyVendorNewApplication({
         vendorEmail: vendor.email,
         vendorName: vendor.companyName,
         trainerName: active.name ?? "A trainer",
         requirementTitle: r.title,
-        proposedRate: body.data.proposedRate,
-        message: body.data.message,
+        proposedRate: finalRate,
+        message: finalMessage,
       }).catch(() => {});
     }
   }
@@ -529,8 +666,8 @@ router.post("/requirements/:id/apply", async (req, res) => {
     requirementId: params.data.id,
     trainerId: active.trainerId,
     status: "submitted",
-    message: body.data.message,
-    proposedRate: body.data.proposedRate,
+    message: finalMessage,
+    proposedRate: finalRate,
     createdAt: new Date().toISOString(),
   });
 });
@@ -574,6 +711,10 @@ router.get("/requirements/:id/applications", async (req, res) => {
     }
   }
 
+  // Vendor ownership is already verified in the auth block above;
+  // admins bypass ownership — vendorNote is only returned to the owning vendor.
+  const isOwningVendor = active.role === "vendor";
+
   const rows = await db
     .select({ app: applicationsTable, trainer: trainersTable })
     .from(applicationsTable)
@@ -588,6 +729,10 @@ router.get("/requirements/:id/applications", async (req, res) => {
       status: r.app.status,
       message: r.app.message,
       proposedRate: r.app.proposedRate,
+      withdrawnReason: r.app.withdrawnReason ?? undefined,
+      ...(isOwningVendor && r.app.vendorNote != null
+        ? { vendorNote: r.app.vendorNote }
+        : {}),
       createdAt: r.app.createdAt.toISOString(),
       trainer: r.trainer
         ? {
@@ -678,6 +823,128 @@ router.get("/requirements/:id/suggested-trainers", async (req, res) => {
   );
 });
 
+// GET /requirements/:id/ai-matches  — vendor owner only
+router.get("/requirements/:id/ai-matches", async (req, res) => {
+  const params = GetRequirementParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "vendor" || !active.vendorId) {
+    res.status(403).json({ error: "vendor only" });
+    return;
+  }
+
+  const [requirement] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (!requirement) {
+    res.status(404).json({ error: "requirement not found" });
+    return;
+  }
+  if (requirement.vendorId !== active.vendorId) {
+    res.status(403).json({ error: "not your requirement" });
+    return;
+  }
+
+  // Fetch up to 50 trainers from DB for LLM ranking
+  const trainers = await db
+    .select({
+      id: trainersTable.id,
+      name: trainersTable.name,
+      mainSkill: trainersTable.mainSkill,
+      subSkills: trainersTable.subSkills,
+      experienceYears: trainersTable.experienceYears,
+      rating: trainersTable.rating,
+      avatarUrl: trainersTable.avatarUrl,
+      location: trainersTable.location,
+      verified: trainersTable.verified,
+      bio: trainersTable.bio,
+    })
+    .from(trainersTable)
+    .orderBy(desc(trainersTable.rating))
+    .limit(50);
+
+  if (trainers.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const trainerList = trainers
+    .map((t, i) => {
+      const skills = [t.mainSkill, ...((t.subSkills as string[]) ?? [])].join(", ");
+      const bio = t.bio ? ` Bio: ${String(t.bio).slice(0, 100)}` : "";
+      return `${i + 1}. ID=${t.id} Name="${t.name}" Skills="${skills}" Exp=${t.experienceYears}yr Rating=${Number(t.rating).toFixed(1)} Location="${t.location ?? ""}".${bio}`;
+    })
+    .join("\n");
+
+  const subSkillsText = (requirement.subSkills as string[] ?? []).join(", ");
+  const prompt = `You are a talent-matching assistant for a B2B training marketplace.
+
+Requirement:
+- Title: "${requirement.title}"
+- Primary skill needed: "${requirement.skill}"
+- Sub-skills: "${subSkillsText}"
+- Duration: ${requirement.durationDays} days
+- Location: "${requirement.location}"
+- Budget: ${requirement.budget > 0 ? `₹${requirement.budget}` : "negotiable"}
+${requirement.description ? `- Description: "${String(requirement.description).slice(0, 300)}"` : ""}
+
+Trainer candidates:
+${trainerList}
+
+Pick the top 5 trainers best suited for this requirement. Consider skill match, experience, and rating. Return ONLY a valid JSON array (no markdown, no extra text) with exactly this structure:
+[{"trainerId":"<id>","reason":"<one sentence explaining why this trainer fits>"}]`;
+
+  let ranked: Array<{ trainerId: string; reason: string }> = [];
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const raw = completion.choices[0]?.message?.content ?? "[]";
+    const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) {
+      ranked = parsed.filter(
+        (x): x is { trainerId: string; reason: string } =>
+          typeof x?.trainerId === "string" && typeof x?.reason === "string",
+      ).slice(0, 5);
+    }
+  } catch {
+    res.json([]);
+    return;
+  }
+
+  const trainerMap = new Map(trainers.map((t) => [t.id, t]));
+  const result = ranked
+    .map(({ trainerId, reason }) => {
+      const t = trainerMap.get(trainerId);
+      if (!t) return null;
+      return {
+        trainerId: t.id,
+        name: t.name,
+        mainSkill: t.mainSkill,
+        subSkills: (t.subSkills as string[]) ?? [],
+        experienceYears: t.experienceYears,
+        rating: Number(t.rating),
+        avatarUrl: t.avatarUrl ?? "",
+        location: t.location ?? undefined,
+        verified: t.verified ?? false,
+        reason,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  res.json(result);
+});
+
 // POST /requirements/:id/flag  — trainer only
 router.post("/requirements/:id/flag", async (req, res) => {
   const params = FlagRequirementParams.safeParse(req.params);
@@ -714,6 +981,131 @@ router.post("/requirements/:id/flag", async (req, res) => {
   res.json(await buildRequirementCard(updated, vendor ?? null, countRow?.count ?? 0));
 });
 
+// POST /requirements/:id/bulk-reject  — vendor-owner only
+router.post("/requirements/:id/bulk-reject", async (req, res) => {
+  const params = GetRequirementParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const activeId = await getActiveUserId(req);
+  const [active] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, activeId))
+    .limit(1);
+  if (!active || active.role !== "vendor" || !active.vendorId) {
+    res.status(403).json({ error: "vendor only" });
+    return;
+  }
+  const [reqRow] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, params.data.id))
+    .limit(1);
+  if (!reqRow) {
+    res.status(404).json({ error: "requirement not found" });
+    return;
+  }
+  if (reqRow.vendorId !== active.vendorId) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+
+  // Enforce server-side: at least one hired application must exist
+  const [hiredCheck] = await db
+    .select({ id: applicationsTable.id })
+    .from(applicationsTable)
+    .where(
+      and(
+        eq(applicationsTable.requirementId, params.data.id),
+        eq(applicationsTable.status, "hired"),
+      ),
+    )
+    .limit(1);
+  if (!hiredCheck) {
+    res.status(409).json({ error: "no_hired_trainer", message: "At least one trainer must be hired before bulk-rejecting." });
+    return;
+  }
+
+  // Find all submitted/shortlisted applications
+  const toReject = await db
+    .select({ app: applicationsTable, trainer: trainersTable })
+    .from(applicationsTable)
+    .leftJoin(trainersTable, eq(applicationsTable.trainerId, trainersTable.id))
+    .where(
+      and(
+        eq(applicationsTable.requirementId, params.data.id),
+        sql`${applicationsTable.status} IN ('submitted', 'shortlisted')`,
+      ),
+    );
+
+  if (toReject.length === 0) {
+    res.json({ rejectedCount: 0 });
+    return;
+  }
+
+  const appIds = toReject.map((r) => r.app.id);
+  await db
+    .update(applicationsTable)
+    .set({ status: "rejected" })
+    .where(inArray(applicationsTable.id, appIds));
+
+  // Fire status-update emails for each rejected trainer
+  const { notifyTrainerStatusUpdate } = await import("../lib/mailer");
+  const [vendor] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.id, active.vendorId))
+    .limit(1);
+
+  await Promise.allSettled(
+    toReject.map(async (r) => {
+      const [[trainerUser], [trainerPrefsRow]] = await Promise.all([
+        db.select().from(usersTable).where(eq(usersTable.trainerId, r.app.trainerId)).limit(1),
+        db.select({ emailPrefs: trainersTable.emailPrefs }).from(trainersTable).where(eq(trainersTable.id, r.app.trainerId)).limit(1),
+      ]);
+      const emailPrefs = trainerPrefsRow?.emailPrefs ?? { endorsements: true, applicationStatus: true, newRequirementMatch: true, messages: true };
+      if (trainerUser?.email && r.trainer && emailPrefs.applicationStatus !== false) {
+        return notifyTrainerStatusUpdate({
+          trainerEmail: trainerUser.email,
+          trainerName: r.trainer.name,
+          requirementTitle: reqRow.title,
+          vendorName: vendor?.companyName ?? "the vendor",
+          status: "rejected",
+          trainerId: r.app.trainerId,
+        });
+      }
+    }),
+  );
+
+  await db.insert(activityTable).values({
+    id: newId("act"),
+    type: "application",
+    title: `${toReject.length} application${toReject.length === 1 ? "" : "s"} rejected in bulk`,
+    subtitle: reqRow.title,
+    avatarUrl: active.avatarUrl,
+  });
+
+  res.json({ rejectedCount: toReject.length });
+});
+
+// GET /admin/requirements/hire-through-us  — admin only
+router.get("/admin/requirements/hire-through-us", async (req, res) => {
+  const activeId = await getActiveUserId(req);
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "admin") {
+    res.status(403).json({ error: "admin only" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.hireThroughUs, true))
+    .orderBy(desc(requirementsTable.createdAt));
+  res.json(await fetchListWithCounts(rows));
+});
+
 // POST /requirements/:id/unflag  — admin only
 router.post("/requirements/:id/unflag", async (req, res) => {
   const params = UnflagRequirementParams.safeParse(req.params);
@@ -747,6 +1139,75 @@ router.post("/requirements/:id/unflag", async (req, res) => {
     .from(applicationsTable)
     .where(eq(applicationsTable.requirementId, updated.id));
   res.json(await buildRequirementCard(updated, vendor ?? null, countRow?.count ?? 0));
+});
+
+async function ensureAdmin(req: Parameters<typeof getActiveUserId>[0]): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const activeId = await getActiveUserId(req);
+  if (!activeId) return { ok: false, status: 401, error: "not authenticated" };
+  const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!active || active.role !== "admin") return { ok: false, status: 403, error: "admin only" };
+  return { ok: true };
+}
+
+async function setHidden(id: string, hidden: boolean) {
+  const [existing] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, id)).limit(1);
+  if (!existing) return null;
+  const [updated] = await db
+    .update(requirementsTable)
+    .set({ hidden })
+    .where(eq(requirementsTable.id, id))
+    .returning();
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, updated.vendorId)).limit(1);
+  const [countRow] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(applicationsTable)
+    .where(eq(applicationsTable.requirementId, updated.id));
+  return buildRequirementCard(updated, vendor ?? null, countRow?.count ?? 0);
+}
+
+// POST /requirements/:id/hide  — admin only
+router.post("/requirements/:id/hide", async (req, res) => {
+  const params = HideRequirementParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+  const auth = await ensureAdmin(req);
+  if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
+  const card = await setHidden(params.data.id, true);
+  if (!card) { res.status(404).json({ error: "requirement not found" }); return; }
+  res.json(card);
+});
+
+// POST /requirements/:id/unhide  — admin only
+router.post("/requirements/:id/unhide", async (req, res) => {
+  const params = HideRequirementParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+  const auth = await ensureAdmin(req);
+  if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
+  const card = await setHidden(params.data.id, false);
+  if (!card) { res.status(404).json({ error: "requirement not found" }); return; }
+  res.json(card);
+});
+
+// POST /requirements/:id/warn  — admin only; emails the vendor a moderation message
+router.post("/requirements/:id/warn", async (req, res) => {
+  const params = WarnRequirementVendorParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "invalid params" }); return; }
+  const body = WarnRequirementVendorBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "invalid body", details: body.error.issues }); return; }
+  const auth = await ensureAdmin(req);
+  if (!auth.ok) { res.status(auth.status).json({ error: auth.error }); return; }
+  const [existing] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, params.data.id)).limit(1);
+  if (!existing) { res.status(404).json({ error: "requirement not found" }); return; }
+  const [vendor] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, existing.vendorId)).limit(1);
+  if (!vendor || !vendor.email) { res.status(404).json({ error: "vendor email not found" }); return; }
+  await notifyVendorWarning({
+    to: vendor.email,
+    vendorName: vendor.contactName ?? vendor.companyName ?? "there",
+    requirementTitle: existing.title,
+    requirementId: existing.id,
+    message: body.data.message,
+  });
+  req.log.info({ requirementId: existing.id, vendorEmail: vendor.email }, "admin warned vendor");
+  res.json({ ok: true });
 });
 
 export default router;

@@ -1,6 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Link } from "wouter";
-import { motion } from "framer-motion";
 import {
   useListTrainers,
   getListTrainersQueryKey,
@@ -20,29 +19,168 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TrainerAvatar } from "@/components/TrainerAvatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, Star, MapPin, Briefcase, Filter, X, Users, Bookmark } from "lucide-react";
+import { Search, Star, MapPin, Briefcase, Filter, X, Users, Bookmark, Plus, ThumbsUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// ── Multi-select skill combobox ──────────────────────────────────────────────
+function SkillMultiSelect({
+  selected,
+  onChange,
+  allSkills,
+}: {
+  selected: string[];
+  onChange: (next: string[]) => void;
+  allSkills: string[];
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const trimmed = query.trim();
+  const showDropdown = open && trimmed.length >= 2;
+
+  const matches = React.useMemo(() => {
+    if (trimmed.length < 2) return [];
+    const q = trimmed.toLowerCase();
+    return allSkills
+      .filter((s) => s.toLowerCase().includes(q) && !selected.includes(s))
+      .slice(0, 8);
+  }, [trimmed, allSkills, selected]);
+
+  const customExists = allSkills.some(
+    (s) => s.toLowerCase() === trimmed.toLowerCase(),
+  );
+  const showCustom =
+    trimmed.length >= 2 && !customExists && !selected.includes(trimmed);
+
+  const add = (skill: string) => {
+    const s = skill.trim();
+    if (!s || selected.includes(s)) return;
+    onChange([...selected, s]);
+    setQuery("");
+    inputRef.current?.focus();
+  };
+
+  const remove = (skill: string) =>
+    onChange(selected.filter((s) => s !== skill));
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === "Enter" || e.key === ",") && trimmed) {
+      e.preventDefault();
+      add(trimmed);
+    } else if (e.key === "Backspace" && query === "" && selected.length > 0) {
+      remove(selected[selected.length - 1]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative space-y-2">
+      <div
+        className="flex flex-wrap gap-1.5 min-h-[42px] p-2 rounded-md border bg-background cursor-text focus-within:ring-1 focus-within:ring-ring"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {selected.map((s) => (
+          <Badge
+            key={s}
+            variant="secondary"
+            className="pl-2 pr-1 py-0.5 gap-1 shrink-0"
+          >
+            {s}
+            <button
+              type="button"
+              aria-label={`Remove ${s}`}
+              onMouseDown={(e) => { e.preventDefault(); remove(s); }}
+              className="hover:bg-foreground/10 rounded-sm"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        <div className="relative flex-1 flex items-center min-w-[120px]">
+          <Search className="absolute left-0 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            ref={inputRef}
+            className="w-full pl-5 outline-none bg-transparent text-sm placeholder:text-muted-foreground"
+            placeholder={selected.length === 0 ? "Type 2+ letters to search skills…" : ""}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onKeyDown={handleKey}
+          />
+        </div>
+      </div>
+
+      {showDropdown && (matches.length > 0 || showCustom) && (
+        <div className="absolute z-50 w-full mt-1 rounded-md border bg-popover shadow-md">
+          <ul className="py-1 max-h-52 overflow-y-auto">
+            {matches.map((s) => (
+              <li key={s}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); add(s); }}
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
+                >
+                  {s}
+                </button>
+              </li>
+            ))}
+            {showCustom && (
+              <li>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); add(trimmed); }}
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center gap-2 text-muted-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  Use "{trimmed}" as custom skill
+                </button>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Enter or comma to add · Backspace removes last
+      </p>
+    </div>
+  );
+}
+
+function useDebounce<T>(value: T, delay = 400): T {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 export default function Trainers() {
-  const [search, setSearch] = useState("");
-  const [skill, setSkill] = useState<string>("all");
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [location, setLocation] = useState("");
   const [remote, setRemote] = useState(false);
   const [minExp, setMinExp] = useState([0]);
-  const [sort, setSort] = useState<"rating" | "experience" | "recent">("rating");
+  const [gender, setGender] = useState<"all" | "male" | "female">("all");
+  const [sort, setSort] = useState<"rating" | "experience" | "recent" | "endorsements">("rating");
 
-  // Add debouncing in a real app, but for now we pass directly to keep it simple and responsive
+  const debouncedLocation = useDebounce(location);
+  const debouncedMinExp = useDebounce(minExp, 1000);
+
   const queryParams = {
-    ...(search ? { q: search } : {}),
-    ...(skill !== "all" ? { skill } : {}),
-    ...(location ? { location } : {}),
+    ...(selectedSkills.length > 0 ? { skills: selectedSkills.join(",") } : {}),
+    ...(debouncedLocation ? { location: debouncedLocation } : {}),
     ...(remote ? { remote: true } : {}),
-    ...(minExp[0] > 0 ? { minExperience: minExp[0] } : {}),
+    ...(debouncedMinExp[0] > 0 ? { minExperience: debouncedMinExp[0] } : {}),
+    ...(gender !== "all" ? { gender: gender as "male" | "female" } : {}),
     sort,
   };
 
@@ -101,15 +239,15 @@ export default function Trainers() {
   const allSkills = skillsData?.flatMap(cat => cat.skills) || [];
 
   const clearFilters = () => {
-    setSearch("");
-    setSkill("all");
+    setSelectedSkills([]);
     setLocation("");
     setRemote(false);
     setMinExp([0]);
+    setGender("all");
     setSort("rating");
   };
 
-  const activeFiltersCount = (search ? 1 : 0) + (skill !== "all" ? 1 : 0) + (location ? 1 : 0) + (remote ? 1 : 0) + (minExp[0] > 0 ? 1 : 0);
+  const activeFiltersCount = selectedSkills.length + (location ? 1 : 0) + (remote ? 1 : 0) + (minExp[0] > 0 ? 1 : 0) + (gender !== "all" ? 1 : 0);
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 flex flex-col md:flex-row gap-8">
@@ -128,32 +266,12 @@ export default function Trainers() {
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="search">Search</Label>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="search"
-                placeholder="Name or keyword..."
-                className="pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="skill">Primary Skill</Label>
-            <Select value={skill} onValueChange={setSkill}>
-              <SelectTrigger id="skill">
-                <SelectValue placeholder="Any skill" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any skill</SelectItem>
-                {allSkills.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Skills</Label>
+            <SkillMultiSelect
+              selected={selectedSkills}
+              onChange={setSelectedSkills}
+              allSkills={allSkills}
+            />
           </div>
 
           <div className="space-y-2">
@@ -168,6 +286,20 @@ export default function Trainers() {
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Gender</Label>
+            <Select value={gender} onValueChange={(v) => setGender(v as "all" | "male" | "female")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Any gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any gender</SelectItem>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-4 pt-2">
@@ -213,6 +345,7 @@ export default function Trainers() {
                 <SelectItem value="rating">Highest Rated</SelectItem>
                 <SelectItem value="experience">Most Experience</SelectItem>
                 <SelectItem value="recent">Recently Added</SelectItem>
+                <SelectItem value="endorsements">Most Endorsed</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -272,10 +405,7 @@ export default function Trainers() {
                 <Link href={`/trainers/${trainer.id}`}>
                 <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
                   <CardHeader className="flex flex-row items-start gap-4 pb-2">
-                    <Avatar className="h-12 w-12 border border-border">
-                      <AvatarImage src={trainer.avatarUrl} alt={trainer.name} />
-                      <AvatarFallback className="bg-primary/10 text-primary">{trainer.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
+                    <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-12 w-12 border border-border" />
                     <div className="flex-1 min-w-0 pr-8">
                       <CardTitle className="text-lg flex items-center gap-2 truncate">
                         {trainer.name}
@@ -309,17 +439,21 @@ export default function Trainers() {
                         <span className="font-medium text-foreground">{trainer.rating.toFixed(1)}</span>
                         <span>({trainer.reviewCount})</span>
                       </div>
-                      <div className="flex items-center justify-end gap-1.5 font-semibold text-foreground">
-                        ${trainer.hourlyRate}/hr
-                      </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Briefcase className="h-4 w-4" />
                         <span>{trainer.experienceYears}y exp</span>
                       </div>
-                      <div className="flex items-center justify-end gap-2 text-muted-foreground">
+                      <div className="flex items-center gap-2 text-muted-foreground">
                         <MapPin className="h-4 w-4" />
-                        <span className="truncate max-w-[100px] text-right">{trainer.location}</span>
+                        <span className="truncate max-w-[100px]">{trainer.location}</span>
                       </div>
+                      {(trainer.endorsementCount ?? 0) > 0 && (
+                        <div className="flex items-center justify-end gap-1.5 text-muted-foreground">
+                          <ThumbsUp className="h-4 w-4 text-emerald-600" />
+                          <span className="font-medium text-emerald-700">{trainer.endorsementCount}</span>
+                          <span>{trainer.endorsementCount === 1 ? "endorsement" : "endorsements"}</span>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

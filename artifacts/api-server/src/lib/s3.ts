@@ -8,7 +8,7 @@ function getConfig(): { client: S3Client; bucket: string } {
   if (!region || !bucket) {
     throw new Error("AWS_REGION and S3_BUCKET_NAME must be set");
   }
-  const client = new S3Client({ region });
+  const client = new S3Client({ region, forcePathStyle: true });
   return { client, bucket };
 }
 
@@ -44,5 +44,30 @@ export async function getResumeDownloadUrl(objectKey: string): Promise<string> {
   const { client, bucket } = getConfig();
   const command = new GetObjectCommand({ Bucket: bucket, Key: objectKey });
   return getSignedUrl(client, command, { expiresIn: 3600 });
+}
+
+export async function uploadResume(
+  body: Buffer,
+  contentType: string,
+): Promise<{ objectKey: string }> {
+  const { client, bucket } = getConfig();
+  const objectKey = `${RESUME_KEY_PREFIX}${randomUUID()}`;
+  // Use a presigned URL for the actual PUT so path-style addressing is used
+  // (direct PutObjectCommand fails for legacy bucket names containing '@')
+  const presignedUrl = await getSignedUrl(
+    client,
+    new PutObjectCommand({ Bucket: bucket, Key: objectKey, ContentType: contentType }),
+    { expiresIn: 300 },
+  );
+  const resp = await fetch(presignedUrl, {
+    method: "PUT",
+    body,
+    headers: { "Content-Type": contentType },
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`S3 upload failed: ${resp.status} ${text}`);
+  }
+  return { objectKey };
 }
 

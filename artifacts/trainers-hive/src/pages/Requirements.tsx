@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Link } from "wouter";
 import {
   useListRequirements,
@@ -16,16 +16,102 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, MapPin, Briefcase, Filter, X, Building, BookOpen, Clock, Users, ArrowRight } from "lucide-react";
+import { Search, MapPin, Briefcase, Filter, X, Building, BookOpen, Clock, Users, ArrowRight, ShieldCheck, Zap, Star, Lock, Handshake, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
+
+// ── Multi-select skill combobox (shared pattern) ─────────────────────────────
+function SkillMultiSelect({
+  selected,
+  onChange,
+  allSkills,
+}: {
+  selected: string[];
+  onChange: (next: string[]) => void;
+  allSkills: string[];
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const trimmed = query.trim();
+  const showDropdown = open && trimmed.length >= 2;
+  const matches = React.useMemo(() => {
+    if (trimmed.length < 2) return [];
+    const q = trimmed.toLowerCase();
+    return allSkills.filter((s) => s.toLowerCase().includes(q) && !selected.includes(s)).slice(0, 8);
+  }, [trimmed, allSkills, selected]);
+  const customExists = allSkills.some((s) => s.toLowerCase() === trimmed.toLowerCase());
+  const showCustom = trimmed.length >= 2 && !customExists && !selected.includes(trimmed);
+  const add = (skill: string) => {
+    const s = skill.trim();
+    if (!s || selected.includes(s)) return;
+    onChange([...selected, s]);
+    setQuery("");
+    inputRef.current?.focus();
+  };
+  const remove = (skill: string) => onChange(selected.filter((s) => s !== skill));
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === "Enter" || e.key === ",") && trimmed) { e.preventDefault(); add(trimmed); }
+    else if (e.key === "Backspace" && query === "" && selected.length > 0) { remove(selected[selected.length - 1]); }
+    else if (e.key === "Escape") { setOpen(false); }
+  };
+  return (
+    <div className="relative space-y-2">
+      <div
+        className="flex flex-wrap gap-1.5 min-h-[42px] p-2 rounded-md border bg-background cursor-text focus-within:ring-1 focus-within:ring-ring"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {selected.map((s) => (
+          <Badge key={s} variant="secondary" className="pl-2 pr-1 py-0.5 gap-1 shrink-0">
+            {s}
+            <button type="button" aria-label={`Remove ${s}`} onMouseDown={(e) => { e.preventDefault(); remove(s); }} className="hover:bg-foreground/10 rounded-sm">
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        <div className="relative flex-1 flex items-center min-w-[120px]">
+          <Search className="absolute left-0 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            ref={inputRef}
+            className="w-full pl-5 outline-none bg-transparent text-sm placeholder:text-muted-foreground"
+            placeholder={selected.length === 0 ? "Type 2+ letters…" : ""}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            onKeyDown={handleKey}
+          />
+        </div>
+      </div>
+      {showDropdown && (matches.length > 0 || showCustom) && (
+        <div className="absolute z-50 w-full mt-1 rounded-md border bg-popover shadow-md">
+          <ul className="py-1 max-h-52 overflow-y-auto">
+            {matches.map((s) => (
+              <li key={s}>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); add(s); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent">{s}</button>
+              </li>
+            ))}
+            {showCustom && (
+              <li>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); add(trimmed); }} className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center gap-2 text-muted-foreground">
+                  <Plus className="h-3.5 w-3.5 shrink-0" /> Use "{trimmed}" as custom skill
+                </button>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Requirements() {
   const { data: user } = useGetCurrentUser();
   const [search, setSearch] = useState("");
-  const [skill, setSkill] = useState<string>("all");
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [location, setLocation] = useState("");
   const [remote, setRemote] = useState(false);
   const [status, setStatus] = useState<string>("open");
@@ -33,7 +119,7 @@ export default function Requirements() {
 
   const queryParams = {
     ...(search ? { q: search } : {}),
-    ...(skill !== "all" ? { skill } : {}),
+    ...(selectedSkills.length > 0 ? { skills: selectedSkills.join(",") } : {}),
     ...(location ? { location } : {}),
     ...(remote ? { remote: true } : {}),
     ...(status !== "all" ? { status: status as any } : {}),
@@ -56,14 +142,14 @@ export default function Requirements() {
 
   const clearFilters = () => {
     setSearch("");
-    setSkill("all");
+    setSelectedSkills([]);
     setLocation("");
     setRemote(false);
     setStatus("open");
     setSort("recent");
   };
 
-  const activeFiltersCount = (search ? 1 : 0) + (skill !== "all" ? 1 : 0) + (location ? 1 : 0) + (remote ? 1 : 0) + (status !== "open" ? 1 : 0);
+  const activeFiltersCount = (search ? 1 : 0) + (selectedSkills.length > 0 ? 1 : 0) + (location ? 1 : 0) + (remote ? 1 : 0) + (status !== "open" ? 1 : 0);
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 flex flex-col md:flex-row gap-8">
@@ -96,18 +182,12 @@ export default function Requirements() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="skill">Skill Required</Label>
-            <Select value={skill} onValueChange={setSkill}>
-              <SelectTrigger id="skill">
-                <SelectValue placeholder="Any skill" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any skill</SelectItem>
-                {allSkills.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Skill Required</Label>
+            <SkillMultiSelect
+              selected={selectedSkills}
+              onChange={setSelectedSkills}
+              allSkills={allSkills}
+            />
           </div>
 
           <div className="space-y-2">
@@ -234,12 +314,44 @@ export default function Requirements() {
                               <h3 className="font-semibold text-xl truncate group-hover:text-primary transition-colors min-w-0 flex-1">
                                 {req.title}
                               </h3>
-                              <Badge variant={req.status === 'open' ? 'default' : req.status === 'vacant' ? 'destructive' : 'secondary'} className="capitalize shrink-0">
-                                {req.status}
-                              </Badge>
+                              <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                {(req as any).isUrgent && (
+                                  <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                    <Zap className="h-3 w-3" /> Urgent
+                                  </span>
+                                )}
+                                {(req as any).isFeatured && (
+                                  <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                    <Star className="h-3 w-3" /> Featured
+                                  </span>
+                                )}
+                                {(req as any).isPrivate && (
+                                  <span className="inline-flex items-center gap-1 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                    <Lock className="h-3 w-3" /> Private
+                                  </span>
+                                )}
+                                {(req as any).hireThroughUs && (
+                                  <span className="inline-flex items-center gap-1 bg-teal-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                    <Handshake className="h-3 w-3" /> Hire Through Us
+                                  </span>
+                                )}
+                                <Badge variant={req.status === 'open' ? 'default' : req.status === 'vacant' ? 'destructive' : 'secondary'} className="capitalize">
+                                  {req.status}
+                                </Badge>
+                              </div>
                             </div>
                             <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
                               <span className="font-medium text-foreground">{req.vendorName}</span>
+                              {req.vendorVerified && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center text-primary cursor-default">
+                                      <ShieldCheck className="h-3.5 w-3.5" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>This company is verified by Trainers Hive</TooltipContent>
+                                </Tooltip>
+                              )}
                               <span>•</span>
                               <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {req.location} {req.remote && "(Remote Optional)"}</span>
                               <span>•</span>
