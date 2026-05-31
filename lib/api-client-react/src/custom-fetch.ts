@@ -44,6 +44,11 @@ export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
 }
 
+/** Returns the current bearer token for the logged-in user, or null if unauthenticated. */
+export async function getAuthToken(): Promise<string | null> {
+  return _authTokenGetter ? _authTokenGetter() : null;
+}
+
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
 }

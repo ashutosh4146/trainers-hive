@@ -59,6 +59,10 @@ export const engagementAgreementsTable = pgTable(
     cancelledByUserId: text("cancelled_by_user_id"),
     cancellationReason: text("cancellation_reason"),
 
+    // S3 key of the finalized PDF uploaded on acceptance (null if not yet stored)
+    storedPdfKey: text("stored_pdf_key"),
+    storedPdfAt: timestamp("stored_pdf_at", { withTimezone: true }),
+
     // Audit log
     auditLog: jsonb("audit_log").$type<Array<{
       at: string;

@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useListMyAgreements, getListMyAgreementsQueryKey } from "@workspace/api-client-react";
+import { useListMyAgreements, getListMyAgreementsQueryKey, getAuthToken } from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileSignature, Download, ExternalLink, Loader2 } from "lucide-react";
-import { auth } from "@/lib/firebase";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
@@ -35,7 +34,7 @@ export default function MyAgreements() {
     if (downloading) return;
     setDownloading(agreementId);
     try {
-      const token = await auth.currentUser?.getIdToken();
+      const token = await getAuthToken();
       const res = await fetch(`/api/agreements/${agreementId}/pdf`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
