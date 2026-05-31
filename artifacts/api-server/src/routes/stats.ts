@@ -200,27 +200,75 @@ router.get("/admin/analytics", async (req, res) => {
   });
 });
 
+// The activity feed is a platform-wide stream shown to every signed-in user
+// regardless of role or ownership. Stored rows contain personal/business data
+// (names, company names, requirement titles), so we MUST NOT broadcast the raw
+// title/subtitle. Instead we regenerate a privacy-safe, anonymized message from
+// the event `type`. This sanitizes existing rows and any future rows alike.
+function anonymizeActivity(type: string, subtitle: string): {
+  title: string;
+  subtitle: string;
+} | null {
+  switch (type) {
+    case "requirement":
+      return {
+        title: "A new training requirement was posted",
+        subtitle: "A company is hiring trainers",
+      };
+    case "application":
+      return {
+        title: "A trainer responded to a requirement",
+        subtitle: "",
+      };
+    case "hire":
+      return { title: "A trainer was hired", subtitle: "" };
+    case "review":
+      // A star rating (e.g. "4.5/5 stars") carries no PII, so it's safe to keep.
+      return {
+        title: "A new review was submitted",
+        subtitle: /^\d(\.\d)?\/5 stars$/.test(subtitle) ? subtitle : "",
+      };
+    // "removal" and any other admin/moderation events are intentionally excluded.
+    default:
+      return null;
+  }
+}
+
 router.get("/activity", async (req, res) => {
   const userId = await getActiveUserId(req);
   if (!userId) {
     res.status(401).json({ error: "Sign in to view platform activity" });
     return;
   }
+  // Over-fetch so we can drop excluded events and still return up to 20 items.
   const rows = await db
     .select()
     .from(activityTable)
     .orderBy(desc(activityTable.createdAt))
-    .limit(20);
-  res.json(
-    rows.map((a) => ({
+    .limit(60);
+  const feed: {
+    id: string;
+    type: string;
+    title: string;
+    subtitle: string;
+    createdAt: string;
+    avatarUrl: undefined;
+  }[] = [];
+  for (const a of rows) {
+    const safe = anonymizeActivity(a.type, a.subtitle);
+    if (!safe) continue;
+    feed.push({
       id: a.id,
       type: a.type,
-      title: a.title,
-      subtitle: a.subtitle,
+      title: safe.title,
+      subtitle: safe.subtitle,
       createdAt: a.createdAt.toISOString(),
-      avatarUrl: a.avatarUrl ?? undefined,
-    })),
-  );
+      // Avatars identify the individual — never expose them in the public feed.
+      avatarUrl: undefined,
+    });
+    if (feed.length >= 20) break;
+  }
+  res.json(feed);
 });
 
 export default router;
