@@ -1,4 +1,4 @@
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import {
   getAuth,
   signOut as firebaseSignOut,
@@ -8,7 +8,6 @@ import {
   signInWithPopup,
   signInWithCustomToken,
   GoogleAuthProvider,
-  type Auth,
   type User,
 } from "firebase/auth";
 
@@ -21,24 +20,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const firebaseReady = Boolean(
-  import.meta.env.VITE_FIREBASE_API_KEY &&
-  import.meta.env.VITE_FIREBASE_APP_ID,
-);
-
-let _app: FirebaseApp | null = null;
-let _auth: Auth | null = null;
-
-if (firebaseReady) {
-  try {
-    _app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]!;
-    _auth = getAuth(_app);
-  } catch (e) {
-    console.warn("[Firebase] Init failed — auth features disabled:", e);
-  }
-}
-
-export const auth = _auth as Auth;
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]!;
+export const auth = getAuth(app);
 
 const PENDING_AUTH_KEY = "th_pending_auth";
 
@@ -70,44 +53,38 @@ export function clearPendingAuth(): void {
 }
 
 export async function sendEmailSignInLink(email: string): Promise<void> {
-  if (!_auth) throw new Error("Firebase not configured");
   const callbackUrl = `${window.location.origin}/auth/callback`;
-  await sendSignInLinkToEmail(_auth, email, {
+  await sendSignInLinkToEmail(auth, email, {
     url: callbackUrl,
     handleCodeInApp: true,
   });
 }
 
 export function isEmailLinkCallback(url: string = window.location.href): boolean {
-  if (!_auth) return false;
-  return isSignInWithEmailLink(_auth, url);
+  return isSignInWithEmailLink(auth, url);
 }
 
 export async function completeEmailLinkSignIn(email: string, url: string = window.location.href): Promise<User> {
-  if (!_auth) throw new Error("Firebase not configured");
-  const cred = await signInWithEmailLink(_auth, email, url);
+  const cred = await signInWithEmailLink(auth, email, url);
   return cred.user;
 }
 
 export async function signInWithGoogle(): Promise<User> {
-  if (!_auth) throw new Error("Firebase not configured");
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const cred = await signInWithPopup(_auth, provider);
+  const cred = await signInWithPopup(auth, provider);
   return cred.user;
 }
 
 export async function signOutFirebase(): Promise<void> {
-  if (!_auth) return;
-  await firebaseSignOut(_auth);
+  await firebaseSignOut(auth);
 }
 
 export async function signInWithAdminToken(customToken: string): Promise<User> {
-  if (!_auth) throw new Error("Firebase not configured");
-  const cred = await signInWithCustomToken(_auth, customToken);
+  const cred = await signInWithCustomToken(auth, customToken);
   return cred.user;
 }
 
 export function getCurrentFirebaseUser(): User | null {
-  return _auth?.currentUser ?? null;
+  return auth.currentUser;
 }

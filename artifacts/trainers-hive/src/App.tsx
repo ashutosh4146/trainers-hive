@@ -208,7 +208,6 @@ function App() {
     }
 
     // Firebase auth state listener — takes priority once resolved.
-    if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         // Firebase user present — use Firebase ID token (most up-to-date).

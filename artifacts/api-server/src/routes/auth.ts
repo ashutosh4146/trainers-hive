@@ -181,4 +181,96 @@ router.post("/auth/password/login", async (req, res) => {
   });
 });
 
+// Step 1 of password reset: email a 6-digit code to the account owner.
+// Always responds { ok: true } regardless of whether the email is registered,
+// so the endpoint can't be used to discover which emails have accounts.
+router.post("/auth/password/reset/request", async (req, res) => {
+  const { email } = (req.body ?? {}) as { email?: string };
+  if (typeof email !== "string" || !EMAIL_RE.test(email)) {
+    res.status(400).json({ error: "Invalid email address" });
+    return;
+  }
+  const normalized = email.toLowerCase().trim();
+  try {
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, normalized))
+      .limit(1);
+    if (user && !user.deactivatedAt) {
+      const otp = createOtp(normalized);
+      // Fire-and-forget: don't await the email send. This keeps response timing
+      // uniform for registered vs. unregistered emails (no enumeration side
+      // channel) and prevents a provider outage from leaking account existence
+      // via a 500 for registered emails only.
+      void sendPasswordResetEmail(normalized, otp).catch((err) => {
+        console.error("Failed to send password reset email:", err);
+      });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    // A DB lookup failure happens for any email regardless of registration, so
+    // surfacing it doesn't reveal account existence.
+    console.error("Password reset request failed:", err);
+    res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
+// Step 2 of password reset: verify the code and set a new password.
+router.post("/auth/password/reset/confirm", async (req, res) => {
+  const { email, otp, password } = (req.body ?? {}) as {
+    email?: string;
+    otp?: string;
+    password?: string;
+  };
+  if (typeof email !== "string" || !EMAIL_RE.test(email)) {
+    res.status(400).json({ error: "Invalid email address" });
+    return;
+  }
+  if (typeof otp !== "string" || otp.trim().length !== 6) {
+    res.status(400).json({ error: "Enter the 6-digit code from your email." });
+    return;
+  }
+  if (typeof password !== "string" || password.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters." });
+    return;
+  }
+
+  const normalized = email.toLowerCase().trim();
+  const result = verifyOtp(normalized, otp);
+  if (result !== "valid") {
+    const map = {
+      invalid: { code: 422, msg: "Incorrect code. Please try again." },
+      expired: { code: 410, msg: "This code has expired. Please request a new one." },
+      too_many_attempts: {
+        code: 429,
+        msg: "Too many incorrect attempts. Please request a new code.",
+      },
+    } as const;
+    const e = map[result];
+    res.status(e.code).json({ error: e.msg });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, normalized))
+    .limit(1);
+  if (!user) {
+    res.status(404).json({ error: "No account found for this email." });
+    return;
+  }
+  if (user.deactivatedAt) {
+    res
+      .status(403)
+      .json({ error: "Your account has been deactivated. Please contact support." });
+    return;
+  }
+
+  const hash = await bcrypt.hash(password, 10);
+  await db.update(usersTable).set({ passwordHash: hash }).where(eq(usersTable.id, user.id));
+  res.json({ ok: true });
+});
+
 export default router;
