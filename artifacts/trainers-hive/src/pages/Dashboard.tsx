@@ -39,6 +39,8 @@ import {
   getListAdminUsersQueryKey,
   getListAdminVendorsQueryKey,
   getListMyApplicationsQueryKey,
+  useListMyAgreements,
+  getListMyAgreementsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,6 +104,8 @@ import {
   Phone,
   UserPlus,
   Building,
+  Wallet,
+  IndianRupee,
 } from "lucide-react";
 import {
   Dialog,
@@ -129,6 +133,154 @@ type VerificationRequest = {
   createdAt: string;
   trainer: { id: string; name: string; avatarUrl: string; mainSkill: string } | null;
 };
+
+function parseAgreementDate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const d = new Date(s.length === 10 ? s + "T00:00:00" : s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function fmtSpendDate(s: string | null | undefined): string {
+  const d = parseAgreementDate(s);
+  if (!d) return "—";
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function fmtINR(n: number): string {
+  return `₹${n.toLocaleString("en-IN")}`;
+}
+
+function VendorSpendSection() {
+  const { data, isLoading, isError } = useListMyAgreements({
+    query: { queryKey: getListMyAgreementsQueryKey() },
+  });
+
+  // "Signed" agreements are those both parties accepted.
+  const signed = (data ?? []).filter((a) => a.status === "accepted");
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  // An engagement is "completed" once its end date has passed; otherwise it's
+  // still "active" (including open-ended agreements with no end date).
+  const withStatus = signed.map((a) => {
+    const end = parseAgreementDate(a.endDate);
+    const completed = end != null && end.getTime() < startOfToday.getTime();
+    return { ...a, engagement: completed ? ("completed" as const) : ("active" as const) };
+  });
+
+  const totalCommitted = withStatus.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
+  const active = withStatus.filter((a) => a.engagement === "active");
+  const completed = withStatus.filter((a) => a.engagement === "completed");
+  const activeSpend = active.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
+  const completedSpend = completed.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
+
+  return (
+    <Card id="vendor-spend">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Wallet className="h-5 w-5 text-primary" /> Vendor Spend
+        </CardTitle>
+        <CardDescription>
+          Committed spend across your signed engagement agreements
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-[160px] w-full" />
+        ) : isError ? (
+          <div className="text-center py-10 border border-dashed rounded-lg">
+            <Wallet className="mx-auto h-8 w-8 text-muted-foreground mb-3 opacity-40" />
+            <p className="font-medium text-muted-foreground">Couldn't load your spend</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              There was a problem loading your agreements. Please refresh the page to try again.
+            </p>
+          </div>
+        ) : withStatus.length === 0 ? (
+          <div className="text-center py-10 border border-dashed rounded-lg">
+            <Wallet className="mx-auto h-8 w-8 text-muted-foreground mb-3 opacity-40" />
+            <p className="font-medium text-muted-foreground">No signed agreements yet</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Once you sign an engagement agreement with a trainer, your committed spend will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-lg border p-4 bg-primary/5">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <IndianRupee className="h-4 w-4" /> Total Committed
+                </div>
+                <p className="text-2xl font-bold mt-1">{fmtINR(totalCommitted)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {withStatus.length} signed {withStatus.length === 1 ? "agreement" : "agreements"}
+                </p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4 text-emerald-600" /> Active
+                </div>
+                <p className="text-2xl font-bold mt-1">{fmtINR(activeSpend)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {active.length} {active.length === 1 ? "engagement" : "engagements"}
+                </p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-blue-600" /> Completed
+                </div>
+                <p className="text-2xl font-bold mt-1">{fmtINR(completedSpend)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {completed.length} {completed.length === 1 ? "engagement" : "engagements"}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Agreement breakdown</p>
+              <div className="space-y-2">
+                {withStatus.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between gap-4 p-3 rounded-lg border hover:border-primary/30 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        href={`/requirements/${a.requirementId}`}
+                        className="font-medium text-sm hover:underline truncate block"
+                      >
+                        {a.counterpartyName}
+                      </Link>
+                      <p className="text-xs text-muted-foreground truncate">{a.requirementTitle}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {fmtSpendDate(a.startDate)} – {fmtSpendDate(a.endDate)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-semibold text-sm">
+                        {a.agreedFee != null ? fmtINR(a.agreedFee) : "—"}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          a.engagement === "active"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-blue-50 text-blue-700 border-blue-200"
+                        }
+                      >
+                        {a.engagement === "active" ? "Active" : "Completed"}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function VendorDashboard({ vendorId }: { vendorId: string }) {
   const { data: vendor } = useGetVendor(vendorId);
@@ -247,6 +399,8 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
           )}
         </CardContent>
       </Card>
+
+      <VendorSpendSection />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card>
