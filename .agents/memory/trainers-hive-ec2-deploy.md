@@ -16,4 +16,6 @@ Production is a self-managed AWS EC2 host, NOT a Replit Deployment. Changes made
 
 **How to ship:** frontend → scp changed source to EC2, copy into `~/trainers-hive/...`, clear `.vite`, build with the NODE_OPTIONS flag, then `sudo rm -rf /var/www/html/assets && sudo cp -r artifacts/trainers-hive/dist/public/. /var/www/html/`. api-server → scp source, `node artifacts/api-server/build.mjs`, `pm2 restart api-server --update-env`. Schema drift must be applied to the prod DB by hand (ALTER TABLE ... IF NOT EXISTS) since there's no migration runner on prod.
 
+**Schema changes MUST go to EC2_DATABASE_URL too.** `drizzle-kit push` (and `lib/db`'s drizzle config) only targets `DATABASE_URL` — the Replit-local DB. The running dev server connects to `EC2_DATABASE_URL || DATABASE_URL`, so new tables must also be created there: `psql "$EC2_DATABASE_URL" -c "CREATE TABLE IF NOT EXISTS ..."`. Running push against EC2_DATABASE_URL in non-TTY shells fails (interactive prompts) — psql DDL is the reliable path.
+
 **Real client IP:** Express has `trust proxy` on and reads `req.ip`; nginx must send `X-Forwarded-For` (and `X-Forwarded-Proto`) or `req.ip` falls back to `::ffff:127.0.0.1`. Already added to the `/api` block.

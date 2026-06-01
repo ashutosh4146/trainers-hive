@@ -41,6 +41,7 @@ import {
   getListMyApplicationsQueryKey,
   useListMyAgreements,
   getListMyAgreementsQueryKey,
+  useRecordAgreementPayment,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,10 +151,144 @@ function fmtINR(n: number): string {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
+type RecordPaymentDialogProps = {
+  agreementId: string;
+  counterpartyName: string;
+  agreedFee: number | null | undefined;
+  paidAmount: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+};
+
+function RecordPaymentDialog({
+  agreementId,
+  counterpartyName,
+  agreedFee,
+  paidAmount,
+  open,
+  onOpenChange,
+  onSuccess,
+}: RecordPaymentDialogProps) {
+  const { toast } = useToast();
+  const [amount, setAmount] = useState("");
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const mutation = useRecordAgreementPayment();
+
+  const outstanding = agreedFee != null ? Math.max(0, agreedFee - paidAmount) : null;
+
+  function handleClose(val: boolean) {
+    if (!submitting) {
+      onOpenChange(val);
+      if (!val) {
+        setAmount("");
+        setNote("");
+        setPaidAt(new Date().toISOString().slice(0, 10));
+      }
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const parsedAmount = parseInt(amount, 10);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast({ title: "Enter a valid amount", variant: "destructive" });
+      return;
+    }
+    if (!paidAt.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      toast({ title: "Enter a valid date", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await mutation.mutateAsync({
+        agreementId,
+        data: { amount: parsedAmount, paidAt, note: note.trim() || null },
+      });
+      toast({ title: "Payment recorded" });
+      onSuccess();
+      onOpenChange(false);
+      setAmount("");
+      setNote("");
+      setPaidAt(new Date().toISOString().slice(0, 10));
+    } catch {
+      toast({ title: "Failed to record payment", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Payment</DialogTitle>
+          <DialogDescription>
+            Record a payment made against the agreement with{" "}
+            <span className="font-medium">{counterpartyName}</span>.
+            {outstanding != null && (
+              <span className="block mt-1 text-sm">
+                Outstanding: <span className="font-semibold text-foreground">{fmtINR(outstanding)}</span>
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-amount">Amount (INR)</Label>
+            <Input
+              id="pay-amount"
+              type="number"
+              min={1}
+              placeholder="e.g. 25000"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-date">Payment Date</Label>
+            <Input
+              id="pay-date"
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-note">Note (optional)</Label>
+            <Textarea
+              id="pay-note"
+              placeholder="e.g. First instalment via NEFT"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Saving…" : "Record Payment"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function VendorSpendSection() {
+  const queryClient = useQueryClient();
   const { data, isLoading, isError } = useListMyAgreements({
     query: { queryKey: getListMyAgreementsQueryKey() },
   });
+  const [payDialogAgreementId, setPayDialogAgreementId] = useState<string | null>(null);
 
   // "Signed" agreements are those both parties accepted.
   const signed = (data ?? []).filter((a) => a.status === "accepted");
@@ -170,10 +305,12 @@ function VendorSpendSection() {
   });
 
   const totalCommitted = withStatus.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
-  const active = withStatus.filter((a) => a.engagement === "active");
-  const completed = withStatus.filter((a) => a.engagement === "completed");
-  const activeSpend = active.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
-  const completedSpend = completed.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
+  const totalPaid = withStatus.reduce((s, a) => s + (a.paidAmount ?? 0), 0);
+  const totalOutstanding = Math.max(0, totalCommitted - totalPaid);
+
+  const activeAgreement = payDialogAgreementId
+    ? withStatus.find((a) => a.id === payDialogAgreementId)
+    : null;
 
   return (
     <Card id="vendor-spend">
@@ -218,20 +355,22 @@ function VendorSpendSection() {
               </div>
               <div className="rounded-lg border p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4 text-emerald-600" /> Active
+                  <CheckCircle className="h-4 w-4 text-emerald-600" /> Paid
                 </div>
-                <p className="text-2xl font-bold mt-1">{fmtINR(activeSpend)}</p>
+                <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtINR(totalPaid)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {active.length} {active.length === 1 ? "engagement" : "engagements"}
+                  {totalCommitted > 0
+                    ? `${Math.round((totalPaid / totalCommitted) * 100)}% of committed`
+                    : "—"}
                 </p>
               </div>
               <div className="rounded-lg border p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-blue-600" /> Completed
+                  <Clock className="h-4 w-4 text-amber-600" /> Outstanding
                 </div>
-                <p className="text-2xl font-bold mt-1">{fmtINR(completedSpend)}</p>
+                <p className="text-2xl font-bold mt-1 text-amber-700">{fmtINR(totalOutstanding)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {completed.length} {completed.length === 1 ? "engagement" : "engagements"}
+                  {totalOutstanding === 0 ? "Fully settled" : "Remaining balance"}
                 </p>
               </div>
             </div>
@@ -239,45 +378,85 @@ function VendorSpendSection() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">Agreement breakdown</p>
               <div className="space-y-2">
-                {withStatus.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center justify-between gap-4 p-3 rounded-lg border hover:border-primary/30 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        href={`/requirements/${a.requirementId}`}
-                        className="font-medium text-sm hover:underline truncate block"
-                      >
-                        {a.counterpartyName}
-                      </Link>
-                      <p className="text-xs text-muted-foreground truncate">{a.requirementTitle}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {fmtSpendDate(a.startDate)} – {fmtSpendDate(a.endDate)}
-                      </p>
+                {withStatus.map((a) => {
+                  const paid = a.paidAmount ?? 0;
+                  const fee = a.agreedFee ?? 0;
+                  const outstanding = Math.max(0, fee - paid);
+                  const pct = fee > 0 ? Math.min(100, Math.round((paid / fee) * 100)) : 0;
+                  return (
+                    <div
+                      key={a.id}
+                      className="p-3 rounded-lg border hover:border-primary/30 transition-colors space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <Link
+                            href={`/requirements/${a.requirementId}`}
+                            className="font-medium text-sm hover:underline truncate block"
+                          >
+                            {a.counterpartyName}
+                          </Link>
+                          <p className="text-xs text-muted-foreground truncate">{a.requirementTitle}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {fmtSpendDate(a.startDate)} – {fmtSpendDate(a.endDate)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge
+                            variant="outline"
+                            className={
+                              a.engagement === "active"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            }
+                          >
+                            {a.engagement === "active" ? "Active" : "Completed"}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2"
+                            onClick={() => setPayDialogAgreementId(a.id)}
+                          >
+                            + Payment
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Paid: <span className="font-medium text-emerald-700">{fmtINR(paid)}</span></span>
+                          <span>Outstanding: <span className={outstanding > 0 ? "font-medium text-amber-700" : "font-medium text-muted-foreground"}>{fmtINR(outstanding)}</span></span>
+                          <span className="font-medium">{fmtINR(fee)}</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-semibold text-sm">
-                        {a.agreedFee != null ? fmtINR(a.agreedFee) : "—"}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={
-                          a.engagement === "active"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200"
-                        }
-                      >
-                        {a.engagement === "active" ? "Active" : "Completed"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
       </CardContent>
+
+      {activeAgreement && (
+        <RecordPaymentDialog
+          agreementId={activeAgreement.id}
+          counterpartyName={activeAgreement.counterpartyName}
+          agreedFee={activeAgreement.agreedFee}
+          paidAmount={activeAgreement.paidAmount ?? 0}
+          open={payDialogAgreementId === activeAgreement.id}
+          onOpenChange={(open) => { if (!open) setPayDialogAgreementId(null); }}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() });
+          }}
+        />
+      )}
     </Card>
   );
 }

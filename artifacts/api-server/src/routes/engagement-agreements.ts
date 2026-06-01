@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request } from "express";
 import {
   db,
   engagementAgreementsTable,
+  agreementPaymentsTable,
   applicationsTable,
   requirementsTable,
   vendorsTable,
@@ -9,7 +10,7 @@ import {
   usersTable,
   type EngagementAgreement,
 } from "@workspace/db";
-import { eq, and, ne, or, desc, sql } from "drizzle-orm";
+import { eq, and, ne, or, desc, sql, inArray, sum } from "drizzle-orm";
 import { z } from "zod";
 import {
   UpdateAgreementTermsBody,
@@ -823,6 +824,23 @@ router.get("/my-agreements", async (req, res) => {
     .where(scope)
     .orderBy(desc(engagementAgreementsTable.updatedAt));
 
+  // Compute total paid per agreement in one query
+  const agreementIds = rows.map((r) => r.ag.id);
+  const paymentTotals: Record<string, number> = {};
+  if (agreementIds.length > 0) {
+    const totals = await db
+      .select({
+        agreementId: agreementPaymentsTable.agreementId,
+        total: sum(agreementPaymentsTable.amount),
+      })
+      .from(agreementPaymentsTable)
+      .where(inArray(agreementPaymentsTable.agreementId, agreementIds))
+      .groupBy(agreementPaymentsTable.agreementId);
+    for (const t of totals) {
+      paymentTotals[t.agreementId] = Number(t.total ?? 0);
+    }
+  }
+
   const role: "vendor" | "trainer" = user.role === "trainer" ? "trainer" : "vendor";
   res.json(
     rows.map((r) => ({
@@ -836,10 +854,130 @@ router.get("/my-agreements", async (req, res) => {
       agreedFee: r.ag.agreedFee,
       startDate: r.ag.startDate,
       endDate: r.ag.endDate,
+      paidAmount: paymentTotals[r.ag.id] ?? 0,
       createdAt: r.ag.createdAt.toISOString(),
       updatedAt: r.ag.updatedAt.toISOString(),
     })),
   );
+});
+
+const RecordPaymentBody = z.object({
+  amount: z.number().int().positive(),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  note: z.string().max(500).optional().nullable(),
+});
+
+router.get("/agreements/:id/payments", async (req, res) => {
+  const params = z.object({ id: z.string() }).safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const user = await loadActiveUser(req);
+  if (!user) {
+    res.status(401).json({ error: "unauthenticated" });
+    return;
+  }
+  const [ag] = await db
+    .select()
+    .from(engagementAgreementsTable)
+    .where(eq(engagementAgreementsTable.id, params.data.id))
+    .limit(1);
+  if (!ag) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  const ctx = await loadApplicationContext(ag.applicationId);
+  if (!ctx) {
+    res.status(500).json({ error: "context_missing" });
+    return;
+  }
+  if (!canViewAgreement(user, ctx.vendor, ctx.trainer)) {
+    res.status(403).json({ error: "not allowed" });
+    return;
+  }
+
+  const payments = await db
+    .select()
+    .from(agreementPaymentsTable)
+    .where(eq(agreementPaymentsTable.agreementId, ag.id))
+    .orderBy(desc(agreementPaymentsTable.paidAt));
+
+  res.json(
+    payments.map((p) => ({
+      id: p.id,
+      agreementId: p.agreementId,
+      amount: p.amount,
+      currency: p.currency,
+      paidAt: p.paidAt,
+      note: p.note,
+      recordedByUserId: p.recordedByUserId,
+      createdAt: p.createdAt.toISOString(),
+    })),
+  );
+});
+
+router.post("/agreements/:id/payments", async (req, res) => {
+  const params = z.object({ id: z.string() }).safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const body = RecordPaymentBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: "invalid body", issues: body.error.issues });
+    return;
+  }
+  const user = await loadActiveUser(req);
+  if (!user) {
+    res.status(401).json({ error: "unauthenticated" });
+    return;
+  }
+  const [ag] = await db
+    .select()
+    .from(engagementAgreementsTable)
+    .where(eq(engagementAgreementsTable.id, params.data.id))
+    .limit(1);
+  if (!ag) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  // Only vendor or admin can record payments
+  const isVendor = user.role === "vendor" && user.vendorId === ag.vendorId;
+  if (!isVendor && user.role !== "admin") {
+    res.status(403).json({ error: "vendor or admin only" });
+    return;
+  }
+  if (ag.status !== "accepted") {
+    res.status(409).json({ error: "wrong_status", message: "Payments can only be recorded against accepted agreements." });
+    return;
+  }
+
+  const id = newId("pmt");
+  const [payment] = await db
+    .insert(agreementPaymentsTable)
+    .values({
+      id,
+      agreementId: ag.id,
+      amount: body.data.amount,
+      currency: "INR",
+      paidAt: body.data.paidAt,
+      note: body.data.note ?? null,
+      recordedByUserId: user.id,
+      createdAt: new Date(),
+    })
+    .returning();
+
+  res.status(201).json({
+    id: payment!.id,
+    agreementId: payment!.agreementId,
+    amount: payment!.amount,
+    currency: payment!.currency,
+    paidAt: payment!.paidAt,
+    note: payment!.note,
+    recordedByUserId: payment!.recordedByUserId,
+    createdAt: payment!.createdAt.toISOString(),
+  });
 });
 
 // PDF download (auth required, vendor/trainer/admin party). Not in OpenAPI — binary.
