@@ -42,6 +42,8 @@ import {
   useListMyAgreements,
   getListMyAgreementsQueryKey,
   useRecordAgreementPayment,
+  useListAgreementPayments,
+  getListAgreementPaymentsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -107,6 +109,7 @@ import {
   Building,
   Wallet,
   IndianRupee,
+  ChevronDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -283,12 +286,67 @@ function RecordPaymentDialog({
   );
 }
 
+function AgreementPaymentHistory({ agreementId }: { agreementId: string }) {
+  const { data, isLoading, isError } = useListAgreementPayments(agreementId, {
+    query: { queryKey: getListAgreementPaymentsQueryKey(agreementId) },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="pt-2 space-y-1.5">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <p className="text-xs text-destructive pt-2">
+        Failed to load payment history. Refresh to try again.
+      </p>
+    );
+  }
+  if (!data || data.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground italic pt-2 text-center">
+        No payments recorded yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="pt-2 space-y-0">
+      {data.map((p, i) => (
+        <div
+          key={p.id}
+          className={`flex items-center justify-between gap-3 py-1.5 text-xs ${
+            i < data.length - 1 ? "border-b border-border/50" : ""
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-muted-foreground shrink-0">
+              {fmtSpendDate(p.paidAt)}
+            </span>
+            {p.note && (
+              <span className="text-muted-foreground truncate">· {p.note}</span>
+            )}
+          </div>
+          <span className="font-semibold text-emerald-700 shrink-0">
+            {fmtINR(p.amount)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function VendorSpendSection() {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useListMyAgreements({
     query: { queryKey: getListMyAgreementsQueryKey() },
   });
   const [payDialogAgreementId, setPayDialogAgreementId] = useState<string | null>(null);
+  const [expandedAgreementId, setExpandedAgreementId] = useState<string | null>(null);
 
   // "Signed" agreements are those both parties accepted.
   const signed = (data ?? []).filter((a) => a.status === "accepted");
@@ -420,6 +478,23 @@ function VendorSpendSection() {
                           >
                             + Payment
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs px-2 gap-1 text-muted-foreground"
+                            onClick={() =>
+                              setExpandedAgreementId(
+                                expandedAgreementId === a.id ? null : a.id
+                              )
+                            }
+                          >
+                            History
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 transition-transform ${
+                                expandedAgreementId === a.id ? "rotate-180" : ""
+                              }`}
+                            />
+                          </Button>
                         </div>
                       </div>
                       <div className="space-y-1">
@@ -435,6 +510,14 @@ function VendorSpendSection() {
                           />
                         </div>
                       </div>
+                      {expandedAgreementId === a.id && (
+                        <div className="border-t pt-2">
+                          <p className="text-xs font-medium text-muted-foreground mb-1">
+                            Payment history
+                          </p>
+                          <AgreementPaymentHistory agreementId={a.id} />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
