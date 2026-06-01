@@ -6544,6 +6544,89 @@ export const useRecordAgreementPayment = <
   return useMutation(getRecordAgreementPaymentMutationOptions(options));
 };
 
+export const getDeleteAgreementPaymentUrl = (
+  agreementId: string,
+  paymentId: string,
+) => {
+  return `/api/agreements/${agreementId}/payments/${paymentId}`;
+};
+
+export const deleteAgreementPayment = async (
+  agreementId: string,
+  paymentId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(
+    getDeleteAgreementPaymentUrl(agreementId, paymentId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteAgreementPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteAgreementPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAgreementPayment>>,
+    { agreementId: string; paymentId: string }
+  > = (props) => {
+    const { agreementId, paymentId } = props ?? {};
+    return deleteAgreementPayment(agreementId, paymentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAgreementPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAgreementPayment>>
+>;
+export type DeleteAgreementPaymentMutationError = ErrorType<unknown>;
+
+export const useDeleteAgreementPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string },
+  TContext
+> => {
+  return useMutation(getDeleteAgreementPaymentMutationOptions(options));
+};
+
 export const getListMyAgreementsUrl = () => {
   return `/api/my-agreements`;
 };

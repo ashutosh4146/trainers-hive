@@ -980,6 +980,53 @@ router.post("/agreements/:id/payments", async (req, res) => {
   });
 });
 
+router.delete("/agreements/:id/payments/:paymentId", async (req, res) => {
+  const params = z
+    .object({ id: z.string(), paymentId: z.string() })
+    .safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const user = await loadActiveUser(req);
+  if (!user) {
+    res.status(401).json({ error: "unauthenticated" });
+    return;
+  }
+  const [ag] = await db
+    .select()
+    .from(engagementAgreementsTable)
+    .where(eq(engagementAgreementsTable.id, params.data.id))
+    .limit(1);
+  if (!ag) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  const isVendor = user.role === "vendor" && user.vendorId === ag.vendorId;
+  if (!isVendor && user.role !== "admin") {
+    res.status(403).json({ error: "vendor or admin only" });
+    return;
+  }
+  const [payment] = await db
+    .select()
+    .from(agreementPaymentsTable)
+    .where(
+      and(
+        eq(agreementPaymentsTable.id, params.data.paymentId),
+        eq(agreementPaymentsTable.agreementId, ag.id),
+      ),
+    )
+    .limit(1);
+  if (!payment) {
+    res.status(404).json({ error: "payment not found" });
+    return;
+  }
+  await db
+    .delete(agreementPaymentsTable)
+    .where(eq(agreementPaymentsTable.id, payment.id));
+  res.status(204).end();
+});
+
 // PDF download (auth required, vendor/trainer/admin party). Not in OpenAPI — binary.
 router.get("/agreements/:id/pdf", async (req, res) => {
   const params = z.object({ id: z.string() }).safeParse(req.params);

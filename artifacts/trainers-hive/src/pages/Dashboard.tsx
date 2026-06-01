@@ -44,6 +44,7 @@ import {
   useRecordAgreementPayment,
   useListAgreementPayments,
   getListAgreementPaymentsQueryKey,
+  useDeleteAgreementPayment,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -286,10 +287,39 @@ function RecordPaymentDialog({
   );
 }
 
-function AgreementPaymentHistory({ agreementId }: { agreementId: string }) {
+function AgreementPaymentHistory({
+  agreementId,
+  canDelete,
+  onDeleted,
+}: {
+  agreementId: string;
+  canDelete: boolean;
+  onDeleted?: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data, isLoading, isError } = useListAgreementPayments(agreementId, {
     query: { queryKey: getListAgreementPaymentsQueryKey(agreementId) },
   });
+  const deleteMutation = useDeleteAgreementPayment();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleConfirmDelete() {
+    if (!confirmDeleteId) return;
+    setDeleting(true);
+    try {
+      await deleteMutation.mutateAsync({ agreementId, paymentId: confirmDeleteId });
+      toast({ title: "Payment deleted" });
+      setConfirmDeleteId(null);
+      void queryClient.invalidateQueries({ queryKey: getListAgreementPaymentsQueryKey(agreementId) });
+      onDeleted?.();
+    } catch {
+      toast({ title: "Failed to delete payment", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -315,28 +345,67 @@ function AgreementPaymentHistory({ agreementId }: { agreementId: string }) {
   }
 
   return (
-    <div className="pt-2 space-y-0">
-      {data.map((p, i) => (
-        <div
-          key={p.id}
-          className={`flex items-center justify-between gap-3 py-1.5 text-xs ${
-            i < data.length - 1 ? "border-b border-border/50" : ""
-          }`}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-muted-foreground shrink-0">
-              {fmtSpendDate(p.paidAt)}
-            </span>
-            {p.note && (
-              <span className="text-muted-foreground truncate">· {p.note}</span>
-            )}
+    <>
+      <div className="pt-2 space-y-0">
+        {data.map((p, i) => (
+          <div
+            key={p.id}
+            className={`flex items-center justify-between gap-3 py-1.5 text-xs ${
+              i < data.length - 1 ? "border-b border-border/50" : ""
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-muted-foreground shrink-0">
+                {fmtSpendDate(p.paidAt)}
+              </span>
+              {p.note && (
+                <span className="text-muted-foreground truncate">· {p.note}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="font-semibold text-emerald-700">
+                {fmtINR(p.amount)}
+              </span>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(p.id)}
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  title="Delete payment"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
-          <span className="font-semibold text-emerald-700 shrink-0">
-            {fmtINR(p.amount)}
-          </span>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      <AlertDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={(open) => { if (!open && !deleting) setConfirmDeleteId(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the payment record and update the
+              paid/outstanding totals. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -515,7 +584,13 @@ function VendorSpendSection() {
                           <p className="text-xs font-medium text-muted-foreground mb-1">
                             Payment history
                           </p>
-                          <AgreementPaymentHistory agreementId={a.id} />
+                          <AgreementPaymentHistory
+                            agreementId={a.id}
+                            canDelete={true}
+                            onDeleted={() => {
+                              void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() });
+                            }}
+                          />
                         </div>
                       )}
                     </div>
