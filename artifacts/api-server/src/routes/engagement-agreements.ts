@@ -980,6 +980,83 @@ router.post("/agreements/:id/payments", async (req, res) => {
   });
 });
 
+const UpdatePaymentBody = z.object({
+  amount: z.number().int().positive().optional(),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().max(500).nullable().optional(),
+});
+
+router.patch("/agreements/:id/payments/:paymentId", async (req, res) => {
+  const params = z
+    .object({ id: z.string(), paymentId: z.string() })
+    .safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "invalid params" });
+    return;
+  }
+  const body = UpdatePaymentBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: "invalid body", issues: body.error.issues });
+    return;
+  }
+  if (Object.keys(body.data).length === 0) {
+    res.status(400).json({ error: "no fields to update" });
+    return;
+  }
+  const user = await loadActiveUser(req);
+  if (!user) {
+    res.status(401).json({ error: "unauthenticated" });
+    return;
+  }
+  const [ag] = await db
+    .select()
+    .from(engagementAgreementsTable)
+    .where(eq(engagementAgreementsTable.id, params.data.id))
+    .limit(1);
+  if (!ag) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  const isVendor = user.role === "vendor" && user.vendorId === ag.vendorId;
+  if (!isVendor && user.role !== "admin") {
+    res.status(403).json({ error: "vendor or admin only" });
+    return;
+  }
+  const [payment] = await db
+    .select()
+    .from(agreementPaymentsTable)
+    .where(
+      and(
+        eq(agreementPaymentsTable.id, params.data.paymentId),
+        eq(agreementPaymentsTable.agreementId, ag.id),
+      ),
+    )
+    .limit(1);
+  if (!payment) {
+    res.status(404).json({ error: "payment not found" });
+    return;
+  }
+  const updates: Record<string, unknown> = {};
+  if (body.data.amount !== undefined) updates.amount = body.data.amount;
+  if (body.data.paidAt !== undefined) updates.paidAt = body.data.paidAt;
+  if ("note" in body.data) updates.note = body.data.note ?? null;
+  const [updated] = await db
+    .update(agreementPaymentsTable)
+    .set(updates)
+    .where(eq(agreementPaymentsTable.id, payment.id))
+    .returning();
+  res.json({
+    id: updated!.id,
+    agreementId: updated!.agreementId,
+    amount: updated!.amount,
+    currency: updated!.currency,
+    paidAt: updated!.paidAt,
+    note: updated!.note,
+    recordedByUserId: updated!.recordedByUserId,
+    createdAt: updated!.createdAt.toISOString(),
+  });
+});
+
 router.delete("/agreements/:id/payments/:paymentId", async (req, res) => {
   const params = z
     .object({ id: z.string(), paymentId: z.string() })

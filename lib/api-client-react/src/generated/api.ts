@@ -70,6 +70,7 @@ import type {
   Trainer,
   TrainerDetail,
   TrainerStats,
+  UpdateAgreementPaymentBody,
   UpdateAgreementTermsBody,
   UpdateApplicationBody,
   UpdateApplicationNoteBody,
@@ -6625,6 +6626,93 @@ export const useDeleteAgreementPayment = <
   TContext
 > => {
   return useMutation(getDeleteAgreementPaymentMutationOptions(options));
+};
+
+export const getUpdateAgreementPaymentUrl = (
+  agreementId: string,
+  paymentId: string,
+) => {
+  return `/api/agreements/${agreementId}/payments/${paymentId}`;
+};
+
+export const updateAgreementPayment = async (
+  agreementId: string,
+  paymentId: string,
+  updateAgreementPaymentBody: UpdateAgreementPaymentBody,
+  options?: RequestInit,
+): Promise<AgreementPayment> => {
+  return customFetch<AgreementPayment>(
+    getUpdateAgreementPaymentUrl(agreementId, paymentId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateAgreementPaymentBody),
+    },
+  );
+};
+
+export const getUpdateAgreementPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAgreementPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAgreementPayment>>,
+    { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> }
+  > = (props) => {
+    const { agreementId, paymentId, data } = props ?? {};
+    return updateAgreementPayment(agreementId, paymentId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAgreementPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAgreementPayment>>
+>;
+export type UpdateAgreementPaymentMutationBody = BodyType<UpdateAgreementPaymentBody>;
+export type UpdateAgreementPaymentMutationError = ErrorType<unknown>;
+
+export const useUpdateAgreementPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAgreementPaymentMutationOptions(options));
 };
 
 export const getListMyAgreementsUrl = () => {

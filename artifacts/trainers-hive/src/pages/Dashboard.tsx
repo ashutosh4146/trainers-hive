@@ -45,6 +45,7 @@ import {
   useListAgreementPayments,
   getListAgreementPaymentsQueryKey,
   useDeleteAgreementPayment,
+  useUpdateAgreementPayment,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -287,14 +288,23 @@ function RecordPaymentDialog({
   );
 }
 
+type EditingPayment = {
+  id: string;
+  amount: string;
+  paidAt: string;
+  note: string;
+};
+
 function AgreementPaymentHistory({
   agreementId,
   canDelete,
   onDeleted,
+  onEdited,
 }: {
   agreementId: string;
   canDelete: boolean;
   onDeleted?: () => void;
+  onEdited?: () => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -302,8 +312,11 @@ function AgreementPaymentHistory({
     query: { queryKey: getListAgreementPaymentsQueryKey(agreementId) },
   });
   const deleteMutation = useDeleteAgreementPayment();
+  const updateMutation = useUpdateAgreementPayment();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState<EditingPayment | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function handleConfirmDelete() {
     if (!confirmDeleteId) return;
@@ -318,6 +331,40 @@ function AgreementPaymentHistory({
       toast({ title: "Failed to delete payment", variant: "destructive" });
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    const parsedAmount = parseInt(editing.amount, 10);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast({ title: "Enter a valid amount", variant: "destructive" });
+      return;
+    }
+    if (!editing.paidAt.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      toast({ title: "Enter a valid date", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateMutation.mutateAsync({
+        agreementId,
+        paymentId: editing.id,
+        data: {
+          amount: parsedAmount,
+          paidAt: editing.paidAt,
+          note: editing.note.trim() || null,
+        },
+      });
+      toast({ title: "Payment updated" });
+      setEditing(null);
+      void queryClient.invalidateQueries({ queryKey: getListAgreementPaymentsQueryKey(agreementId) });
+      onEdited?.();
+    } catch {
+      toast({ title: "Failed to update payment", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -367,19 +414,98 @@ function AgreementPaymentHistory({
                 {fmtINR(p.amount)}
               </span>
               {canDelete && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteId(p.id)}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                  title="Delete payment"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditing({
+                        id: p.id,
+                        amount: String(p.amount),
+                        paidAt: p.paidAt ?? "",
+                        note: p.note ?? "",
+                      })
+                    }
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title="Edit payment"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(p.id)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    title="Delete payment"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
               )}
             </div>
           </div>
         ))}
       </div>
+
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(open) => { if (!open && !saving) setEditing(null); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Payment</DialogTitle>
+            <DialogDescription>
+              Correct the amount, date, or note for this payment record.
+            </DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <form onSubmit={handleSaveEdit} className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pay-amount">Amount (INR)</Label>
+                <Input
+                  id="edit-pay-amount"
+                  type="number"
+                  min={1}
+                  value={editing.amount}
+                  onChange={(e) => setEditing({ ...editing, amount: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pay-date">Payment Date</Label>
+                <Input
+                  id="edit-pay-date"
+                  type="date"
+                  value={editing.paidAt}
+                  onChange={(e) => setEditing({ ...editing, paidAt: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pay-note">Note (optional)</Label>
+                <Textarea
+                  id="edit-pay-note"
+                  placeholder="e.g. Corrected amount via NEFT"
+                  value={editing.note}
+                  onChange={(e) => setEditing({ ...editing, note: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditing(null)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={confirmDeleteId !== null}
@@ -588,6 +714,9 @@ function VendorSpendSection() {
                             agreementId={a.id}
                             canDelete={true}
                             onDeleted={() => {
+                              void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() });
+                            }}
+                            onEdited={() => {
                               void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() });
                             }}
                           />

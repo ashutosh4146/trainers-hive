@@ -836,6 +836,13 @@ export interface RecordAgreementPaymentBody {
   note?: string | null;
 }
 
+export interface UpdateAgreementPaymentBody {
+  amount?: number;
+  paidAt?: string;
+  /** @nullable */
+  note?: string | null;
+}
+
 export interface UpdateAgreementTermsBody {
   /** @nullable */
   agreedFee?: number | null;
