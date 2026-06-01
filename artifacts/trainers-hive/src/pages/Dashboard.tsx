@@ -112,6 +112,8 @@ import {
   Wallet,
   IndianRupee,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Dialog,
@@ -154,6 +156,55 @@ function fmtSpendDate(s: string | null | undefined): string {
 
 function fmtINR(n: number): string {
   return `₹${n.toLocaleString("en-IN")}`;
+}
+
+function usePagination<T>(items: T[], pageSize: number) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const pageItems = items.slice(start, start + pageSize);
+  return {
+    page: safePage,
+    totalPages,
+    pageItems,
+    total: items.length,
+    start: items.length === 0 ? 0 : start + 1,
+    end: Math.min(start + pageSize, items.length),
+    prev: () => setPage((p) => Math.max(1, p - 1)),
+    next: () => setPage((p) => Math.min(totalPages, p + 1)),
+    canPrev: safePage > 1,
+    canNext: safePage < totalPages,
+  };
+}
+
+function PaginationBar({
+  page, totalPages, total, start, end, onPrev, onNext, canPrev, canNext,
+}: {
+  page: number; totalPages: number; total: number; start: number; end: number;
+  onPrev: () => void; onNext: () => void; canPrev: boolean; canNext: boolean;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between pt-3 border-t mt-3 text-xs text-muted-foreground">
+      <span>Showing {start}–{end} of {total}</span>
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm" variant="ghost" className="h-7 w-7 p-0"
+          onClick={onPrev} disabled={!canPrev}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
+        <span className="px-2 tabular-nums">{page} / {totalPages}</span>
+        <Button
+          size="sm" variant="ghost" className="h-7 w-7 p-0"
+          onClick={onNext} disabled={!canNext}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 type RecordPaymentDialogProps = {
@@ -557,6 +608,8 @@ function VendorSpendSection() {
     return { ...a, engagement: completed ? ("completed" as const) : ("active" as const) };
   });
 
+  const agreementPag = usePagination(withStatus, 5);
+
   const totalCommitted = withStatus.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
   const totalPaid = withStatus.reduce((s, a) => s + (a.paidAmount ?? 0), 0);
   const totalOutstanding = Math.max(0, totalCommitted - totalPaid);
@@ -631,7 +684,7 @@ function VendorSpendSection() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">Agreement breakdown</p>
               <div className="space-y-2">
-                {withStatus.map((a) => {
+                {agreementPag.pageItems.map((a) => {
                   const paid = a.paidAmount ?? 0;
                   const fee = a.agreedFee ?? 0;
                   const outstanding = Math.max(0, fee - paid);
@@ -726,6 +779,17 @@ function VendorSpendSection() {
                   );
                 })}
               </div>
+              <PaginationBar
+                page={agreementPag.page}
+                totalPages={agreementPag.totalPages}
+                total={agreementPag.total}
+                start={agreementPag.start}
+                end={agreementPag.end}
+                onPrev={agreementPag.prev}
+                onNext={agreementPag.next}
+                canPrev={agreementPag.canPrev}
+                canNext={agreementPag.canNext}
+              />
             </div>
           </div>
         )}
@@ -768,6 +832,10 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
   const [editingEndorsement, setEditingEndorsement] = useState<{ id: string; trainerId: string; text: string } | null>(null);
   const [editText, setEditText] = useState("");
   const [deletingEndorsementId, setDeletingEndorsementId] = useState<string | null>(null);
+
+  const reqPag = usePagination(requirements ?? [], 5);
+  const savedPag = usePagination(savedTrainers ?? [], 6);
+  const endorsePag = usePagination(givenEndorsements ?? [], 5);
 
   const handleSaveEditEndorsement = () => {
     if (!editingEndorsement) return;
@@ -930,7 +998,7 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
             <Skeleton className="h-[200px] w-full" />
           ) : requirements && requirements.length > 0 ? (
             <div className="space-y-4">
-              {requirements.map(req => (
+              {reqPag.pageItems.map(req => (
                 <Link key={req.id} href={`/requirements/${req.id}`} className="flex items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors bg-card hover:shadow-sm">
                   <div>
                     <h4 className="font-semibold">{req.title}</h4>
@@ -947,6 +1015,12 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
                   </div>
                 </Link>
               ))}
+              <PaginationBar
+                page={reqPag.page} totalPages={reqPag.totalPages} total={reqPag.total}
+                start={reqPag.start} end={reqPag.end}
+                onPrev={reqPag.prev} onNext={reqPag.next}
+                canPrev={reqPag.canPrev} canNext={reqPag.canNext}
+              />
             </div>
           ) : (
             <div className="text-center py-12 border border-dashed rounded-lg">
@@ -986,7 +1060,7 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
             </div>
           ) : (
             <div className="space-y-3">
-              {savedTrainers.map((s) => (
+              {savedPag.pageItems.map((s) => (
                 <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border gap-4 hover:border-primary/30 transition-colors">
                   <Link href={`/trainers/${s.trainer.id}`} className="flex items-center gap-3 min-w-0 flex-1">
                     <img
@@ -1020,6 +1094,12 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
                   </div>
                 </div>
               ))}
+              <PaginationBar
+                page={savedPag.page} totalPages={savedPag.totalPages} total={savedPag.total}
+                start={savedPag.start} end={savedPag.end}
+                onPrev={savedPag.prev} onNext={savedPag.next}
+                canPrev={savedPag.canPrev} canNext={savedPag.canNext}
+              />
             </div>
           )}
         </CardContent>
@@ -1050,7 +1130,7 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
             </div>
           ) : (
             <div className="space-y-3">
-              {givenEndorsements.map((e) => (
+              {endorsePag.pageItems.map((e) => (
                 <div key={e.id} className="flex items-start justify-between p-3 rounded-lg border gap-4 hover:border-primary/30 transition-colors">
                   <Link href={`/trainers/${e.trainerId}`} className="flex items-start gap-3 min-w-0 flex-1">
                     <img
@@ -1087,6 +1167,12 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
                   </div>
                 </div>
               ))}
+              <PaginationBar
+                page={endorsePag.page} totalPages={endorsePag.totalPages} total={endorsePag.total}
+                start={endorsePag.start} end={endorsePag.end}
+                onPrev={endorsePag.prev} onNext={endorsePag.next}
+                canPrev={endorsePag.canPrev} canNext={endorsePag.canNext}
+              />
             </div>
           )}
         </CardContent>
@@ -1158,7 +1244,8 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
     { status: "open" },
     { query: { queryKey: [...getListRequirementsQueryKey({ status: "open" }), "trainer", trainerId] } },
   );
-  const top5 = matchingReqs?.slice(0, 5) ?? [];
+  const matchPag = usePagination(matchingReqs ?? [], 5);
+  const appPag = usePagination(applications ?? [], 5);
   const hasNoSkills = !!trainerProfile && !trainerProfile.mainSkill;
   const [messageAppId, setMessageAppId] = useState<string | null>(null);
   const [messageAppTitle, setMessageAppTitle] = useState<string>("");
@@ -1230,7 +1317,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
         <CardContent>
           {matchLoading || profileLoading ? (
             <Skeleton className="h-[180px] w-full" />
-          ) : top5.length === 0 ? (
+          ) : matchPag.total === 0 ? (
             <div className="text-center py-10 border border-dashed rounded-lg">
               <Briefcase className="mx-auto h-8 w-8 text-muted-foreground mb-3 opacity-40" />
               {hasNoSkills ? (
@@ -1253,7 +1340,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
             </div>
           ) : (
             <div className="space-y-2">
-              {top5.map((req) => (
+              {matchPag.pageItems.map((req) => (
                 <Link
                   key={req.id}
                   href={`/requirements/${req.id}`}
@@ -1277,6 +1364,12 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                   </div>
                 </Link>
               ))}
+              <PaginationBar
+                page={matchPag.page} totalPages={matchPag.totalPages} total={matchPag.total}
+                start={matchPag.start} end={matchPag.end}
+                onPrev={matchPag.prev} onNext={matchPag.next}
+                canPrev={matchPag.canPrev} canNext={matchPag.canNext}
+              />
             </div>
           )}
         </CardContent>
@@ -1294,7 +1387,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
             <Skeleton className="h-[200px] w-full" />
           ) : applications && applications.length > 0 ? (
             <div className="space-y-4">
-              {applications.map(app => {
+              {appPag.pageItems.map(app => {
                 const canMessage = app.status === 'shortlisted' || app.status === 'hired';
                 const canWithdraw = app.status !== 'rejected' && app.status !== 'withdrawn';
                 const isWithdrawn = app.status === 'withdrawn';
@@ -1369,6 +1462,12 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                   </div>
                 );
               })}
+              <PaginationBar
+                page={appPag.page} totalPages={appPag.totalPages} total={appPag.total}
+                start={appPag.start} end={appPag.end}
+                onPrev={appPag.prev} onNext={appPag.next}
+                canPrev={appPag.canPrev} canNext={appPag.canNext}
+              />
             </div>
           ) : (
             <div className="text-center py-12 border border-dashed rounded-lg">
