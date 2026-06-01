@@ -41,6 +41,11 @@ import {
   getListMyApplicationsQueryKey,
   useListMyAgreements,
   getListMyAgreementsQueryKey,
+  useRecordAgreementPayment,
+  useListAgreementPayments,
+  getListAgreementPaymentsQueryKey,
+  useDeleteAgreementPayment,
+  useUpdateAgreementPayment,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,6 +111,9 @@ import {
   Building,
   Wallet,
   IndianRupee,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Dialog,
@@ -150,10 +158,441 @@ function fmtINR(n: number): string {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
+function usePagination<T>(items: T[], pageSize: number) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const pageItems = items.slice(start, start + pageSize);
+  return {
+    page: safePage,
+    totalPages,
+    pageItems,
+    total: items.length,
+    start: items.length === 0 ? 0 : start + 1,
+    end: Math.min(start + pageSize, items.length),
+    prev: () => setPage((p) => Math.max(1, p - 1)),
+    next: () => setPage((p) => Math.min(totalPages, p + 1)),
+    canPrev: safePage > 1,
+    canNext: safePage < totalPages,
+  };
+}
+
+function PaginationBar({
+  page, totalPages, total, start, end, onPrev, onNext, canPrev, canNext,
+}: {
+  page: number; totalPages: number; total: number; start: number; end: number;
+  onPrev: () => void; onNext: () => void; canPrev: boolean; canNext: boolean;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between pt-3 border-t mt-3 text-xs text-muted-foreground">
+      <span>Showing {start}–{end} of {total}</span>
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm" variant="ghost" className="h-7 w-7 p-0"
+          onClick={onPrev} disabled={!canPrev}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
+        <span className="px-2 tabular-nums">{page} / {totalPages}</span>
+        <Button
+          size="sm" variant="ghost" className="h-7 w-7 p-0"
+          onClick={onNext} disabled={!canNext}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+type RecordPaymentDialogProps = {
+  agreementId: string;
+  counterpartyName: string;
+  agreedFee: number | null | undefined;
+  paidAmount: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+};
+
+function RecordPaymentDialog({
+  agreementId,
+  counterpartyName,
+  agreedFee,
+  paidAmount,
+  open,
+  onOpenChange,
+  onSuccess,
+}: RecordPaymentDialogProps) {
+  const { toast } = useToast();
+  const [amount, setAmount] = useState("");
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const mutation = useRecordAgreementPayment();
+
+  const outstanding = agreedFee != null ? Math.max(0, agreedFee - paidAmount) : null;
+
+  function handleClose(val: boolean) {
+    if (!submitting) {
+      onOpenChange(val);
+      if (!val) {
+        setAmount("");
+        setNote("");
+        setPaidAt(new Date().toISOString().slice(0, 10));
+      }
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const parsedAmount = parseInt(amount, 10);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast({ title: "Enter a valid amount", variant: "destructive" });
+      return;
+    }
+    if (!paidAt.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      toast({ title: "Enter a valid date", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await mutation.mutateAsync({
+        agreementId,
+        data: { amount: parsedAmount, paidAt, note: note.trim() || null },
+      });
+      toast({ title: "Payment recorded" });
+      onSuccess();
+      onOpenChange(false);
+      setAmount("");
+      setNote("");
+      setPaidAt(new Date().toISOString().slice(0, 10));
+    } catch {
+      toast({ title: "Failed to record payment", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Payment</DialogTitle>
+          <DialogDescription>
+            Record a payment made against the agreement with{" "}
+            <span className="font-medium">{counterpartyName}</span>.
+            {outstanding != null && (
+              <span className="block mt-1 text-sm">
+                Outstanding: <span className="font-semibold text-foreground">{fmtINR(outstanding)}</span>
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-amount">Amount (INR)</Label>
+            <Input
+              id="pay-amount"
+              type="number"
+              min={1}
+              placeholder="e.g. 25000"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-date">Payment Date</Label>
+            <Input
+              id="pay-date"
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pay-note">Note (optional)</Label>
+            <Textarea
+              id="pay-note"
+              placeholder="e.g. First instalment via NEFT"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Saving…" : "Record Payment"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type EditingPayment = {
+  id: string;
+  amount: string;
+  paidAt: string;
+  note: string;
+};
+
+function AgreementPaymentHistory({
+  agreementId,
+  canDelete,
+  onDeleted,
+  onEdited,
+}: {
+  agreementId: string;
+  canDelete: boolean;
+  onDeleted?: () => void;
+  onEdited?: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading, isError } = useListAgreementPayments(agreementId, {
+    query: { queryKey: getListAgreementPaymentsQueryKey(agreementId) },
+  });
+  const deleteMutation = useDeleteAgreementPayment();
+  const updateMutation = useUpdateAgreementPayment();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState<EditingPayment | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleConfirmDelete() {
+    if (!confirmDeleteId) return;
+    setDeleting(true);
+    try {
+      await deleteMutation.mutateAsync({ agreementId, paymentId: confirmDeleteId });
+      toast({ title: "Payment deleted" });
+      setConfirmDeleteId(null);
+      void queryClient.invalidateQueries({ queryKey: getListAgreementPaymentsQueryKey(agreementId) });
+      onDeleted?.();
+    } catch {
+      toast({ title: "Failed to delete payment", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    const parsedAmount = parseInt(editing.amount, 10);
+    if (!parsedAmount || parsedAmount <= 0) {
+      toast({ title: "Enter a valid amount", variant: "destructive" });
+      return;
+    }
+    if (!editing.paidAt.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      toast({ title: "Enter a valid date", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateMutation.mutateAsync({
+        agreementId,
+        paymentId: editing.id,
+        data: {
+          amount: parsedAmount,
+          paidAt: editing.paidAt,
+          note: editing.note.trim() || null,
+        },
+      });
+      toast({ title: "Payment updated" });
+      setEditing(null);
+      void queryClient.invalidateQueries({ queryKey: getListAgreementPaymentsQueryKey(agreementId) });
+      onEdited?.();
+    } catch {
+      toast({ title: "Failed to update payment", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="pt-2 space-y-1.5">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <p className="text-xs text-destructive pt-2">
+        Failed to load payment history. Refresh to try again.
+      </p>
+    );
+  }
+  if (!data || data.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground italic pt-2 text-center">
+        No payments recorded yet.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <div className="pt-2 space-y-0">
+        {data.map((p, i) => (
+          <div
+            key={p.id}
+            className={`flex items-center justify-between gap-3 py-1.5 text-xs ${
+              i < data.length - 1 ? "border-b border-border/50" : ""
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-muted-foreground shrink-0">
+                {fmtSpendDate(p.paidAt)}
+              </span>
+              {p.note && (
+                <span className="text-muted-foreground truncate">· {p.note}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="font-semibold text-emerald-700">
+                {fmtINR(p.amount)}
+              </span>
+              {canDelete && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditing({
+                        id: p.id,
+                        amount: String(p.amount),
+                        paidAt: p.paidAt ?? "",
+                        note: p.note ?? "",
+                      })
+                    }
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title="Edit payment"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(p.id)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    title="Delete payment"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(open) => { if (!open && !saving) setEditing(null); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Payment</DialogTitle>
+            <DialogDescription>
+              Correct the amount, date, or note for this payment record.
+            </DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <form onSubmit={handleSaveEdit} className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pay-amount">Amount (INR)</Label>
+                <Input
+                  id="edit-pay-amount"
+                  type="number"
+                  min={1}
+                  value={editing.amount}
+                  onChange={(e) => setEditing({ ...editing, amount: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pay-date">Payment Date</Label>
+                <Input
+                  id="edit-pay-date"
+                  type="date"
+                  value={editing.paidAt}
+                  onChange={(e) => setEditing({ ...editing, paidAt: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pay-note">Note (optional)</Label>
+                <Textarea
+                  id="edit-pay-note"
+                  placeholder="e.g. Corrected amount via NEFT"
+                  value={editing.note}
+                  onChange={(e) => setEditing({ ...editing, note: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditing(null)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={(open) => { if (!open && !deleting) setConfirmDeleteId(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the payment record and update the
+              paid/outstanding totals. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 function VendorSpendSection() {
+  const queryClient = useQueryClient();
   const { data, isLoading, isError } = useListMyAgreements({
     query: { queryKey: getListMyAgreementsQueryKey() },
   });
+  const [payDialogAgreementId, setPayDialogAgreementId] = useState<string | null>(null);
+  const [expandedAgreementId, setExpandedAgreementId] = useState<string | null>(null);
 
   // "Signed" agreements are those both parties accepted.
   const signed = (data ?? []).filter((a) => a.status === "accepted");
@@ -169,11 +608,15 @@ function VendorSpendSection() {
     return { ...a, engagement: completed ? ("completed" as const) : ("active" as const) };
   });
 
+  const agreementPag = usePagination(withStatus, 5);
+
   const totalCommitted = withStatus.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
-  const active = withStatus.filter((a) => a.engagement === "active");
-  const completed = withStatus.filter((a) => a.engagement === "completed");
-  const activeSpend = active.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
-  const completedSpend = completed.reduce((s, a) => s + (a.agreedFee ?? 0), 0);
+  const totalPaid = withStatus.reduce((s, a) => s + (a.paidAmount ?? 0), 0);
+  const totalOutstanding = Math.max(0, totalCommitted - totalPaid);
+
+  const activeAgreement = payDialogAgreementId
+    ? withStatus.find((a) => a.id === payDialogAgreementId)
+    : null;
 
   return (
     <Card id="vendor-spend">
@@ -218,20 +661,22 @@ function VendorSpendSection() {
               </div>
               <div className="rounded-lg border p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4 text-emerald-600" /> Active
+                  <CheckCircle className="h-4 w-4 text-emerald-600" /> Paid
                 </div>
-                <p className="text-2xl font-bold mt-1">{fmtINR(activeSpend)}</p>
+                <p className="text-2xl font-bold mt-1 text-emerald-700">{fmtINR(totalPaid)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {active.length} {active.length === 1 ? "engagement" : "engagements"}
+                  {totalCommitted > 0
+                    ? `${Math.round((totalPaid / totalCommitted) * 100)}% of committed`
+                    : "—"}
                 </p>
               </div>
               <div className="rounded-lg border p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-blue-600" /> Completed
+                  <Clock className="h-4 w-4 text-amber-600" /> Outstanding
                 </div>
-                <p className="text-2xl font-bold mt-1">{fmtINR(completedSpend)}</p>
+                <p className="text-2xl font-bold mt-1 text-amber-700">{fmtINR(totalOutstanding)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {completed.length} {completed.length === 1 ? "engagement" : "engagements"}
+                  {totalOutstanding === 0 ? "Fully settled" : "Remaining balance"}
                 </p>
               </div>
             </div>
@@ -239,45 +684,130 @@ function VendorSpendSection() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">Agreement breakdown</p>
               <div className="space-y-2">
-                {withStatus.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center justify-between gap-4 p-3 rounded-lg border hover:border-primary/30 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        href={`/requirements/${a.requirementId}`}
-                        className="font-medium text-sm hover:underline truncate block"
-                      >
-                        {a.counterpartyName}
-                      </Link>
-                      <p className="text-xs text-muted-foreground truncate">{a.requirementTitle}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {fmtSpendDate(a.startDate)} – {fmtSpendDate(a.endDate)}
-                      </p>
+                {agreementPag.pageItems.map((a) => {
+                  const paid = a.paidAmount ?? 0;
+                  const fee = a.agreedFee ?? 0;
+                  const outstanding = Math.max(0, fee - paid);
+                  const pct = fee > 0 ? Math.min(100, Math.round((paid / fee) * 100)) : 0;
+                  return (
+                    <div
+                      key={a.id}
+                      className="p-3 rounded-lg border hover:border-primary/30 transition-colors space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <Link
+                            href={`/requirements/${a.requirementId}`}
+                            className="font-medium text-sm hover:underline truncate block"
+                          >
+                            {a.counterpartyName}
+                          </Link>
+                          <p className="text-xs text-muted-foreground truncate">{a.requirementTitle}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {fmtSpendDate(a.startDate)} – {fmtSpendDate(a.endDate)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge
+                            variant="outline"
+                            className={
+                              a.engagement === "active"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            }
+                          >
+                            {a.engagement === "active" ? "Active" : "Completed"}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2"
+                            onClick={() => setPayDialogAgreementId(a.id)}
+                          >
+                            + Payment
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs px-2 gap-1 text-muted-foreground"
+                            onClick={() =>
+                              setExpandedAgreementId(
+                                expandedAgreementId === a.id ? null : a.id
+                              )
+                            }
+                          >
+                            History
+                            <ChevronDown
+                              className={`h-3.5 w-3.5 transition-transform ${
+                                expandedAgreementId === a.id ? "rotate-180" : ""
+                              }`}
+                            />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Paid: <span className="font-medium text-emerald-700">{fmtINR(paid)}</span></span>
+                          <span>Outstanding: <span className={outstanding > 0 ? "font-medium text-amber-700" : "font-medium text-muted-foreground"}>{fmtINR(outstanding)}</span></span>
+                          <span className="font-medium">{fmtINR(fee)}</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                      {expandedAgreementId === a.id && (
+                        <div className="border-t pt-2">
+                          <p className="text-xs font-medium text-muted-foreground mb-1">
+                            Payment history
+                          </p>
+                          <AgreementPaymentHistory
+                            agreementId={a.id}
+                            canDelete={true}
+                            onDeleted={() => {
+                              void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() });
+                            }}
+                            onEdited={() => {
+                              void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() });
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-semibold text-sm">
-                        {a.agreedFee != null ? fmtINR(a.agreedFee) : "—"}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={
-                          a.engagement === "active"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-blue-50 text-blue-700 border-blue-200"
-                        }
-                      >
-                        {a.engagement === "active" ? "Active" : "Completed"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+              <PaginationBar
+                page={agreementPag.page}
+                totalPages={agreementPag.totalPages}
+                total={agreementPag.total}
+                start={agreementPag.start}
+                end={agreementPag.end}
+                onPrev={agreementPag.prev}
+                onNext={agreementPag.next}
+                canPrev={agreementPag.canPrev}
+                canNext={agreementPag.canNext}
+              />
             </div>
           </div>
         )}
       </CardContent>
+
+      {activeAgreement && (
+        <RecordPaymentDialog
+          agreementId={activeAgreement.id}
+          counterpartyName={activeAgreement.counterpartyName}
+          agreedFee={activeAgreement.agreedFee}
+          paidAmount={activeAgreement.paidAmount ?? 0}
+          open={payDialogAgreementId === activeAgreement.id}
+          onOpenChange={(open) => { if (!open) setPayDialogAgreementId(null); }}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() });
+          }}
+        />
+      )}
     </Card>
   );
 }
@@ -302,6 +832,10 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
   const [editingEndorsement, setEditingEndorsement] = useState<{ id: string; trainerId: string; text: string } | null>(null);
   const [editText, setEditText] = useState("");
   const [deletingEndorsementId, setDeletingEndorsementId] = useState<string | null>(null);
+
+  const reqPag = usePagination(requirements ?? [], 5);
+  const savedPag = usePagination(savedTrainers ?? [], 6);
+  const endorsePag = usePagination(givenEndorsements ?? [], 5);
 
   const handleSaveEditEndorsement = () => {
     if (!editingEndorsement) return;
@@ -464,7 +998,7 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
             <Skeleton className="h-[200px] w-full" />
           ) : requirements && requirements.length > 0 ? (
             <div className="space-y-4">
-              {requirements.map(req => (
+              {reqPag.pageItems.map(req => (
                 <Link key={req.id} href={`/requirements/${req.id}`} className="flex items-center justify-between p-4 rounded-lg border hover:border-primary/50 transition-colors bg-card hover:shadow-sm">
                   <div>
                     <h4 className="font-semibold">{req.title}</h4>
@@ -481,6 +1015,12 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
                   </div>
                 </Link>
               ))}
+              <PaginationBar
+                page={reqPag.page} totalPages={reqPag.totalPages} total={reqPag.total}
+                start={reqPag.start} end={reqPag.end}
+                onPrev={reqPag.prev} onNext={reqPag.next}
+                canPrev={reqPag.canPrev} canNext={reqPag.canNext}
+              />
             </div>
           ) : (
             <div className="text-center py-12 border border-dashed rounded-lg">
@@ -520,7 +1060,7 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
             </div>
           ) : (
             <div className="space-y-3">
-              {savedTrainers.map((s) => (
+              {savedPag.pageItems.map((s) => (
                 <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border gap-4 hover:border-primary/30 transition-colors">
                   <Link href={`/trainers/${s.trainer.id}`} className="flex items-center gap-3 min-w-0 flex-1">
                     <img
@@ -554,6 +1094,12 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
                   </div>
                 </div>
               ))}
+              <PaginationBar
+                page={savedPag.page} totalPages={savedPag.totalPages} total={savedPag.total}
+                start={savedPag.start} end={savedPag.end}
+                onPrev={savedPag.prev} onNext={savedPag.next}
+                canPrev={savedPag.canPrev} canNext={savedPag.canNext}
+              />
             </div>
           )}
         </CardContent>
@@ -584,7 +1130,7 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
             </div>
           ) : (
             <div className="space-y-3">
-              {givenEndorsements.map((e) => (
+              {endorsePag.pageItems.map((e) => (
                 <div key={e.id} className="flex items-start justify-between p-3 rounded-lg border gap-4 hover:border-primary/30 transition-colors">
                   <Link href={`/trainers/${e.trainerId}`} className="flex items-start gap-3 min-w-0 flex-1">
                     <img
@@ -621,6 +1167,12 @@ function VendorDashboard({ vendorId }: { vendorId: string }) {
                   </div>
                 </div>
               ))}
+              <PaginationBar
+                page={endorsePag.page} totalPages={endorsePag.totalPages} total={endorsePag.total}
+                start={endorsePag.start} end={endorsePag.end}
+                onPrev={endorsePag.prev} onNext={endorsePag.next}
+                canPrev={endorsePag.canPrev} canNext={endorsePag.canNext}
+              />
             </div>
           )}
         </CardContent>
@@ -692,7 +1244,8 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
     { status: "open" },
     { query: { queryKey: [...getListRequirementsQueryKey({ status: "open" }), "trainer", trainerId] } },
   );
-  const top5 = matchingReqs?.slice(0, 5) ?? [];
+  const matchPag = usePagination(matchingReqs ?? [], 5);
+  const appPag = usePagination(applications ?? [], 5);
   const hasNoSkills = !!trainerProfile && !trainerProfile.mainSkill;
   const [messageAppId, setMessageAppId] = useState<string | null>(null);
   const [messageAppTitle, setMessageAppTitle] = useState<string>("");
@@ -764,7 +1317,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
         <CardContent>
           {matchLoading || profileLoading ? (
             <Skeleton className="h-[180px] w-full" />
-          ) : top5.length === 0 ? (
+          ) : matchPag.total === 0 ? (
             <div className="text-center py-10 border border-dashed rounded-lg">
               <Briefcase className="mx-auto h-8 w-8 text-muted-foreground mb-3 opacity-40" />
               {hasNoSkills ? (
@@ -787,7 +1340,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
             </div>
           ) : (
             <div className="space-y-2">
-              {top5.map((req) => (
+              {matchPag.pageItems.map((req) => (
                 <Link
                   key={req.id}
                   href={`/requirements/${req.id}`}
@@ -811,6 +1364,12 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                   </div>
                 </Link>
               ))}
+              <PaginationBar
+                page={matchPag.page} totalPages={matchPag.totalPages} total={matchPag.total}
+                start={matchPag.start} end={matchPag.end}
+                onPrev={matchPag.prev} onNext={matchPag.next}
+                canPrev={matchPag.canPrev} canNext={matchPag.canNext}
+              />
             </div>
           )}
         </CardContent>
@@ -828,7 +1387,7 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
             <Skeleton className="h-[200px] w-full" />
           ) : applications && applications.length > 0 ? (
             <div className="space-y-4">
-              {applications.map(app => {
+              {appPag.pageItems.map(app => {
                 const canMessage = app.status === 'shortlisted' || app.status === 'hired';
                 const canWithdraw = app.status !== 'rejected' && app.status !== 'withdrawn';
                 const isWithdrawn = app.status === 'withdrawn';
@@ -903,6 +1462,12 @@ function TrainerDashboard({ trainerId }: { trainerId: string }) {
                   </div>
                 );
               })}
+              <PaginationBar
+                page={appPag.page} totalPages={appPag.totalPages} total={appPag.total}
+                start={appPag.start} end={appPag.end}
+                onPrev={appPag.prev} onNext={appPag.next}
+                canPrev={appPag.canPrev} canNext={appPag.canNext}
+              />
             </div>
           ) : (
             <div className="text-center py-12 border border-dashed rounded-lg">

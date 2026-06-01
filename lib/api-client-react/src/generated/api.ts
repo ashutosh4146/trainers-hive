@@ -21,6 +21,7 @@ import type {
   AdminUser,
   AdminUsersPage,
   AdminVendorsPage,
+  AgreementPayment,
   AiMatch,
   Application,
   ApplicationWithRequirement,
@@ -50,6 +51,7 @@ import type {
   Message,
   MessageThreadItem,
   PlatformStats,
+  RecordAgreementPaymentBody,
   RequestAgreementChangesBody,
   Requirement,
   RequirementDetail,
@@ -68,6 +70,7 @@ import type {
   Trainer,
   TrainerDetail,
   TrainerStats,
+  UpdateAgreementPaymentBody,
   UpdateAgreementTermsBody,
   UpdateApplicationBody,
   UpdateApplicationNoteBody,
@@ -6378,6 +6381,340 @@ export const useCancelAgreement = <
 /**
  * @summary List engagement agreements for the current user (vendor or trainer)
  */
+export const getListAgreementPaymentsUrl = (agreementId: string) => {
+  return `/api/agreements/${agreementId}/payments`;
+};
+
+export const listAgreementPayments = async (
+  agreementId: string,
+  options?: RequestInit,
+): Promise<AgreementPayment[]> => {
+  return customFetch<AgreementPayment[]>(getListAgreementPaymentsUrl(agreementId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAgreementPaymentsQueryKey = (agreementId: string) => {
+  return [`/api/agreements/${agreementId}/payments`] as const;
+};
+
+export const getListAgreementPaymentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAgreementPayments>>,
+  TError = ErrorType<unknown>,
+>(
+  agreementId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgreementPayments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAgreementPaymentsQueryKey(agreementId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAgreementPayments>>
+  > = ({ signal }) =>
+    listAgreementPayments(agreementId, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAgreementPayments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAgreementPaymentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAgreementPayments>>
+>;
+export type ListAgreementPaymentsQueryError = ErrorType<unknown>;
+
+export function useListAgreementPayments<
+  TData = Awaited<ReturnType<typeof listAgreementPayments>>,
+  TError = ErrorType<unknown>,
+>(
+  agreementId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAgreementPayments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAgreementPaymentsQueryOptions(
+    agreementId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getRecordAgreementPaymentUrl = (agreementId: string) => {
+  return `/api/agreements/${agreementId}/payments`;
+};
+
+export const recordAgreementPayment = async (
+  agreementId: string,
+  recordAgreementPaymentBody: RecordAgreementPaymentBody,
+  options?: RequestInit,
+): Promise<AgreementPayment> => {
+  return customFetch<AgreementPayment>(
+    getRecordAgreementPaymentUrl(agreementId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(recordAgreementPaymentBody),
+    },
+  );
+};
+
+export const getRecordAgreementPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordAgreementPayment>>,
+    TError,
+    { agreementId: string; data: BodyType<RecordAgreementPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordAgreementPayment>>,
+  TError,
+  { agreementId: string; data: BodyType<RecordAgreementPaymentBody> },
+  TContext
+> => {
+  const mutationKey = ["recordAgreementPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordAgreementPayment>>,
+    { agreementId: string; data: BodyType<RecordAgreementPaymentBody> }
+  > = (props) => {
+    const { agreementId, data } = props ?? {};
+    return recordAgreementPayment(agreementId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordAgreementPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordAgreementPayment>>
+>;
+export type RecordAgreementPaymentMutationBody =
+  BodyType<RecordAgreementPaymentBody>;
+export type RecordAgreementPaymentMutationError = ErrorType<unknown>;
+
+export const useRecordAgreementPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordAgreementPayment>>,
+    TError,
+    { agreementId: string; data: BodyType<RecordAgreementPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordAgreementPayment>>,
+  TError,
+  { agreementId: string; data: BodyType<RecordAgreementPaymentBody> },
+  TContext
+> => {
+  return useMutation(getRecordAgreementPaymentMutationOptions(options));
+};
+
+export const getDeleteAgreementPaymentUrl = (
+  agreementId: string,
+  paymentId: string,
+) => {
+  return `/api/agreements/${agreementId}/payments/${paymentId}`;
+};
+
+export const deleteAgreementPayment = async (
+  agreementId: string,
+  paymentId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(
+    getDeleteAgreementPaymentUrl(agreementId, paymentId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteAgreementPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteAgreementPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAgreementPayment>>,
+    { agreementId: string; paymentId: string }
+  > = (props) => {
+    const { agreementId, paymentId } = props ?? {};
+    return deleteAgreementPayment(agreementId, paymentId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAgreementPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAgreementPayment>>
+>;
+export type DeleteAgreementPaymentMutationError = ErrorType<unknown>;
+
+export const useDeleteAgreementPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string },
+  TContext
+> => {
+  return useMutation(getDeleteAgreementPaymentMutationOptions(options));
+};
+
+export const getUpdateAgreementPaymentUrl = (
+  agreementId: string,
+  paymentId: string,
+) => {
+  return `/api/agreements/${agreementId}/payments/${paymentId}`;
+};
+
+export const updateAgreementPayment = async (
+  agreementId: string,
+  paymentId: string,
+  updateAgreementPaymentBody: UpdateAgreementPaymentBody,
+  options?: RequestInit,
+): Promise<AgreementPayment> => {
+  return customFetch<AgreementPayment>(
+    getUpdateAgreementPaymentUrl(agreementId, paymentId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateAgreementPaymentBody),
+    },
+  );
+};
+
+export const getUpdateAgreementPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAgreementPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAgreementPayment>>,
+    { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> }
+  > = (props) => {
+    const { agreementId, paymentId, data } = props ?? {};
+    return updateAgreementPayment(agreementId, paymentId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAgreementPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAgreementPayment>>
+>;
+export type UpdateAgreementPaymentMutationBody = BodyType<UpdateAgreementPaymentBody>;
+export type UpdateAgreementPaymentMutationError = ErrorType<unknown>;
+
+export const useUpdateAgreementPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAgreementPayment>>,
+    TError,
+    { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAgreementPayment>>,
+  TError,
+  { agreementId: string; paymentId: string; data: BodyType<UpdateAgreementPaymentBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAgreementPaymentMutationOptions(options));
+};
+
 export const getListMyAgreementsUrl = () => {
   return `/api/my-agreements`;
 };

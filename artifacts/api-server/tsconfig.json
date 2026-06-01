@@ -1,13 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"],
-    "paths": {
-      "drizzle-orm": ["../../lib/db/node_modules/drizzle-orm/index.d.ts"],
-      "drizzle-orm/*": ["../../lib/db/node_modules/drizzle-orm/*"]
-    }
+    "types": ["node"]
   },
   "include": ["src"],
   "references": [
@@ -16,9 +14,6 @@
     },
     {
       "path": "../../lib/api-zod"
-    },
-    {
-      "path": "../../lib/integrations-openai-ai-server"
     }
   ]
 }

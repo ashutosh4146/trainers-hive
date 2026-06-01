@@ -13,3 +13,4 @@ export * from "./application-messages";
 export * from "./saved-trainers";
 export * from "./endorsements";
 export * from "./engagement-agreements";
+export * from "./agreement-payments";

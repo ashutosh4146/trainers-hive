@@ -812,8 +812,35 @@ export interface EngagementAgreementListItem {
   startDate?: string | null;
   /** @nullable */
   endDate?: string | null;
+  paidAmount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AgreementPayment {
+  id: string;
+  agreementId: string;
+  amount: number;
+  currency: string;
+  paidAt: string;
+  /** @nullable */
+  note?: string | null;
+  recordedByUserId: string;
+  createdAt: string;
+}
+
+export interface RecordAgreementPaymentBody {
+  amount: number;
+  paidAt: string;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface UpdateAgreementPaymentBody {
+  amount?: number;
+  paidAt?: string;
+  /** @nullable */
+  note?: string | null;
 }
 
 export interface UpdateAgreementTermsBody {

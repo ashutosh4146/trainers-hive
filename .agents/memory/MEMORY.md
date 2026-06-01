@@ -1,0 +1,3 @@
+- [Authenticated file downloads](authed-downloads.md) — a plain `<a href>`/`window.open` to a token-protected endpoint sends no Authorization header → 401; must fetch+blob.
+- [Trainers Hive EC2 deploy](trainers-hive-ec2-deploy.md) — prod runs on EC2 (nginx + PM2), not Replit deploy; how to ship frontend/api changes there.
+- [Trainers Hive API codegen is NOT live](trainers-hive-codegen.md) — openapi.yaml only has /healthz but generated client is hand-maintained; never run codegen (clean:true wipes it).

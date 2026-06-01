@@ -47,11 +47,3 @@ Thumbs.db
 # Replit
 .cache/
 .local/
-
-# Secrets — never commit service account keys or credentials
-attached_assets/*firebase-adminsdk*.json
-*firebase-adminsdk*.json
-
-# Local environment files (never commit secrets)
-.env
-artifacts/*/.env
