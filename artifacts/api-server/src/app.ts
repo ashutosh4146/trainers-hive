@@ -1,16 +1,13 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import rateLimit from "express-rate-limit";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { AccountDeactivatedError, UnauthenticatedError } from "./lib/session";
 
 const app: Express = express();
 
-// Trust the first proxy hop (nginx in front of the api-server) so that
-// `req.ip` resolves to the real client address from X-Forwarded-For
-// instead of 127.0.0.1. This makes captured signature evidence (IP/UA)
-// trustworthy and not directly spoofable by clients.
 app.set("trust proxy", 1);
 
 app.use(
@@ -36,13 +33,27 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "Too many requests, please slow down." },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests", message: "Too many auth attempts, please try again later." },
+});
+
+app.use("/api", generalLimiter);
+app.use("/api/auth", authLimiter);
+
 app.use("/api", router);
 
-/**
- * Global error handler — catches AccountDeactivatedError thrown by
- * getActiveUserId and returns 403. Express 5 propagates async throws
- * from route handlers automatically.
- */
 app.use(
   "/api",
   (err: Error, _req: Request, res: Response, _next: NextFunction) => {

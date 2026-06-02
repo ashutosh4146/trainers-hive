@@ -26,6 +26,19 @@ function serialize(v: typeof vendorsTable.$inferSelect) {
   };
 }
 
+function serializePublic(v: typeof vendorsTable.$inferSelect) {
+  return {
+    id: v.id,
+    companyName: v.companyName,
+    industry: v.industry,
+    location: v.location,
+    about: v.about ?? undefined,
+    logoUrl: v.logoUrl,
+    websiteUrl: v.websiteUrl ?? undefined,
+    verified: v.verified,
+  };
+}
+
 router.get("/vendors/:id", async (req, res) => {
   const params = GetVendorParams.safeParse(req.params);
   if (!params.success) {
@@ -41,7 +54,20 @@ router.get("/vendors/:id", async (req, res) => {
     res.status(404).json({ error: "vendor not found" });
     return;
   }
-  res.json(serialize(rows[0]!));
+  const vendor = rows[0]!;
+  let isPrivileged = false;
+  try {
+    const activeId = await getActiveUserId(req);
+    if (activeId) {
+      const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+      if (active && (active.role === "admin" || (active.role === "vendor" && active.vendorId === vendor.id))) {
+        isPrivileged = true;
+      }
+    }
+  } catch {
+    // not authenticated
+  }
+  res.json(isPrivileged ? serialize(vendor) : serializePublic(vendor));
 });
 
 router.patch("/vendors/:id", async (req, res) => {

@@ -2032,13 +2032,20 @@ function AdminVendorsSection() {
   );
 }
 
+const ADMIN_PAGE_SIZE = 5;
+
 function AdminDashboard() {
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats();
   const { data: requirements, isLoading: reqsLoading } = useListRecentRequirements();
-  const { data: recentUsers, isLoading: recentUsersLoading } = useListAdminUsers({ page: 1, pageSize: 5 } as any);
+  const { data: recentUsers, isLoading: recentUsersLoading } = useListAdminUsers({ page: 1, pageSize: 10 } as any);
   const { data: inquiries, isLoading: inqLoading } = useListHireInquiries();
   const { data: hireThroughUsReqs, isLoading: hireThroughUsLoading } = useListHireThroughUsRequirements();
   const { data: flaggedReqs, isLoading: flaggedLoading } = useListRequirements({ flagged: true } as any);
+
+  const recentReqsPag = usePagination(requirements ?? [], ADMIN_PAGE_SIZE);
+  const recentUsersPag = usePagination((recentUsers as any)?.users ?? [], ADMIN_PAGE_SIZE);
+  const newInquiriesPag = usePagination((inquiries ?? []).filter(i => i.status === "new"), ADMIN_PAGE_SIZE);
+  const flaggedPag = usePagination(flaggedReqs ?? [], ADMIN_PAGE_SIZE);
   const deleteRequirement = useDeleteRequirement();
   const unflagRequirement = useUnflagRequirement();
   const hideRequirement = useHideRequirement();
@@ -2054,6 +2061,7 @@ function AdminDashboard() {
   const [vreqNoteTarget, setVreqNoteTarget] = useState<{ id: string; trainerName: string; status: "rejected" | "needs_info" } | null>(null);
   const [vreqNoteText, setVreqNoteText] = useState("");
   const [vreqNoteSubmitting, setVreqNoteSubmitting] = useState(false);
+  const vreqPag = usePagination(verificationRequests ?? [], ADMIN_PAGE_SIZE);
 
   type AnalyticsTrend = { week: string; count: number }[];
   const [analytics, setAnalytics] = useState<{
@@ -2065,7 +2073,10 @@ function AdminDashboard() {
   const fetchVerificationRequests = async () => {
     setVreqLoading(true);
     try {
-      const res = await fetch("/api/verification-requests");
+      const token = localStorage.getItem("th_token");
+      const res = await fetch("/api/verification-requests", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) setVerificationRequests(await res.json());
     } finally {
       setVreqLoading(false);
@@ -2074,16 +2085,23 @@ function AdminDashboard() {
 
   useEffect(() => {
     fetchVerificationRequests();
-    fetch("/api/admin/analytics")
+    const token = localStorage.getItem("th_token");
+    fetch("/api/admin/analytics", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setAnalytics(data); })
       .catch(() => {});
   }, []);
 
   const handleVerificationAction = async (id: string, status: "approved" | "rejected" | "needs_info", adminNote?: string) => {
+    const token = localStorage.getItem("th_token");
     const res = await fetch(`/api/verification-requests/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ status, adminNote }),
     });
     if (res.ok) {
@@ -2140,10 +2158,10 @@ function AdminDashboard() {
               {inqLoading ? "…" : `${inquiries?.filter(i => i.status === "new").length ?? 0} new`}
             </Badge>
           </CardHeader>
-          <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
+          <CardContent className="space-y-3">
             {inqLoading ? (
               <Skeleton className="h-[200px] w-full" />
-            ) : !inquiries?.filter(i => i.status === "new").length ? (
+            ) : newInquiriesPag.total === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-10 gap-2">
                 <CheckCircle className="h-8 w-8 text-green-500" />
                 <p className="text-sm text-muted-foreground">All caught up — no new inquiries waiting.</p>
@@ -2155,54 +2173,54 @@ function AdminDashboard() {
                 </button>
               </div>
             ) : (
-              inquiries
-                .filter(i => i.status === "new")
-                .slice(0, 5)
-                .map((inq) => (
-                  <div key={inq.id} className="border rounded-lg p-3 space-y-2 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{inq.companyName}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {inq.contactName} · {inq.email}
-                          {inq.headcount && ` · ${inq.headcount} ppl`}
-                        </p>
-                        <p className="text-xs mt-1 line-clamp-2 text-foreground/80">{inq.trainingNeed}</p>
-                      </div>
-                      <Badge variant="secondary" className="shrink-0 text-[10px]">
-                        {formatDistanceToNow(new Date(inq.createdAt), { addSuffix: true })}
-                      </Badge>
+              newInquiriesPag.pageItems.map((inq) => (
+                <div key={inq.id} className="border rounded-lg p-3 space-y-2 hover:bg-muted/30 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{inq.companyName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {inq.contactName} · {inq.email}
+                        {inq.headcount && ` · ${inq.headcount} ppl`}
+                      </p>
+                      <p className="text-xs mt-1 line-clamp-2 text-foreground/80">{inq.trainingNeed}</p>
                     </div>
-                    <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                      <Button size="sm" className="h-7 px-3 gap-1 text-xs" asChild>
-                        <Link href={`/inquiries/${inq.id}`}>
-                          Open enquiry →
-                        </Link>
-                      </Button>
+                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      {formatDistanceToNow(new Date(inq.createdAt), { addSuffix: true })}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                    <Button size="sm" className="h-7 px-3 gap-1 text-xs" asChild>
+                      <Link href={`/inquiries/${inq.id}`}>
+                        Open enquiry →
+                      </Link>
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" asChild>
+                      <a href={`mailto:${inq.email}?subject=Re: Your training inquiry with Trainers Hive`}>
+                        <Mail className="h-3 w-3" /> Email
+                      </a>
+                    </Button>
+                    {inq.phone && (
                       <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" asChild>
-                        <a href={`mailto:${inq.email}?subject=Re: Your training inquiry with Trainers Hive`}>
-                          <Mail className="h-3 w-3" /> Email
+                        <a href={`tel:${inq.phone}`}>
+                          <Phone className="h-3 w-3" /> Call
                         </a>
                       </Button>
-                      {inq.phone && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" asChild>
-                          <a href={`tel:${inq.phone}`}>
-                            <Phone className="h-3 w-3" /> Call
-                          </a>
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                ))
+                </div>
+              ))
             )}
-            {!inqLoading && (inquiries?.filter(i => i.status === "new").length ?? 0) > 5 && (
-              <button
-                className="w-full text-xs text-primary hover:underline pt-1"
-                onClick={() => document.getElementById("hire-inquiries")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-              >
-                View all {inquiries?.filter(i => i.status === "new").length} new inquiries →
-              </button>
-            )}
+            <PaginationBar
+              page={newInquiriesPag.page}
+              totalPages={newInquiriesPag.totalPages}
+              total={newInquiriesPag.total}
+              start={newInquiriesPag.start}
+              end={newInquiriesPag.end}
+              onPrev={newInquiriesPag.prev}
+              onNext={newInquiriesPag.next}
+              canPrev={newInquiriesPag.canPrev}
+              canNext={newInquiriesPag.canNext}
+            />
           </CardContent>
         </Card>
 
@@ -2281,18 +2299,31 @@ function AdminDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            {reqsLoading ? <Skeleton className="h-[200px] w-full" /> : requirements?.length ? (
-              <div className="space-y-4">
-                {requirements.slice(0, 5).map(req => (
-                  <Link key={req.id} href={`/requirements/${req.id}`} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                    <div>
-                      <p className="font-medium text-sm truncate max-w-[200px]">{req.title}</p>
-                      <p className="text-xs text-muted-foreground">{req.vendorName}</p>
-                    </div>
-                    <Badge variant="outline" className="text-xs font-normal">{req.skill}</Badge>
-                  </Link>
-                ))}
-              </div>
+            {reqsLoading ? <Skeleton className="h-[200px] w-full" /> : recentReqsPag.total > 0 ? (
+              <>
+                <div className="space-y-4">
+                  {recentReqsPag.pageItems.map(req => (
+                    <Link key={req.id} href={`/requirements/${req.id}`} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                      <div>
+                        <p className="font-medium text-sm truncate max-w-[200px]">{req.title}</p>
+                        <p className="text-xs text-muted-foreground">{req.vendorName}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs font-normal">{req.skill}</Badge>
+                    </Link>
+                  ))}
+                </div>
+                <PaginationBar
+                  page={recentReqsPag.page}
+                  totalPages={recentReqsPag.totalPages}
+                  total={recentReqsPag.total}
+                  start={recentReqsPag.start}
+                  end={recentReqsPag.end}
+                  onPrev={recentReqsPag.prev}
+                  onNext={recentReqsPag.next}
+                  canPrev={recentReqsPag.canPrev}
+                  canNext={recentReqsPag.canNext}
+                />
+              </>
             ) : <p className="text-muted-foreground text-sm">No requirements found</p>}
           </CardContent>
         </Card>
@@ -2316,27 +2347,40 @@ function AdminDashboard() {
           <CardContent>
             {recentUsersLoading ? (
               <Skeleton className="h-[200px] w-full" />
-            ) : (recentUsers as any)?.users?.length ? (
-              <div className="space-y-3">
-                {((recentUsers as any).users as any[]).slice(0, 5).map((u) => (
-                  <div key={u.id} className="flex items-center justify-between p-2 rounded-lg border hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
-                        {(u.name || u.email || "?").charAt(0).toUpperCase()}
+            ) : recentUsersPag.total > 0 ? (
+              <>
+                <div className="space-y-3">
+                  {recentUsersPag.pageItems.map((u: any) => (
+                    <div key={u.id} className="flex items-center justify-between p-2 rounded-lg border hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                          {(u.name || u.email || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{u.name || u.email}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {u.email} · joined {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{u.name || u.email}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {u.email} · joined {formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}
-                        </p>
-                      </div>
+                      <Badge variant="outline" className="text-[10px] capitalize shrink-0 ml-2">
+                        {u.role}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-[10px] capitalize shrink-0 ml-2">
-                      {u.role}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <PaginationBar
+                  page={recentUsersPag.page}
+                  totalPages={recentUsersPag.totalPages}
+                  total={recentUsersPag.total}
+                  start={recentUsersPag.start}
+                  end={recentUsersPag.end}
+                  onPrev={recentUsersPag.prev}
+                  onNext={recentUsersPag.next}
+                  canPrev={recentUsersPag.canPrev}
+                  canNext={recentUsersPag.canNext}
+                />
+              </>
             ) : (
               <p className="text-muted-foreground text-sm">No users yet</p>
             )}
@@ -2572,11 +2616,12 @@ function AdminDashboard() {
         <CardContent>
           {flaggedLoading ? (
             <Skeleton className="h-[120px] w-full" />
-          ) : !flaggedReqs?.length ? (
+          ) : flaggedPag.total === 0 ? (
             <p className="text-muted-foreground text-sm text-center py-8">No flagged requirements — all clear!</p>
           ) : (
+            <>
             <div className="space-y-3">
-              {(flaggedReqs as any[]).map((req) => (
+              {(flaggedPag.pageItems as any[]).map((req) => (
                 <div key={req.id} className="flex items-start justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5 gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -2685,6 +2730,18 @@ function AdminDashboard() {
                 </div>
               ))}
             </div>
+            <PaginationBar
+              page={flaggedPag.page}
+              totalPages={flaggedPag.totalPages}
+              total={flaggedPag.total}
+              start={flaggedPag.start}
+              end={flaggedPag.end}
+              onPrev={flaggedPag.prev}
+              onNext={flaggedPag.next}
+              canPrev={flaggedPag.canPrev}
+              canNext={flaggedPag.canNext}
+            />
+            </>
           )}
         </CardContent>
       </Card>
@@ -2713,11 +2770,12 @@ function AdminDashboard() {
         <CardContent>
           {vreqLoading ? (
             <Skeleton className="h-[120px] w-full" />
-          ) : !verificationRequests.length ? (
+          ) : vreqPag.total === 0 ? (
             <p className="text-muted-foreground text-sm text-center py-8">No verification requests yet.</p>
           ) : (
+            <>
             <div className="space-y-3">
-              {verificationRequests.map((req) => (
+              {(vreqPag.pageItems as typeof verificationRequests).map((req) => (
                 <div key={req.id} className="p-4 rounded-lg border space-y-3">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0">
@@ -2791,6 +2849,18 @@ function AdminDashboard() {
                 </div>
               ))}
             </div>
+            <PaginationBar
+              page={vreqPag.page}
+              totalPages={vreqPag.totalPages}
+              total={vreqPag.total}
+              start={vreqPag.start}
+              end={vreqPag.end}
+              onPrev={vreqPag.prev}
+              onNext={vreqPag.next}
+              canPrev={vreqPag.canPrev}
+              canNext={vreqPag.canNext}
+            />
+            </>
           )}
         </CardContent>
       </Card>

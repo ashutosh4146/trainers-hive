@@ -110,7 +110,7 @@ router.get("/requirements", async (req, res) => {
     res.status(400).json({ error: "invalid query", details: parsed.error.issues });
     return;
   }
-  const { q, skill, location, remote, status, vendorId, sort, flagged, skills } = parsed.data as typeof parsed.data & { skills?: string };
+  const { q, skill, location, remote, status, vendorId, sort, flagged, skills, limit, offset } = parsed.data as typeof parsed.data & { skills?: string; limit?: number; offset?: number };
 
   // Detect session — used for private gating and trainer relevance ranking
   let isAuthenticated = false;
@@ -219,9 +219,11 @@ router.get("/requirements", async (req, res) => {
   }
 
   // Featured requirements always surface first, then apply the secondary sort
+  const pageLimit = Math.min(Math.max(1, limit ?? 20), 100);
+  const pageOffset = Math.max(0, offset ?? 0);
   const rows = where
-    ? await db.select().from(requirementsTable).where(where).orderBy(desc(requirementsTable.isFeatured), orderBy)
-    : await db.select().from(requirementsTable).orderBy(desc(requirementsTable.isFeatured), orderBy);
+    ? await db.select().from(requirementsTable).where(where).orderBy(desc(requirementsTable.isFeatured), orderBy).limit(pageLimit).offset(pageOffset)
+    : await db.select().from(requirementsTable).orderBy(desc(requirementsTable.isFeatured), orderBy).limit(pageLimit).offset(pageOffset);
   res.json(await fetchListWithCounts(rows));
 });
 
@@ -402,6 +404,21 @@ router.get("/requirements/:id", async (req, res) => {
     .from(applicationsTable)
     .where(eq(applicationsTable.requirementId, r.id));
   const card = await buildRequirementCard(r, vendor ?? null, count);
+
+  // Only the owning vendor or an admin sees contact details
+  let showContact = false;
+  try {
+    const activeId = await getActiveUserId(req);
+    if (activeId) {
+      const [active] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+      if (active && (active.role === "admin" || (active.role === "vendor" && active.vendorId === r.vendorId))) {
+        showContact = true;
+      }
+    }
+  } catch {
+    // not authenticated
+  }
+
   res.json({
     ...card,
     description: r.description,
@@ -411,9 +428,11 @@ router.get("/requirements/:id", async (req, res) => {
           companyName: vendor.companyName,
           industry: vendor.industry,
           location: vendor.location,
-          contactName: vendor.contactName,
-          contactDesignation: vendor.contactDesignation,
-          email: vendor.email,
+          ...(showContact ? {
+            contactName: vendor.contactName,
+            contactDesignation: vendor.contactDesignation,
+            email: vendor.email,
+          } : {}),
           about: vendor.about ?? undefined,
           logoUrl: vendor.logoUrl,
           websiteUrl: vendor.websiteUrl ?? undefined,

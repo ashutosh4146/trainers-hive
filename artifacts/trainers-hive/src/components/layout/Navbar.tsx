@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, LayoutDashboard, Settings, User as UserIcon, LogOut, Plus, Bell, Sun, Moon, MessageSquare, InboxIcon, FileSignature } from "lucide-react";
+import { Activity, LayoutDashboard, Settings, User as UserIcon, LogOut, Plus, Bell, Sun, Moon, MessageSquare, InboxIcon, FileSignature, Users, Building, Briefcase } from "lucide-react";
 import { useAuth, getRoleLabel, type UserRole } from "@/hooks/useAuth";
 import { signOutFirebase } from "@/lib/firebase";
 import { useUnreadMessages, markRead } from "@/hooks/useUnreadMessages";
@@ -103,23 +103,42 @@ export function Navbar() {
             </Link>
 
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-              <Link href="/trainers" className="text-muted-foreground hover:text-primary transition-colors">Trainers</Link>
-              <Link href="/requirements" className="text-muted-foreground hover:text-primary transition-colors">Requirements</Link>
-              {isSignedIn && auth?.role === "vendor" && (
-                <Link href="/hire-us" className="font-semibold text-primary hover:text-primary/80 transition-colors border border-primary/30 rounded-full px-3 py-0.5 text-xs bg-primary/5">Hire Us</Link>
-              )}
-              {isSignedIn && (
-                <Link href="/dashboard" className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
-                  <LayoutDashboard className="h-4 w-4" />
-                  Dashboard
-                </Link>
-              )}
-              {isSignedIn && auth?.role === "vendor" && (
-                <Link href="/requirements/new" className="hidden sm:flex ml-2">
-                  <Button size="sm" className="gap-1 shadow-sm h-8">
-                    <Plus className="h-4 w-4" /> Post Requirement
-                  </Button>
-                </Link>
+              {isSignedIn && auth?.role === "admin" ? (
+                <>
+                  <Link href="/trainers" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                    <Users className="h-4 w-4" /> Trainers
+                  </Link>
+                  <Link href="/requirements" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                    <Briefcase className="h-4 w-4" /> Requirements
+                  </Link>
+                  <Link href="/dashboard#vendor-verification" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                    <Building className="h-4 w-4" /> Vendors
+                  </Link>
+                  <Link href="/dashboard" className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+                    <LayoutDashboard className="h-4 w-4" /> Dashboard
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/trainers" className="text-muted-foreground hover:text-primary transition-colors">Trainers</Link>
+                  <Link href="/requirements" className="text-muted-foreground hover:text-primary transition-colors">Requirements</Link>
+                  {isSignedIn && auth?.role === "vendor" && (
+                    <Link href="/hire-us" className="font-semibold text-primary hover:text-primary/80 transition-colors border border-primary/30 rounded-full px-3 py-0.5 text-xs bg-primary/5">Hire Us</Link>
+                  )}
+                  {isSignedIn && (
+                    <Link href="/dashboard" className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+                      <LayoutDashboard className="h-4 w-4" />
+                      Dashboard
+                    </Link>
+                  )}
+                  {isSignedIn && auth?.role === "vendor" && (
+                    <Link href="/requirements/new" className="hidden sm:flex ml-2">
+                      <Button size="sm" className="gap-1 shadow-sm h-8">
+                        <Plus className="h-4 w-4" /> Post Requirement
+                      </Button>
+                    </Link>
+                  )}
+                </>
               )}
             </nav>
           </div>
@@ -309,12 +328,14 @@ export function Navbar() {
                           <span>Dashboard</span>
                         </DropdownMenuItem>
                       </Link>
-                      <Link href="/agreements">
-                        <DropdownMenuItem className="cursor-pointer">
-                          <FileSignature className="mr-2 h-4 w-4" />
-                          <span>Agreements</span>
-                        </DropdownMenuItem>
-                      </Link>
+                      {auth?.role !== "admin" && (
+                        <Link href="/agreements">
+                          <DropdownMenuItem className="cursor-pointer">
+                            <FileSignature className="mr-2 h-4 w-4" />
+                            <span>Agreements</span>
+                          </DropdownMenuItem>
+                        </Link>
+                      )}
                       <Link href="/settings">
                         <DropdownMenuItem className="cursor-pointer">
                           <Settings className="mr-2 h-4 w-4" />

@@ -84,6 +84,8 @@ export const ListTrainersQueryParams = zod.object({
   minExperience: zod.coerce.number().optional(),
   gender: zod.enum(["male", "female"]).optional(),
   sort: zod.enum(["rating", "experience", "recent", "endorsements"]).optional(),
+  limit: zod.coerce.number().int().min(1).max(100).optional(),
+  offset: zod.coerce.number().int().min(0).optional(),
 });
 
 export const ListTrainersResponseItem = zod.object({
@@ -721,6 +723,8 @@ export const ListRequirementsQueryParams = zod.object({
     .string()
     .optional()
     .describe("Comma-separated skill names (OR-match)"),
+  limit: zod.coerce.number().int().min(1).max(100).optional(),
+  offset: zod.coerce.number().int().min(0).optional(),
 });
 
 export const ListRequirementsResponseItem = zod.object({

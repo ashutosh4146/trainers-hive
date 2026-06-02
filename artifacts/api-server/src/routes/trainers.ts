@@ -73,12 +73,25 @@ function serializeTrainer(t: typeof trainersTable.$inferSelect & { endorsementCo
 }
 
 router.get("/trainers", async (req, res) => {
+  // Must be signed in; vendors cannot browse the trainer list
+  let activeId: string | null = null;
+  try { activeId = await getActiveUserId(req); } catch { /* unauthenticated */ }
+  if (!activeId) {
+    res.status(401).json({ error: "authentication required" });
+    return;
+  }
+  const [activeUser] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!activeUser || activeUser.role === "vendor") {
+    res.status(403).json({ error: "vendors cannot browse trainer profiles" });
+    return;
+  }
+
   const parsed = ListTrainersQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid query", details: parsed.error.issues });
     return;
   }
-  const { q, skill, skills, location, remote, minExperience, gender, sort } = parsed.data;
+  const { q, skill, skills, location, remote, minExperience, gender, sort, limit, offset } = parsed.data;
   const conds: SQL[] = [];
   if (q) {
     const like = `%${q}%`;
@@ -125,9 +138,11 @@ router.get("/trainers", async (req, res) => {
         : sort === "endorsements"
           ? desc(endorsementCountSq)
           : desc(trainersTable.rating);
+  const pageLimit = Math.min(Math.max(1, limit ?? 20), 100);
+  const pageOffset = Math.max(0, offset ?? 0);
   const rows = where
-    ? await baseQuery.where(where).orderBy(orderBy)
-    : await baseQuery.orderBy(orderBy);
+    ? await baseQuery.where(where).orderBy(orderBy).limit(pageLimit).offset(pageOffset)
+    : await baseQuery.orderBy(orderBy).limit(pageLimit).offset(pageOffset);
   res.json(rows.map(serializeTrainer));
 });
 
@@ -234,6 +249,45 @@ router.get("/trainers/:id", async (req, res) => {
     res.status(400).json({ error: "invalid params" });
     return;
   }
+
+  // Must be signed in
+  let activeId: string | null = null;
+  try { activeId = await getActiveUserId(req); } catch { /* unauthenticated */ }
+  if (!activeId) {
+    res.status(401).json({ error: "authentication required" });
+    return;
+  }
+
+  const [activeUser] = await db.select().from(usersTable).where(eq(usersTable.id, activeId)).limit(1);
+  if (!activeUser) {
+    res.status(401).json({ error: "authentication required" });
+    return;
+  }
+
+  // Vendors may only view a trainer who has applied to one of their requirements
+  if (activeUser.role === "vendor") {
+    if (!activeUser.vendorId) {
+      res.status(403).json({ error: "access denied" });
+      return;
+    }
+    // Check: does this trainer have any application on a requirement owned by this vendor?
+    const [application] = await db
+      .select({ id: applicationsTable.id })
+      .from(applicationsTable)
+      .innerJoin(requirementsTable, eq(applicationsTable.requirementId, requirementsTable.id))
+      .where(
+        and(
+          eq(applicationsTable.trainerId, params.data.id),
+          eq(requirementsTable.vendorId, activeUser.vendorId),
+        ),
+      )
+      .limit(1);
+    if (!application) {
+      res.status(403).json({ error: "you can only view trainers who have applied to your requirements" });
+      return;
+    }
+  }
+
   const endorsementCountSq = sql<number>`(SELECT COUNT(*) FROM endorsements WHERE endorsements.trainer_id = ${trainersTable.id})`.as("endorsementCount");
   const rows = await db
     .select({ ...getTableColumns(trainersTable), endorsementCount: endorsementCountSq })
