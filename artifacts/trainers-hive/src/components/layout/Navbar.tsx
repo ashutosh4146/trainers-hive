@@ -111,7 +111,7 @@ export function Navbar() {
                   <Link href="/requirements" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
                     <Briefcase className="h-4 w-4" /> Requirements
                   </Link>
-                  <Link href="/dashboard#vendor-verification" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                  <Link href="/vendors" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
                     <Building className="h-4 w-4" /> Vendors
                   </Link>
                   <Link href="/dashboard" className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1">

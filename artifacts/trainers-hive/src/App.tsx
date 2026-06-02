@@ -92,6 +92,7 @@ const Messages = React.lazy(() => import("./pages/Messages"));
 const SkillsDemand = React.lazy(() => import("./pages/SkillsDemand"));
 const InquiryDetail = React.lazy(() => import("./pages/InquiryDetail"));
 const MyAgreements = React.lazy(() => import("./pages/MyAgreements"));
+const Vendors = React.lazy(() => import("./pages/Vendors"));
 
 function PrivateRoute({ component: Component }: { component: React.ComponentType }) {
   const { isSignedIn } = useAuth();
@@ -187,6 +188,7 @@ function Router() {
               <Route path="/about" component={AboutUs} />
               <Route path="/terms" component={TermsAndConditions} />
               <Route path="/skills-demand" component={SkillsDemand} />
+              <Route path="/vendors" component={Vendors} />
               <Route component={NotFound} />
             </Switch>
           </AppLayout>
