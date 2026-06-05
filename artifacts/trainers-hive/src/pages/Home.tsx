@@ -21,6 +21,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 
+type PlatformStats = {
+  vendorCount?: number;
+  trainerCount?: number;
+  openRequirementCount?: number;
+  completedEngagements?: number;
+};
+
 function toArray<T = any>(value: unknown): T[] {
   if (Array.isArray(value)) return value;
 
@@ -45,6 +52,30 @@ function toArray<T = any>(value: unknown): T[] {
   return [];
 }
 
+function toRecord<T extends Record<string, unknown>>(value: unknown): Partial<T> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+
+  const record = value as Record<string, unknown>;
+
+  if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
+    return record.data as Partial<T>;
+  }
+
+  if (record.result && typeof record.result === "object" && !Array.isArray(record.result)) {
+    return record.result as Partial<T>;
+  }
+
+  if (record.stats && typeof record.stats === "object" && !Array.isArray(record.stats)) {
+    return record.stats as Partial<T>;
+  }
+
+  return record as Partial<T>;
+}
+
+function statNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 export default function Home() {
   const { data: user } = useGetCurrentUser();
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats({ query: { queryKey: getGetPlatformStatsQueryKey() }});
@@ -55,6 +86,7 @@ export default function Home() {
     query: { queryKey: getListActivityQueryKey(), enabled: isLoggedIn },
   });
 
+  const platformStats = toRecord<PlatformStats>(stats);
   const featuredTrainersList = toArray(featuredTrainers);
   const recentRequirementsList = toArray(recentRequirements);
   const activityFeedList = toArray(activityFeed);
@@ -110,22 +142,22 @@ export default function Home() {
                   <Skeleton className="h-4 w-32" />
                 </div>
               ))
-            ) : stats ? (
+            ) : platformStats ? (
               <>
                 <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{stats.vendorCount}+</span>
+                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.vendorCount)}+</span>
                   <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Verified Vendors</span>
                 </div>
                 <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{stats.trainerCount}+</span>
+                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.trainerCount)}+</span>
                   <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Expert Trainers</span>
                 </div>
                 <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{stats.openRequirementCount}</span>
+                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.openRequirementCount)}</span>
                   <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Open Opportunities</span>
                 </div>
                 <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{stats.completedEngagements}+</span>
+                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.completedEngagements)}+</span>
                   <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Completed Engagements</span>
                 </div>
               </>
