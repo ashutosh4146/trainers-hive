@@ -96,6 +96,7 @@ export default function Home() {
   const showActivityFeed = isLoggedIn && (activityLoading || activityFeedList.length > 0);
   const showDataSections = showFeaturedTrainers || showRecentRequirements || showActivityFeed;
   const browseRequirementsHref = isLoggedIn ? "/requirements" : "/login";
+  const findTrainerHref = isLoggedIn ? "/trainers" : "/login";
 
   return (
     <div className="w-full flex flex-col">
@@ -127,7 +128,7 @@ export default function Home() {
                   Browse Open Requirements
                 </Button>
               </Link>
-              <Link href="/trainers">
+              <Link href={findTrainerHref}>
                 <Button size="lg" variant="outline" className="h-12 px-8 text-base border-slate-700 bg-slate-800/50 hover:bg-slate-800 hover:text-white backdrop-blur-sm">
                   Find a Trainer
                 </Button>
