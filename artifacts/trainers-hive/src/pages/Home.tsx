@@ -5,7 +5,6 @@ import {
   useListFeaturedTrainers,
   useListRecentRequirements,
   useListActivity,
-  useGetCurrentUser,
   getGetPlatformStatsQueryKey,
   getListFeaturedTrainersQueryKey,
   getListRecentRequirementsQueryKey,
@@ -19,6 +18,7 @@ import { TrainerAvatar } from "@/components/TrainerAvatar";
 import { ArrowRight, BookOpen, Briefcase, Users, Star, MapPin, Building, Activity, Clock, ShieldCheck } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 
 type PlatformStats = {
@@ -77,11 +77,11 @@ function statNumber(value: unknown): number {
 }
 
 export default function Home() {
-  const { data: user } = useGetCurrentUser();
+  const { isSignedIn } = useAuth();
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats({ query: { queryKey: getGetPlatformStatsQueryKey() }});
   const { data: featuredTrainers, isLoading: trainersLoading } = useListFeaturedTrainers({ query: { queryKey: getListFeaturedTrainersQueryKey() }});
   const { data: recentRequirements, isLoading: requirementsLoading } = useListRecentRequirements({ query: { queryKey: getListRecentRequirementsQueryKey() }});
-  const isLoggedIn = !!user;
+  const isLoggedIn = isSignedIn;
   const { data: activityFeed, isLoading: activityLoading } = useListActivity({
     query: { queryKey: getListActivityQueryKey(), enabled: isLoggedIn },
   });
