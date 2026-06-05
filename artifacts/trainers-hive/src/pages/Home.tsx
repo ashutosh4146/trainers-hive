@@ -95,6 +95,7 @@ export default function Home() {
   const showRecentRequirements = isLoggedIn && (requirementsLoading || recentRequirementsList.length > 0);
   const showActivityFeed = isLoggedIn && (activityLoading || activityFeedList.length > 0);
   const showDataSections = showFeaturedTrainers || showRecentRequirements || showActivityFeed;
+  const browseRequirementsHref = isLoggedIn ? "/requirements" : "/login";
 
   return (
     <div className="w-full flex flex-col">
@@ -121,7 +122,7 @@ export default function Home() {
               Trainers Hive is the verified infrastructure layer connecting corporate L&D leaders, universities, and specialized training professionals for high-stakes engagements.
             </p>
             <div className="flex flex-wrap gap-4">
-              <Link href="/requirements">
+              <Link href={browseRequirementsHref}>
                 <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/20">
                   Browse Open Requirements
                 </Button>
