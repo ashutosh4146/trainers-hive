@@ -166,230 +166,222 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-3 gap-12">
-        {/* Main Content (Featured Trainers & Requirements) */}
-        <div className="lg:col-span-2 space-y-20">
-          {/* Featured Trainers */}
-          <section>
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-bold tracking-tight">Featured Experts</h2>
-              <Link href="/trainers">
-                <Button variant="ghost" className="group">
-                  View all <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
-            </div>
+      {isLoggedIn && (
+        <div className="container mx-auto px-4 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-3 gap-12">
+          {/* Main Content (Featured Trainers & Requirements) */}
+          <div className="lg:col-span-2 space-y-20">
+            {/* Featured Trainers */}
+            <section>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-3xl font-bold tracking-tight">Featured Experts</h2>
+                <Link href="/trainers">
+                  <Button variant="ghost" className="group">
+                    View all <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {trainersLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <Card key={i} className="overflow-hidden">
-                    <CardHeader className="flex flex-row items-start gap-4 pb-2">
-                      <Skeleton className="h-12 w-12 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-5 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-full" />
-                      <div className="flex gap-2">
-                        <Skeleton className="h-6 w-16 rounded-full" />
-                        <Skeleton className="h-6 w-16 rounded-full" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              ) : featuredTrainersList.length ? (
-                featuredTrainersList.map((trainer) => {
-                  const subSkills = Array.isArray(trainer.subSkills) ? trainer.subSkills : [];
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {trainersLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <Card key={i} className="overflow-hidden">
+                      <CardHeader className="flex flex-row items-start gap-4 pb-2">
+                        <Skeleton className="h-12 w-12 rounded-full" />
+                        <div className="space-y-2 flex-1">
+                          <Skeleton className="h-5 w-3/4" />
+                          <Skeleton className="h-4 w-1/2" />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-full" />
+                        <div className="flex gap-2">
+                          <Skeleton className="h-6 w-16 rounded-full" />
+                          <Skeleton className="h-6 w-16 rounded-full" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : featuredTrainersList.length ? (
+                  featuredTrainersList.map((trainer) => {
+                    const subSkills = Array.isArray(trainer.subSkills) ? trainer.subSkills : [];
 
-                  return (
-                    <Link key={trainer.id} href={`/trainers/${trainer.id}`}>
-                      <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
-                        <CardHeader className="flex flex-row items-start gap-4 pb-2">
-                          <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-12 w-12 border-2 border-primary/10" />
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-lg flex items-center gap-2 truncate">
-                              {trainer.name}
-                              {trainer.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 px-1.5 py-0">Verified</Badge>}
-                            </CardTitle>
-                            <CardDescription className="truncate text-sm text-muted-foreground mt-1">
-                              {trainer.headline}
-                            </CardDescription>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="py-2 flex-1">
-                          <div className="flex flex-wrap gap-1.5 mb-4">
-                            <Badge variant="outline" className="font-normal border-primary/20 bg-primary/5 text-primary">
-                              {trainer.mainSkill}
-                            </Badge>
-                            {subSkills.slice(0, 2).map((skill: string) => (
-                              <Badge key={skill} variant="outline" className="font-normal text-muted-foreground">
-                                {skill}
-                              </Badge>
-                            ))}
-                            {subSkills.length > 2 && (
-                              <Badge variant="outline" className="font-normal text-muted-foreground">
-                                +{subSkills.length - 2}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1.5">
-                              <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-                              <span className="font-medium text-foreground">{Number(trainer.rating ?? 0).toFixed(1)}</span>
-                              <span>({trainer.reviewCount ?? 0})</span>
+                    return (
+                      <Link key={trainer.id} href={`/trainers/${trainer.id}`}>
+                        <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
+                          <CardHeader className="flex flex-row items-start gap-4 pb-2">
+                            <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-12 w-12 border-2 border-primary/10" />
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-lg flex items-center gap-2 truncate">
+                                {trainer.name}
+                                {trainer.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 px-1.5 py-0">Verified</Badge>}
+                              </CardTitle>
+                              <CardDescription className="truncate text-sm text-muted-foreground mt-1">
+                                {trainer.headline}
+                              </CardDescription>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <Briefcase className="h-4 w-4" />
-                              <span>{trainer.experienceYears ?? 0}y exp</span>
+                          </CardHeader>
+                          <CardContent className="py-2 flex-1">
+                            <div className="flex flex-wrap gap-1.5 mb-4">
+                              <Badge variant="outline" className="font-normal border-primary/20 bg-primary/5 text-primary">
+                                {trainer.mainSkill}
+                              </Badge>
+                              {subSkills.slice(0, 2).map((skill: string) => (
+                                <Badge key={skill} variant="outline" className="font-normal text-muted-foreground">
+                                  {skill}
+                                </Badge>
+                              ))}
+                              {subSkills.length > 2 && (
+                                <Badge variant="outline" className="font-normal text-muted-foreground">
+                                  +{subSkills.length - 2}
+                                </Badge>
+                              )}
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="h-4 w-4" />
-                              <span className="truncate">{trainer.location}</span>
+                            <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1.5">
+                                <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+                                <span className="font-medium text-foreground">{Number(trainer.rating ?? 0).toFixed(1)}</span>
+                                <span>({trainer.reviewCount ?? 0})</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Briefcase className="h-4 w-4" />
+                                <span>{trainer.experienceYears ?? 0}y exp</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <MapPin className="h-4 w-4" />
+                                <span className="truncate">{trainer.location}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-2 text-center py-12 bg-muted/30 rounded-lg border border-dashed">
+                    <Users className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+                    <p className="text-muted-foreground">No featured trainers available right now.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Recent Requirements */}
+            <section>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-3xl font-bold tracking-tight">Recent Opportunities</h2>
+                <Link href="/requirements">
+                  <Button variant="ghost" className="group">
+                    View all <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="space-y-4">
+                {requirementsLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <Card key={i}>
+                      <CardContent className="p-6">
+                        <div className="flex gap-4">
+                          <Skeleton className="h-12 w-12 rounded-md" />
+                          <div className="space-y-2 flex-1">
+                            <Skeleton className="h-5 w-1/3" />
+                            <Skeleton className="h-4 w-1/4" />
+                            <div className="flex gap-4 pt-2">
+                              <Skeleton className="h-4 w-20" />
+                              <Skeleton className="h-4 w-20" />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : recentRequirementsList.length ? (
+                  recentRequirementsList.map((req) => (
+                    <Link key={req.id} href={`/requirements/${req.id}`}>
+                      <Card className="hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group">
+                        <CardContent className="p-6">
+                          <div className="flex flex-col sm:flex-row gap-4 sm:items-start">
+                            <Avatar className="h-12 w-12 rounded-md border bg-card">
+                              <AvatarImage src={req.vendorLogoUrl} alt={req.vendorName} className="object-contain p-1" loading="lazy" />
+                              <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
+                                <Building className="h-6 w-6" />
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div>
+                                <h3 className="font-semibold text-lg truncate group-hover:text-primary transition-colors">
+                                  {req.title}
+                                </h3>
+                                <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1 flex-wrap">
+                                  <span className="font-medium text-foreground">{req.vendorName}</span>
+                                  {req.vendorVerified && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex items-center text-primary cursor-default">
+                                          <ShieldCheck className="h-3.5 w-3.5" />
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>This company is verified by Trainers Hive</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  <span>•</span>
+                                  <span className="truncate">{req.location} {req.remote && "(Remote Optional)"}</span>
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1.5">
+                                  <BookOpen className="h-4 w-4" />
+                                  <span className="font-medium text-foreground">{req.skill}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="h-4 w-4" />
+                                  <span>{req.durationDays} days</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Briefcase className="h-4 w-4" />
+                                  <span className="font-medium text-foreground capitalize">
+                                    {req.budget > 0
+                                      ? `₹${Number(req.budget).toLocaleString("en-IN")}${req.feeType === "negotiable" ? " (Negotiable)" : ""}`
+                                      : req.trainingMode ?? "Discuss payout"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex sm:flex-col items-center sm:items-end justify-between mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0">
+                              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 whitespace-nowrap">
+                                {req.applicationCount} applications
+                              </Badge>
+                              <span className="text-xs text-muted-foreground sm:mt-2">
+                                Due {new Date(req.deadline).toLocaleDateString()}
+                              </span>
                             </div>
                           </div>
                         </CardContent>
                       </Card>
                     </Link>
-                  );
-                })
-              ) : (
-                <div className="col-span-2 text-center py-12 bg-muted/30 rounded-lg border border-dashed">
-                  <Users className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-                  <p className="text-muted-foreground">No featured trainers available right now.</p>
-                </div>
-              )}
-            </div>
-          </section>
+                  ))
+                ) : (
+                  <div className="text-center py-12 bg-muted/30 rounded-lg border border-dashed">
+                    <Briefcase className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+                    <p className="text-muted-foreground">No open requirements at the moment.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
 
-          {/* Recent Requirements */}
-          <section>
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-bold tracking-tight">Recent Opportunities</h2>
-              <Link href="/requirements">
-                <Button variant="ghost" className="group">
-                  View all <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              {requirementsLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-6">
-                      <div className="flex gap-4">
-                        <Skeleton className="h-12 w-12 rounded-md" />
-                        <div className="space-y-2 flex-1">
-                          <Skeleton className="h-5 w-1/3" />
-                          <Skeleton className="h-4 w-1/4" />
-                          <div className="flex gap-4 pt-2">
-                            <Skeleton className="h-4 w-20" />
-                            <Skeleton className="h-4 w-20" />
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              ) : recentRequirementsList.length ? (
-                recentRequirementsList.map((req) => (
-                  <Link key={req.id} href={`/requirements/${req.id}`}>
-                    <Card className="hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group">
-                      <CardContent className="p-6">
-                        <div className="flex flex-col sm:flex-row gap-4 sm:items-start">
-                          <Avatar className="h-12 w-12 rounded-md border bg-card">
-                            <AvatarImage src={req.vendorLogoUrl} alt={req.vendorName} className="object-contain p-1" loading="lazy" />
-                            <AvatarFallback className="rounded-md bg-muted text-muted-foreground">
-                              <Building className="h-6 w-6" />
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0 space-y-2">
-                            <div>
-                              <h3 className="font-semibold text-lg truncate group-hover:text-primary transition-colors">
-                                {req.title}
-                              </h3>
-                              <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1 flex-wrap">
-                                <span className="font-medium text-foreground">{req.vendorName}</span>
-                                {req.vendorVerified && (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex items-center text-primary cursor-default">
-                                        <ShieldCheck className="h-3.5 w-3.5" />
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>This company is verified by Trainers Hive</TooltipContent>
-                                  </Tooltip>
-                                )}
-                                <span>•</span>
-                                <span className="truncate">{req.location} {req.remote && "(Remote Optional)"}</span>
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                              <div className="flex items-center gap-1.5">
-                                <BookOpen className="h-4 w-4" />
-                                <span className="font-medium text-foreground">{req.skill}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="h-4 w-4" />
-                                <span>{req.durationDays} days</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <Briefcase className="h-4 w-4" />
-                                <span className="font-medium text-foreground capitalize">
-                                  {req.budget > 0
-                                    ? `₹${Number(req.budget).toLocaleString("en-IN")}${req.feeType === "negotiable" ? " (Negotiable)" : ""}`
-                                    : req.trainingMode ?? "Discuss payout"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex sm:flex-col items-center sm:items-end justify-between mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0">
-                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 whitespace-nowrap">
-                              {req.applicationCount} applications
-                            </Badge>
-                            <span className="text-xs text-muted-foreground sm:mt-2">
-                              Due {new Date(req.deadline).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))
-              ) : (
-                <div className="text-center py-12 bg-muted/30 rounded-lg border border-dashed">
-                  <Briefcase className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-                  <p className="text-muted-foreground">No open requirements at the moment.</p>
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* Sidebar (Activity Feed — logged-in users only) */}
-        <div>
-          <Card className="sticky top-24 bg-muted/20 border-border">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Activity className="h-5 w-5 text-primary" />
-                Live Platform Activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!isLoggedIn ? (
-                <div className="text-center py-8 space-y-3">
-                  <Activity className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-                  <p className="text-sm text-muted-foreground">Sign in to see live platform activity.</p>
-                  <Link href="/login">
-                    <Button size="sm" variant="outline" className="mt-1">Sign In</Button>
-                  </Link>
-                </div>
-              ) : (
+          {/* Sidebar (Activity Feed — logged-in users only) */}
+          <div>
+            <Card className="sticky top-24 bg-muted/20 border-border">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  Live Platform Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
                   {activityLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (
@@ -433,11 +425,11 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
