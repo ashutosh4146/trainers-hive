@@ -1,18 +1,18 @@
 import React from "react";
 import { Link } from "wouter";
-import { 
-  useGetPlatformStats, 
-  useListFeaturedTrainers, 
-  useListRecentRequirements, 
+import {
+  useGetPlatformStats,
+  useListFeaturedTrainers,
+  useListRecentRequirements,
   useListActivity,
   useGetCurrentUser,
   getGetPlatformStatsQueryKey,
   getListFeaturedTrainersQueryKey,
   getListRecentRequirementsQueryKey,
-  getListActivityQueryKey
+  getListActivityQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TrainerAvatar } from "@/components/TrainerAvatar";
@@ -20,6 +20,30 @@ import { ArrowRight, BookOpen, Briefcase, Users, Star, MapPin, Building, Activit
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
+
+function toArray<T = any>(value: unknown): T[] {
+  if (Array.isArray(value)) return value;
+
+  if (value && typeof value === "object") {
+    const wrapped = value as {
+      data?: T[];
+      items?: T[];
+      results?: T[];
+      trainers?: T[];
+      requirements?: T[];
+      activities?: T[];
+    };
+
+    if (Array.isArray(wrapped.data)) return wrapped.data;
+    if (Array.isArray(wrapped.items)) return wrapped.items;
+    if (Array.isArray(wrapped.results)) return wrapped.results;
+    if (Array.isArray(wrapped.trainers)) return wrapped.trainers;
+    if (Array.isArray(wrapped.requirements)) return wrapped.requirements;
+    if (Array.isArray(wrapped.activities)) return wrapped.activities;
+  }
+
+  return [];
+}
 
 export default function Home() {
   const { data: user } = useGetCurrentUser();
@@ -31,19 +55,23 @@ export default function Home() {
     query: { queryKey: getListActivityQueryKey(), enabled: isLoggedIn },
   });
 
+  const featuredTrainersList = toArray(featuredTrainers);
+  const recentRequirementsList = toArray(recentRequirements);
+  const activityFeedList = toArray(activityFeed);
+
   return (
     <div className="w-full flex flex-col">
       {/* Hero Section */}
       <section className="relative w-full py-20 md:py-32 lg:py-40 bg-slate-900 text-slate-50 overflow-hidden border-b border-primary/20">
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/40 via-slate-900 to-slate-900 opacity-80" />
-          <div className="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none transform translate-x-1/4" style={{filter: 'blur(72px)'}}>
+          <div className="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none transform translate-x-1/4" style={{ filter: "blur(72px)" }}>
              <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-primary" aria-hidden="true">
               <path d="M45.7,-76.1C58.9,-69.3,69.1,-55.3,77.7,-40.8C86.3,-26.2,93.4,-11.1,91.8,3.2C90.2,17.4,79.9,30.8,70.1,43.2C60.3,55.5,51.1,66.8,39,73.5C26.9,80.1,12,82.2,-3,87.3C-18.1,92.5,-33.4,100.8,-46.8,96.3C-60.2,91.8,-71.7,74.5,-79.6,57.1C-87.4,39.6,-91.7,22.1,-91.9,4.4C-92.1,-13.2,-88.2,-30.9,-79.1,-46.2C-70.1,-61.4,-56.1,-74.3,-41.2,-80.5C-26.2,-86.6,-10.4,-90.1,3.4,-95.9C17.2,-101.8,32.5,-82.9,45.7,-76.1Z" transform="translate(100 100)" />
             </svg>
           </div>
         </div>
-        
+
         <div className="container relative z-10 mx-auto px-4 md:px-6">
           <div className="max-w-3xl">
             <Badge variant="outline" className="mb-6 border-primary/50 text-primary-foreground dark:text-white bg-primary/10 px-3 py-1 backdrop-blur-sm">
@@ -109,7 +137,6 @@ export default function Home() {
       <div className="container mx-auto px-4 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-3 gap-12">
         {/* Main Content (Featured Trainers & Requirements) */}
         <div className="lg:col-span-2 space-y-20">
-          
           {/* Featured Trainers */}
           <section>
             <div className="flex items-center justify-between mb-8">
@@ -120,7 +147,7 @@ export default function Home() {
                 </Button>
               </Link>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {trainersLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
@@ -142,57 +169,61 @@ export default function Home() {
                     </CardContent>
                   </Card>
                 ))
-              ) : featuredTrainers?.length ? (
-                featuredTrainers.map((trainer) => (
-                  <Link key={trainer.id} href={`/trainers/${trainer.id}`}>
-                    <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
-                      <CardHeader className="flex flex-row items-start gap-4 pb-2">
-                        <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-12 w-12 border-2 border-primary/10" />
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg flex items-center gap-2 truncate">
-                            {trainer.name}
-                            {trainer.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 px-1.5 py-0">Verified</Badge>}
-                          </CardTitle>
-                          <CardDescription className="truncate text-sm text-muted-foreground mt-1">
-                            {trainer.headline}
-                          </CardDescription>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="py-2 flex-1">
-                        <div className="flex flex-wrap gap-1.5 mb-4">
-                          <Badge variant="outline" className="font-normal border-primary/20 bg-primary/5 text-primary">
-                            {trainer.mainSkill}
-                          </Badge>
-                          {trainer.subSkills.slice(0, 2).map((skill) => (
-                            <Badge key={skill} variant="outline" className="font-normal text-muted-foreground">
-                              {skill}
+              ) : featuredTrainersList.length ? (
+                featuredTrainersList.map((trainer) => {
+                  const subSkills = Array.isArray(trainer.subSkills) ? trainer.subSkills : [];
+
+                  return (
+                    <Link key={trainer.id} href={`/trainers/${trainer.id}`}>
+                      <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
+                        <CardHeader className="flex flex-row items-start gap-4 pb-2">
+                          <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-12 w-12 border-2 border-primary/10" />
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-lg flex items-center gap-2 truncate">
+                              {trainer.name}
+                              {trainer.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 px-1.5 py-0">Verified</Badge>}
+                            </CardTitle>
+                            <CardDescription className="truncate text-sm text-muted-foreground mt-1">
+                              {trainer.headline}
+                            </CardDescription>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="py-2 flex-1">
+                          <div className="flex flex-wrap gap-1.5 mb-4">
+                            <Badge variant="outline" className="font-normal border-primary/20 bg-primary/5 text-primary">
+                              {trainer.mainSkill}
                             </Badge>
-                          ))}
-                          {trainer.subSkills.length > 2 && (
-                            <Badge variant="outline" className="font-normal text-muted-foreground">
-                              +{trainer.subSkills.length - 2}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1.5">
-                            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-                            <span className="font-medium text-foreground">{trainer.rating.toFixed(1)}</span>
-                            <span>({trainer.reviewCount})</span>
+                            {subSkills.slice(0, 2).map((skill: string) => (
+                              <Badge key={skill} variant="outline" className="font-normal text-muted-foreground">
+                                {skill}
+                              </Badge>
+                            ))}
+                            {subSkills.length > 2 && (
+                              <Badge variant="outline" className="font-normal text-muted-foreground">
+                                +{subSkills.length - 2}
+                              </Badge>
+                            )}
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <Briefcase className="h-4 w-4" />
-                            <span>{trainer.experienceYears}y exp</span>
+                          <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1.5">
+                              <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+                              <span className="font-medium text-foreground">{Number(trainer.rating ?? 0).toFixed(1)}</span>
+                              <span>({trainer.reviewCount ?? 0})</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Briefcase className="h-4 w-4" />
+                              <span>{trainer.experienceYears ?? 0}y exp</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="h-4 w-4" />
+                              <span className="truncate">{trainer.location}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="h-4 w-4" />
-                            <span className="truncate">{trainer.location}</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  );
+                })
               ) : (
                 <div className="col-span-2 text-center py-12 bg-muted/30 rounded-lg border border-dashed">
                   <Users className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
@@ -232,8 +263,8 @@ export default function Home() {
                     </CardContent>
                   </Card>
                 ))
-              ) : recentRequirements?.length ? (
-                recentRequirements.map((req) => (
+              ) : recentRequirementsList.length ? (
+                recentRequirementsList.map((req) => (
                   <Link key={req.id} href={`/requirements/${req.id}`}>
                     <Card className="hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group">
                       <CardContent className="p-6">
@@ -265,7 +296,7 @@ export default function Home() {
                                 <span className="truncate">{req.location} {req.remote && "(Remote Optional)"}</span>
                               </p>
                             </div>
-                            
+
                             <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                               <div className="flex items-center gap-1.5">
                                 <BookOpen className="h-4 w-4" />
@@ -278,9 +309,9 @@ export default function Home() {
                               <div className="flex items-center gap-1.5">
                                 <Briefcase className="h-4 w-4" />
                                 <span className="font-medium text-foreground capitalize">
-                                  {(req as any).budget > 0
-                                    ? `₹${((req as any).budget as number).toLocaleString("en-IN")}${(req as any).feeType === "negotiable" ? " (Negotiable)" : ""}`
-                                    : (req as any).trainingMode ?? "Discuss payout"}
+                                  {req.budget > 0
+                                    ? `₹${Number(req.budget).toLocaleString("en-IN")}${req.feeType === "negotiable" ? " (Negotiable)" : ""}`
+                                    : req.trainingMode ?? "Discuss payout"}
                                 </span>
                               </div>
                             </div>
@@ -327,49 +358,49 @@ export default function Home() {
                   </Link>
                 </div>
               ) : (
-              <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                {activityLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="relative flex items-start gap-4">
-                      <Skeleton className="h-10 w-10 rounded-full shrink-0 z-10" />
-                      <div className="space-y-2 flex-1 pt-1">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-3 w-1/2" />
+                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+                  {activityLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="relative flex items-start gap-4">
+                        <Skeleton className="h-10 w-10 rounded-full shrink-0 z-10" />
+                        <div className="space-y-2 flex-1 pt-1">
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : activityFeed?.length ? (
-                  activityFeed.map((activity) => (
-                    <div 
-                      key={activity.id}
-                      className="relative flex items-start gap-4 group animate-in fade-in slide-in-from-right-2 duration-200"
-                    >
-                      <div className="absolute left-5 top-5 -ml-px h-full w-0.5 bg-border group-last:hidden" />
-                      <Avatar className="h-10 w-10 shrink-0 z-10 border-2 border-background shadow-sm">
-                        {activity.avatarUrl && <AvatarImage src={activity.avatarUrl} loading="lazy" />}
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                          {activity.type === 'hire' ? 'H' : activity.type === 'review' ? 'R' : 'A'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 pt-1 min-w-0">
-                        <p className="text-sm font-medium leading-tight text-foreground">
-                          {activity.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {activity.subtitle}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-1.5 font-mono">
-                          {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
-                        </p>
+                    ))
+                  ) : activityFeedList.length ? (
+                    activityFeedList.map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="relative flex items-start gap-4 group animate-in fade-in slide-in-from-right-2 duration-200"
+                      >
+                        <div className="absolute left-5 top-5 -ml-px h-full w-0.5 bg-border group-last:hidden" />
+                        <Avatar className="h-10 w-10 shrink-0 z-10 border-2 border-background shadow-sm">
+                          {activity.avatarUrl && <AvatarImage src={activity.avatarUrl} loading="lazy" />}
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                            {activity.type === "hire" ? "H" : activity.type === "review" ? "R" : "A"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 pt-1 min-w-0">
+                          <p className="text-sm font-medium leading-tight text-foreground">
+                            {activity.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                            {activity.subtitle}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-1.5 font-mono">
+                            {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                          </p>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-muted-foreground">No recent activity.</p>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-muted-foreground">No recent activity.</p>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
