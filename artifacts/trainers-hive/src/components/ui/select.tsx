@@ -6,7 +6,14 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Select = SelectPrimitive.Root
+const Select = ({ value, defaultValue, ...props }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>) => (
+  <SelectPrimitive.Root
+    key={value ?? defaultValue ?? "select-empty"}
+    value={value}
+    defaultValue={defaultValue}
+    {...props}
+  />
+)
 
 const SelectGroup = SelectPrimitive.Group
 
@@ -139,7 +146,7 @@ const SelectSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-muted", className)}
+    className={cn("-mx-1 my-px h-px bg-muted", className)}
     {...props}
   />
 ))
