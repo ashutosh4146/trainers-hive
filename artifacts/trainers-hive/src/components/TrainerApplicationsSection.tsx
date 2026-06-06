@@ -56,6 +56,10 @@ function getCounts(apps: any[]) {
   };
 }
 
+function canWithdrawApplication(status: string) {
+  return status === "submitted" || status === "shortlisted";
+}
+
 export function TrainerApplicationsSection() {
   const { data: user } = useGetCurrentUser();
   const { data: applications, isLoading } = useListMyApplications({
@@ -182,6 +186,7 @@ export function TrainerApplicationsSection() {
                 const meta = statusMeta(app.status);
                 const inactive = app.status === "rejected" || app.status === "withdrawn";
                 const canMessage = app.status === "shortlisted" || app.status === "hired";
+                const canWithdraw = canWithdrawApplication(app.status);
                 return (
                   <div
                     key={app.id}
@@ -231,9 +236,9 @@ export function TrainerApplicationsSection() {
                             </Link>
                           </Button>
                         )}
-                        {app.status !== "rejected" && app.status !== "withdrawn" && (
+                        {canWithdraw && (
                           <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
-                            <LogOut className="h-3.5 w-3.5" /> Withdraw from original list
+                            <LogOut className="h-3.5 w-3.5" /> Withdraw application
                           </Button>
                         )}
                         <Button asChild size="sm">
