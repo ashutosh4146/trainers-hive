@@ -77,11 +77,12 @@ function statNumber(value: unknown): number {
 }
 
 export default function Home() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, auth } = useAuth();
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats({ query: { queryKey: getGetPlatformStatsQueryKey() }});
   const { data: featuredTrainers, isLoading: trainersLoading } = useListFeaturedTrainers({ query: { queryKey: getListFeaturedTrainersQueryKey() }});
   const { data: recentRequirements, isLoading: requirementsLoading } = useListRecentRequirements({ query: { queryKey: getListRecentRequirementsQueryKey() }});
   const isLoggedIn = isSignedIn;
+  const isAdmin = auth?.role === "admin";
   const { data: activityFeed, isLoading: activityLoading } = useListActivity({
     query: { queryKey: getListActivityQueryKey(), enabled: isLoggedIn },
   });
@@ -92,13 +93,12 @@ export default function Home() {
   const activityFeedList = toArray(activityFeed);
 
   const showStatsSection = statsLoading || !!platformStats;
-  const showFeaturedTrainers = isLoggedIn && (trainersLoading || featuredTrainersList.length > 0);
+  const showFeaturedTrainers = isAdmin && (trainersLoading || featuredTrainersList.length > 0);
   const showRecentRequirements = isLoggedIn && (requirementsLoading || recentRequirementsList.length > 0);
   const showActivityFeed = isLoggedIn && (activityLoading || activityFeedList.length > 0);
   const showDataSections = showFeaturedTrainers || showRecentRequirements || showActivityFeed;
   const browseRequirementsHref = isLoggedIn ? "/requirements" : "/login";
-  const findTrainerHref = isLoggedIn ? "/trainers" : "/login";
-
+  
   return (
     <div className="w-full flex flex-col">
       {/* Hero Section */}
