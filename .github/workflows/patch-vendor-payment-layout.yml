@@ -1,0 +1,53 @@
+name: Patch vendor payment layout
+
+on:
+  push:
+    branches:
+      - dashboard-applications-alignment
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dashboard-applications-alignment
+      - name: Move spend and payments to full width
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/trainers-hive/src/components/VendorDashboardPolish.tsx')
+          s = p.read_text()
+          start_marker = '          <Card><CardHeader><CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" /> Spend and payments</CardTitle>'
+          start = s.find(start_marker)
+          if start == -1:
+              raise SystemExit('Spend card start not found')
+          end_marker = '</Card>\n        </div>\n\n        <div className="space-y-6">'
+          end = s.find(end_marker, start)
+          if end == -1:
+              raise SystemExit('Spend card end not found')
+          spend_block = s[start:end + len('</Card>')]
+          s = s[:start] + s[end + len('</Card>'):]
+          insert_marker = '      </div>\n\n      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">'
+          idx = s.find(insert_marker)
+          if idx == -1:
+              raise SystemExit('Insert marker not found')
+          s = s[:idx + len('      </div>\n\n')] + spend_block.replace('          <Card>', '      <Card>', 1) + '\n\n' + s[idx + len('      </div>\n\n'):]
+          p.write_text(s)
+          Path('.github/workflows/patch-vendor-payment-layout.yml').unlink(missing_ok=True)
+          Path('tmp-vendor-payment-layout-trigger.txt').unlink(missing_ok=True)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/components/VendorDashboardPolish.tsx .github/workflows/patch-vendor-payment-layout.yml tmp-vendor-payment-layout-trigger.txt
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Move vendor payments section to full width"
+            git push origin HEAD:dashboard-applications-alignment
+          fi
