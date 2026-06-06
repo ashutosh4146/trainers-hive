@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-import { Activity, Building2, Users, Mail, ArrowLeft, KeyRound, Eye, EyeOff } from "lucide-react";
+import { Activity, Mail, ArrowLeft, KeyRound, Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useAuth,
   isBusinessEmail,
-  roleRequiresBusinessEmail,
   getRoleLabel,
   getRoleSessionKey,
   type UserRole,
@@ -21,17 +20,15 @@ import {
 import { cn } from "@/lib/utils";
 import { sendEmailSignInLink, savePendingAuth, signInWithGoogle } from "@/lib/firebase";
 
-const ROLES: { id: UserRole; label: string; icon: React.ReactNode }[] = [
-  { id: "trainer", label: "Trainer",      icon: <Users className="h-5 w-5" /> },
-  { id: "vendor",  label: "Organisation", icon: <Building2 className="h-5 w-5" /> },
-];
-
 type View = "select" | "sent" | "forgot";
 type LoginMethod = "link" | "password";
 
+function getDetectedRole(email: string): UserRole {
+  return isBusinessEmail(email) ? "vendor" : "trainer";
+}
+
 export default function Login() {
   const [view, setView] = useState<View>("select");
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("link");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,19 +51,20 @@ export default function Login() {
   const queryClient = useQueryClient();
   const switchUser = useSwitchUser();
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const detectedRole = getDetectedRole(normalizedEmail);
+  const detectedRoleLabel = getRoleLabel(detectedRole);
+
   React.useEffect(() => {
     if (auth?.signedIn) navigate("/dashboard");
   }, [auth]);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!selectedRole) errs.role = "Select a role to continue.";
-    if (!email.trim()) {
+    if (!normalizedEmail) {
       errs.email = "Email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       errs.email = "Enter a valid email address.";
-    } else if (selectedRole && roleRequiresBusinessEmail(selectedRole) && !isBusinessEmail(email)) {
-      errs.email = "A business email address is required for this role.";
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -74,11 +72,11 @@ export default function Login() {
 
   const handleSendLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate() || !selectedRole) return;
+    if (!validate()) return;
     setIsSending(true);
     try {
-      savePendingAuth({ type: "login", role: selectedRole, email: email.trim() });
-      await sendEmailSignInLink(email.trim());
+      savePendingAuth({ type: "login", role: detectedRole, email: normalizedEmail });
+      await sendEmailSignInLink(normalizedEmail);
       setView("sent");
     } catch (err) {
       toast({ title: "Could not send link", description: (err as Error).message, variant: "destructive" });
@@ -88,11 +86,11 @@ export default function Login() {
   };
 
   const handleResend = async () => {
-    if (!selectedRole) return;
+    if (!validate()) return;
     setIsSending(true);
     try {
-      savePendingAuth({ type: "login", role: selectedRole, email: email.trim() });
-      await sendEmailSignInLink(email.trim());
+      savePendingAuth({ type: "login", role: detectedRole, email: normalizedEmail });
+      await sendEmailSignInLink(normalizedEmail);
       toast({ title: "New link sent", description: "Check your inbox for a fresh sign-in link." });
     } catch (err) {
       toast({ title: "Could not resend", description: (err as Error).message, variant: "destructive" });
@@ -102,19 +100,17 @@ export default function Login() {
   };
 
   const handleGoogleSignIn = async () => {
-    if (!selectedRole) {
-      setErrors({ role: "Please select a role before signing in with Google." });
-      return;
-    }
     setIsGoogleLoading(true);
     try {
       const user = await signInWithGoogle();
+      const googleEmail = (user.email || "").trim().toLowerCase();
+      const role = getDetectedRole(googleEmail);
       switchUser.mutate(
         {
           data: {
-            role: getRoleSessionKey(selectedRole),
-            name: user.displayName || user.email?.split("@")[0] || "User",
-            email: user.email || "",
+            role: getRoleSessionKey(role),
+            name: user.displayName || googleEmail.split("@")[0] || "User",
+            email: googleEmail,
           },
         },
         {
@@ -122,11 +118,11 @@ export default function Login() {
             queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
             signIn({
               signedIn: true,
-              name: user.displayName || user.email?.split("@")[0] || "User",
-              email: user.email || "",
-              role: selectedRole,
+              name: user.displayName || googleEmail.split("@")[0] || "User",
+              email: googleEmail,
+              role,
             });
-            toast({ title: "Welcome back!", description: `Signed in as ${getRoleLabel(selectedRole)}.` });
+            toast({ title: "Welcome back!", description: `Signed in as ${getRoleLabel(role)}.` });
             navigate("/dashboard");
           },
           onError: () => {
@@ -147,8 +143,7 @@ export default function Login() {
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: Record<string, string> = {};
-    if (!selectedRole) errs.role = "Select a role to continue.";
-    if (!email.trim()) errs.email = "Email is required.";
+    if (!normalizedEmail) errs.email = "Email is required.";
     if (!password) errs.password = "Password is required.";
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
@@ -158,7 +153,7 @@ export default function Login() {
       const res = await fetch("/api/auth/password/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       });
 
       if (!res.ok) {
@@ -179,7 +174,7 @@ export default function Login() {
       }
 
       switchUser.mutate(
-        { data: { role: getRoleSessionKey(selectedRole!), email: user.email, name: user.name } },
+        { data: { role: getRoleSessionKey(detectedRole), email: user.email, name: user.name } },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
@@ -187,9 +182,9 @@ export default function Login() {
               signedIn: true,
               name: user.name,
               email: user.email,
-              role: selectedRole!,
+              role: detectedRole,
             });
-            toast({ title: "Welcome back!", description: `Signed in as ${getRoleLabel(selectedRole!)}.` });
+            toast({ title: "Welcome back!", description: `Signed in as ${detectedRoleLabel}.` });
             navigate("/dashboard");
           },
           onError: () => {
@@ -215,9 +210,9 @@ export default function Login() {
   const handleSendResetCode = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: Record<string, string> = {};
-    if (!email.trim()) {
+    if (!normalizedEmail) {
       errs.email = "Email is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       errs.email = "Enter a valid email address.";
     }
     setErrors(errs);
@@ -228,7 +223,7 @@ export default function Login() {
       const res = await fetch("/api/auth/password/reset/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: normalizedEmail }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -237,7 +232,7 @@ export default function Login() {
       setResetStep("confirm");
       toast({
         title: "Check your inbox",
-        description: `If an account exists for ${email.trim()}, we've sent a 6-digit reset code.`,
+        description: `If an account exists for ${normalizedEmail}, we've sent a 6-digit reset code.`,
       });
     } catch (err) {
       toast({ title: "Could not send code", description: (err as Error).message, variant: "destructive" });
@@ -259,7 +254,7 @@ export default function Login() {
       const res = await fetch("/api/auth/password/reset/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), otp: resetCode.trim(), password: newPassword }),
+        body: JSON.stringify({ email: normalizedEmail, otp: resetCode.trim(), password: newPassword }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -288,8 +283,6 @@ export default function Login() {
 
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md space-y-6">
-
-          {/* Step: Select role + login */}
           {view === "select" && (
             <>
               <div className="text-center space-y-2">
@@ -298,38 +291,8 @@ export default function Login() {
               </div>
               <Card className="border-2">
                 <CardContent className="p-6 space-y-5">
-                  {/* Role selector */}
                   <div className="space-y-2">
-                    <Label>Sign in as</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {ROLES.map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => { setSelectedRole(r.id); setLoginMethod("link"); setErrors({}); }}
-                          className={cn(
-                            "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs font-medium transition-all",
-                            selectedRole === r.id
-                              ? "border-primary bg-primary/5 text-primary"
-                              : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                          )}
-                        >
-                          {r.icon}
-                          {r.label}
-                        </button>
-                      ))}
-                    </div>
-                    {errors.role && <p className="text-sm text-destructive">{errors.role}</p>}
-                  </div>
-
-                  {/* Email field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="email">
-                      Email Address
-                      {selectedRole && roleRequiresBusinessEmail(selectedRole) && (
-                        <span className="ml-1 text-xs text-muted-foreground font-normal">(business email)</span>
-                      )}
-                    </Label>
+                    <Label htmlFor="email">Email Address</Label>
                     <Input
                       id="email"
                       type="email"
@@ -338,36 +301,37 @@ export default function Login() {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                     {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                    {normalizedEmail && !errors.email && (
+                      <p className="text-xs text-muted-foreground">
+                        Signing in as: <span className="font-medium text-foreground">{detectedRoleLabel}</span>
+                      </p>
+                    )}
                   </div>
 
-                  {/* Toggle between link and password */}
-                  {selectedRole && (
-                    <div className="flex rounded-lg border overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => setLoginMethod("link")}
-                        className={cn(
-                          "flex-1 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5",
-                          loginMethod === "link" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
-                        )}
-                      >
-                        <Mail className="h-4 w-4" /> Magic Link
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLoginMethod("password")}
-                        className={cn(
-                          "flex-1 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5",
-                          loginMethod === "password" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
-                        )}
-                      >
-                        <KeyRound className="h-4 w-4" /> Password
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex rounded-lg border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setLoginMethod("link")}
+                      className={cn(
+                        "flex-1 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5",
+                        loginMethod === "link" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      <Mail className="h-4 w-4" /> Magic Link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLoginMethod("password")}
+                      className={cn(
+                        "flex-1 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5",
+                        loginMethod === "password" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      <KeyRound className="h-4 w-4" /> Password
+                    </button>
+                  </div>
 
-                  {/* Password field */}
-                  {selectedRole && loginMethod === "password" ? (
+                  {loginMethod === "password" ? (
                     <form onSubmit={handlePasswordLogin} className="space-y-4">
                       <input type="email" name="username" autoComplete="username" value={email} onChange={() => {}} className="sr-only" tabIndex={-1} aria-hidden="true" />
                       <div className="space-y-2">
@@ -415,8 +379,7 @@ export default function Login() {
                     </form>
                   )}
 
-                  {/* Google option: trainers only */}
-                  {selectedRole === "trainer" && loginMethod === "link" && (
+                  {loginMethod === "link" && (
                     <>
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
@@ -450,7 +413,6 @@ export default function Login() {
             </>
           )}
 
-          {/* Step: Check email */}
           {view === "sent" && (
             <>
               <div className="text-center space-y-2">
@@ -462,7 +424,7 @@ export default function Login() {
                 <h1 className="text-3xl font-bold tracking-tight">Check your inbox</h1>
                 <p className="text-muted-foreground">
                   We sent a sign-in link to{" "}
-                  <span className="font-semibold text-foreground">{email}</span>
+                  <span className="font-semibold text-foreground">{normalizedEmail}</span>
                 </p>
               </div>
               <Card className="border-2">
@@ -498,7 +460,6 @@ export default function Login() {
             </>
           )}
 
-          {/* Step: Forgot / reset password */}
           {view === "forgot" && (
             <>
               <div className="text-center space-y-2">
@@ -539,7 +500,7 @@ export default function Login() {
                     <form onSubmit={handleConfirmReset} className="space-y-4">
                       <input type="email" name="username" autoComplete="username" value={email} onChange={() => {}} className="sr-only" tabIndex={-1} aria-hidden="true" />
                       <p className="text-sm text-muted-foreground">
-                        Code sent to <span className="font-semibold text-foreground">{email}</span>
+                        Code sent to <span className="font-semibold text-foreground">{normalizedEmail}</span>
                       </p>
                       <div className="space-y-2">
                         <Label htmlFor="reset-code">Reset code</Label>
