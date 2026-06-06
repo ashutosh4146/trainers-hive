@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Send, MessageSquare, ArrowLeft, Inbox, Briefcase } from "lucide-react";
+import { Search, Send, MessageSquare, ArrowLeft, Inbox, Briefcase, Sparkles } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,35 @@ function statusLabel(status: string) {
   if (status === "shortlisted") return { label: "Shortlisted", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" };
   if (status === "applied" || status === "submitted") return { label: "Applied", cls: "bg-muted text-muted-foreground" };
   return { label: status || "Open", cls: "bg-muted text-muted-foreground" };
+}
+
+function getQuickReplies(status: string) {
+  if (status === "submitted" || status === "applied") {
+    return [
+      "Thanks for your application. I’ll review your profile and get back shortly.",
+      "Could you share your availability and expected commercial terms for this requirement?",
+      "Your profile looks relevant. Let’s discuss the training scope and timelines.",
+    ];
+  }
+  if (status === "shortlisted") {
+    return [
+      "You have been shortlisted. Please confirm your availability for the proposed dates.",
+      "Let’s finalize scope, delivery mode, and commercials before moving ahead.",
+      "Can we schedule a quick call to discuss the requirement in detail?",
+    ];
+  }
+  if (status === "hired") {
+    return [
+      "You are selected for this requirement. Let’s confirm agreement terms and next steps.",
+      "Please share any prerequisites or setup needs before the training starts.",
+      "Let’s align on dates, agenda, deliverables, and communication plan.",
+    ];
+  }
+  return [
+    "Thanks for the update. Let’s discuss next steps.",
+    "Please share your availability for a quick discussion.",
+    "Can you confirm the scope, timeline, and commercials?",
+  ];
 }
 
 function EmptyInbox({ isVendor }: { isVendor: boolean }) {
@@ -80,6 +109,7 @@ function ConversationPanel({
   const { auth } = useAuth();
   const [body, setBody] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const quickReplies = getQuickReplies(status);
 
   const { data, isLoading } = useListApplicationMessages(applicationId, {
     query: {
@@ -181,6 +211,21 @@ function ConversationPanel({
         }}
         className="border-t bg-card/50 px-4 py-3 md:px-5"
       >
+        <div className="mb-3 flex items-start gap-2 overflow-x-auto pb-1">
+          <span className="mt-1 inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5" /> Quick replies
+          </span>
+          {quickReplies.map((reply) => (
+            <button
+              key={reply}
+              type="button"
+              onClick={() => setBody(reply)}
+              className="shrink-0 rounded-full border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+            >
+              {reply.length > 42 ? `${reply.slice(0, 42)}…` : reply}
+            </button>
+          ))}
+        </div>
         <div className="flex items-end gap-2">
           <Textarea
             value={body}
