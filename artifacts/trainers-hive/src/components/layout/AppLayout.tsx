@@ -17,6 +17,7 @@ import {
   getTrainerCompletionItems,
   getVendorCompletionItems,
 } from "@/components/ProfileCompletion";
+import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { Button } from "@/components/ui/button";
 
@@ -113,6 +114,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isSignedIn, auth } = useAuth();
   const isVendorOrCollege = isSignedIn && auth?.role === "vendor";
   const useTrainerDashboard = isSignedIn && auth?.role === "trainer" && location === "/dashboard";
+  const usePaginatedTrainers = location === "/trainers";
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
@@ -123,7 +125,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           key={location}
           className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
-          {useTrainerDashboard ? <TrainerDashboardRedesign /> : children}
+          {useTrainerDashboard ? <TrainerDashboardRedesign /> : usePaginatedTrainers ? <PaginatedTrainersDirectory /> : children}
         </div>
       </main>
       <footer className="border-t py-10 bg-card text-card-foreground">
