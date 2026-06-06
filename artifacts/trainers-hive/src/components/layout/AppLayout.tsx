@@ -135,7 +135,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const dashboardRole = auth?.role ?? currentUser?.role;
   const useTrainerDashboard = isDashboard && dashboardRole === "trainer";
   const waitForDashboardRole = isDashboard && isSignedIn && currentUserLoading && !dashboardRole;
-  const usePaginatedTrainers = location === "/trainers";
+  const usePaginatedTrainers = location === "/trainers" && dashboardRole === "admin";
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
