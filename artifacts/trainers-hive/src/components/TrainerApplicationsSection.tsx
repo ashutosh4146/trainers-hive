@@ -78,6 +78,8 @@ export function TrainerApplicationsSection() {
   const apps = applications ?? [];
   const counts = getCounts(apps);
   const attentionCount = counts.shortlisted + counts.hired;
+  const activeCount = counts.submitted + counts.shortlisted + counts.hired;
+  const closedCount = counts.completed + counts.rejected + counts.withdrawn;
   const filtered = apps
     .filter((app) => filter === "all" || app.status === filter)
     .filter((app) => {
@@ -142,6 +144,24 @@ export function TrainerApplicationsSection() {
             </div>
           </div>
 
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <button type="button" onClick={() => setFilter("submitted")} className="rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
+              <p className="text-xs font-medium text-muted-foreground">Awaiting review</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{counts.submitted}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Applications sent to vendors.</p>
+            </button>
+            <button type="button" onClick={() => setFilter(attentionCount > 0 ? "shortlisted" : "all")} className="rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
+              <p className="text-xs font-medium text-muted-foreground">Needs follow-up</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{attentionCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Shortlisted or hired applications.</p>
+            </button>
+            <button type="button" onClick={() => setFilter("completed")} className="rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
+              <p className="text-xs font-medium text-muted-foreground">Closed history</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{closedCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Completed, rejected, or withdrawn.</p>
+            </button>
+          </div>
+
           <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-center">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -153,7 +173,7 @@ export function TrainerApplicationsSection() {
               />
             </div>
             <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{attentionCount}</span> applications need active follow-up.
+              <span className="font-medium text-foreground">{activeCount}</span> applications are currently active.
             </div>
           </div>
         </CardHeader>
@@ -178,7 +198,10 @@ export function TrainerApplicationsSection() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
-              No applications match your current filters.
+              <p>No applications match your current filters.</p>
+              <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setFilter("all"); setQuery(""); }}>
+                Clear filters
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
