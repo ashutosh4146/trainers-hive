@@ -220,3 +220,19 @@
     background-color: var(--elevate-2);
   }
 }
+
+@media (min-width: 1280px) {
+  [class*="xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]"] > .space-y-6:last-child::after {
+    content: "Hiring checklist\A • Shortlist applicants on open requirements\A • Reply to trainer messages before hiring\A • Close completed or outdated requirements\A • Record payments after completion";
+    display: block;
+    white-space: pre-line;
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) + 4px);
+    background: hsl(var(--card));
+    color: hsl(var(--muted-foreground));
+    line-height: 1.8;
+    font-size: 0.95rem;
+  }
+}
