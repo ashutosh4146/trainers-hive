@@ -29,6 +29,8 @@ function NotificationIcon({ type }: { type: AppNotification["type"] }) {
   switch (type) {
     case "trainer_shortlisted":
       return <UserCheck className={className} />;
+    case "trainer_hired":
+      return <Briefcase className={className} />;
     case "requirement_approved":
     case "requirement_rejected":
       return <ClipboardCheck className={className} />;
@@ -167,55 +169,31 @@ export function Navbar() {
                     <p className="text-sm font-semibold">Notifications</p>
                     <p className="text-[11px] text-muted-foreground">System and marketplace updates</p>
                   </div>
-                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => navigate("/notifications")}>
-                    View all
-                  </button>
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => navigate("/notifications")}>View all</button>
                 </div>
 
                 {notificationsLoading ? (
                   <div className="p-4 space-y-3">
                     {[0, 1, 2].map((i) => (
-                      <div key={i} className="flex gap-3">
-                        <div className="h-8 w-8 rounded-full bg-muted" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-3 w-32 rounded bg-muted" />
-                          <div className="h-3 w-48 rounded bg-muted" />
-                        </div>
-                      </div>
+                      <div key={i} className="flex gap-3"><div className="h-8 w-8 rounded-full bg-muted" /><div className="flex-1 space-y-2"><div className="h-3 w-32 rounded bg-muted" /><div className="h-3 w-48 rounded bg-muted" /></div></div>
                     ))}
                   </div>
                 ) : recentNotifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                     <Bell className="h-8 w-8 text-muted-foreground opacity-30" />
                     <p className="mt-2 text-sm text-muted-foreground">No notifications yet</p>
-                    <p className="mt-1 text-xs text-muted-foreground/70">
-                      Updates like shortlists, approvals, agreements, payments, and applications will appear here.
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground/70">Updates like shortlists, hiring, approvals, agreements, payments, and applications will appear here.</p>
                   </div>
                 ) : (
                   <ScrollArea className="max-h-80">
                     <div className="py-1">
                       {recentNotifications.map((notification) => (
-                        <button
-                          key={notification.id}
-                          type="button"
-                          onClick={() => openNotification(notification)}
-                          className="flex w-full gap-3 px-4 py-3 text-left hover:bg-accent/50 transition-colors"
-                        >
-                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <NotificationIcon type={notification.type} />
-                          </span>
+                        <button key={notification.id} type="button" onClick={() => openNotification(notification)} className="flex w-full gap-3 px-4 py-3 text-left hover:bg-accent/50 transition-colors">
+                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><NotificationIcon type={notification.type} /></span>
                           <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-2">
-                              <span className="truncate text-sm font-medium">{notification.title || getNotificationLabel(notification.type)}</span>
-                              {!notification.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                            </span>
-                            {notification.body && (
-                              <span className="mt-0.5 block truncate text-xs text-muted-foreground">{notification.body}</span>
-                            )}
-                            <span className="mt-1 block text-[10px] text-muted-foreground">
-                              {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                            </span>
+                            <span className="flex items-center gap-2"><span className="truncate text-sm font-medium">{notification.title || getNotificationLabel(notification.type)}</span>{!notification.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}</span>
+                            {notification.body && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{notification.body}</span>}
+                            <span className="mt-1 block text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</span>
                           </span>
                         </button>
                       ))}
@@ -227,9 +205,7 @@ export function Navbar() {
           )}
 
           {!isSignedIn ? (
-            <div className="flex items-center gap-2 ml-2">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/login")}>Sign In</Button>
-            </div>
+            <div className="flex items-center gap-2 ml-2"><Button variant="ghost" size="sm" onClick={() => navigate("/login")}>Sign In</Button></div>
           ) : (
             <TooltipProvider delayDuration={300}>
               <Tooltip>
@@ -237,58 +213,22 @@ export function Navbar() {
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="relative h-9 w-9 rounded-full ml-1">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={user?.avatarUrl} alt={displayName} />
-                          <AvatarFallback>{displayName.charAt(0).toUpperCase()}</AvatarFallback>
-                        </Avatar>
+                        <Avatar className="h-9 w-9"><AvatarImage src={user?.avatarUrl} alt={displayName} /><AvatarFallback>{displayName.charAt(0).toUpperCase()}</AvatarFallback></Avatar>
                       </Button>
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
                   <DropdownMenuContent className="w-60" align="end" forceMount>
-                    <DropdownMenuLabel className="font-normal">
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">{displayName}</p>
-                        <p className="text-xs leading-none text-muted-foreground">{displayEmail}</p>
-                        <p className="text-xs font-semibold text-primary mt-1 uppercase tracking-wider">{displayRole}</p>
-                      </div>
-                    </DropdownMenuLabel>
+                    <DropdownMenuLabel className="font-normal"><div className="flex flex-col space-y-1"><p className="text-sm font-medium leading-none">{displayName}</p><p className="text-xs leading-none text-muted-foreground">{displayEmail}</p><p className="text-xs font-semibold text-primary mt-1 uppercase tracking-wider">{displayRole}</p></div></DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <Link href="/profile">
-                      <DropdownMenuItem className="cursor-pointer">
-                        <UserIcon className="mr-2 h-4 w-4" />
-                        <span>Profile</span>
-                      </DropdownMenuItem>
-                    </Link>
-                    <Link href="/dashboard">
-                      <DropdownMenuItem className="cursor-pointer">
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        <span>Dashboard</span>
-                      </DropdownMenuItem>
-                    </Link>
-                    {auth?.role !== "admin" && (
-                      <Link href="/agreements">
-                        <DropdownMenuItem className="cursor-pointer">
-                          <FileSignature className="mr-2 h-4 w-4" />
-                          <span>Agreements</span>
-                        </DropdownMenuItem>
-                      </Link>
-                    )}
-                    <Link href="/settings">
-                      <DropdownMenuItem className="cursor-pointer">
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Settings</span>
-                      </DropdownMenuItem>
-                    </Link>
+                    <Link href="/profile"><DropdownMenuItem className="cursor-pointer"><UserIcon className="mr-2 h-4 w-4" /><span>Profile</span></DropdownMenuItem></Link>
+                    <Link href="/dashboard"><DropdownMenuItem className="cursor-pointer"><LayoutDashboard className="mr-2 h-4 w-4" /><span>Dashboard</span></DropdownMenuItem></Link>
+                    {auth?.role !== "admin" && <Link href="/agreements"><DropdownMenuItem className="cursor-pointer"><FileSignature className="mr-2 h-4 w-4" /><span>Agreements</span></DropdownMenuItem></Link>}
+                    <Link href="/settings"><DropdownMenuItem className="cursor-pointer"><Settings className="mr-2 h-4 w-4" /><span>Settings</span></DropdownMenuItem></Link>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={handleSignOut}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Sign Out</span>
-                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={handleSignOut}><LogOut className="mr-2 h-4 w-4" /><span>Sign Out</span></DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <TooltipContent side="bottom" className="font-medium">
-                  Hi, {displayName.split(" ")[0]}!
-                </TooltipContent>
+                <TooltipContent side="bottom" className="font-medium">Hi, {displayName.split(" ")[0]}!</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
