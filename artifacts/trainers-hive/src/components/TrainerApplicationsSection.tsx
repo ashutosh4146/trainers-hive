@@ -14,7 +14,7 @@ import { format, formatDistanceToNow } from "date-fns";
 const STATUS_ORDER = ["all", "submitted", "shortlisted", "hired", "completed", "rejected", "withdrawn"] as const;
 const PAGE_SIZE = 5;
 
-type Filter = typeof STATUS_ORDER[number];
+type Filter = typeof STATUS_ORDER[number] | "attention" | "closed";
 
 function statusMeta(status: string) {
   switch (status) {
@@ -60,6 +60,13 @@ function canWithdrawApplication(status: string) {
   return status === "submitted" || status === "shortlisted";
 }
 
+function matchesFilter(app: any, filter: Filter) {
+  if (filter === "all") return true;
+  if (filter === "attention") return app.status === "shortlisted" || app.status === "hired";
+  if (filter === "closed") return app.status === "completed" || app.status === "rejected" || app.status === "withdrawn";
+  return app.status === filter;
+}
+
 export function TrainerApplicationsSection() {
   const { data: user } = useGetCurrentUser();
   const { data: applications, isLoading } = useListMyApplications({
@@ -81,7 +88,7 @@ export function TrainerApplicationsSection() {
   const activeCount = counts.submitted + counts.shortlisted + counts.hired;
   const closedCount = counts.completed + counts.rejected + counts.withdrawn;
   const filtered = apps
-    .filter((app) => filter === "all" || app.status === filter)
+    .filter((app) => matchesFilter(app, filter))
     .filter((app) => {
       const q = query.trim().toLowerCase();
       if (!q) return true;
@@ -145,17 +152,17 @@ export function TrainerApplicationsSection() {
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <button type="button" onClick={() => setFilter("submitted")} className="rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
+            <button type="button" onClick={() => setFilter("submitted")} className={cn("rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5", filter === "submitted" && "border-primary/40 bg-primary/5")}>
               <p className="text-xs font-medium text-muted-foreground">Awaiting review</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{counts.submitted}</p>
               <p className="mt-1 text-xs text-muted-foreground">Applications sent to vendors.</p>
             </button>
-            <button type="button" onClick={() => setFilter(attentionCount > 0 ? "shortlisted" : "all")} className="rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
+            <button type="button" onClick={() => setFilter("attention")} className={cn("rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5", filter === "attention" && "border-primary/40 bg-primary/5")}>
               <p className="text-xs font-medium text-muted-foreground">Needs follow-up</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{attentionCount}</p>
               <p className="mt-1 text-xs text-muted-foreground">Shortlisted or hired applications.</p>
             </button>
-            <button type="button" onClick={() => setFilter("completed")} className="rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5">
+            <button type="button" onClick={() => setFilter("closed")} className={cn("rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5", filter === "closed" && "border-primary/40 bg-primary/5")}>
               <p className="text-xs font-medium text-muted-foreground">Closed history</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{closedCount}</p>
               <p className="mt-1 text-xs text-muted-foreground">Completed, rejected, or withdrawn.</p>
