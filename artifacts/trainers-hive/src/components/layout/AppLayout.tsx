@@ -17,6 +17,7 @@ import {
   getTrainerCompletionItems,
   getVendorCompletionItems,
 } from "@/components/ProfileCompletion";
+import { TrainerApplicationsSection } from "@/components/TrainerApplicationsSection";
 import { TrainerApplicationTracker } from "@/components/TrainerApplicationTracker";
 import { Button } from "@/components/ui/button";
 
@@ -123,6 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         >
           {children}
         </div>
+        <TrainerApplicationsSection />
         <TrainerApplicationTracker />
       </main>
       <footer className="border-t py-10 bg-card text-card-foreground">
