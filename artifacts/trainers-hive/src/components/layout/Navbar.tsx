@@ -24,8 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, LayoutDashboard, Settings, User as UserIcon, LogOut, Plus, Bell, Sun, Moon, MessageSquare, InboxIcon, FileSignature, Users, Building, Briefcase } from "lucide-react";
 import { useAuth, getRoleLabel, type UserRole } from "@/hooks/useAuth";
 import { signOutFirebase } from "@/lib/firebase";
-import { useUnreadMessages, markRead } from "@/hooks/useUnreadMessages";
-import { MessageThread } from "@/components/MessageThread";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { formatDistanceToNow } from "date-fns";
 
 function statusBadge(status: string) {
@@ -34,9 +33,15 @@ function statusBadge(status: string) {
   return "bg-muted text-muted-foreground";
 }
 
+function formatStatus(status: string) {
+  if (status === "hired") return "Hired";
+  if (status === "shortlisted") return "Shortlisted";
+  if (status === "applied") return "Applied";
+  return status || "Update";
+}
+
 export function Navbar() {
   const { auth, signOut, isSignedIn } = useAuth();
-  // Only fetch the current user when signed in — prevents 401s for guests
   const { data: user } = useGetCurrentUser({
     query: {
       enabled: isSignedIn,
@@ -49,13 +54,11 @@ export function Navbar() {
   const queryClient = useQueryClient();
 
   const [bellOpen, setBellOpen] = useState(false);
-  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
-  const [openThreadTitle, setOpenThreadTitle] = useState("");
 
   const isEligibleForMessages =
     isSignedIn && (auth?.role === "trainer" || auth?.role === "vendor");
 
-  const { data: threads, isLoading: threadsLoading } = useListMessageThreads({
+  const { data: threadsData, isLoading: threadsLoading } = useListMessageThreads({
     query: {
       queryKey: getListMessageThreadsQueryKey(),
       enabled: isEligibleForMessages && bellOpen,
@@ -63,19 +66,19 @@ export function Navbar() {
     },
   });
 
+  const threads = Array.isArray(threadsData) ? threadsData : [];
+  const recentThreads = threads.slice(0, 5);
+
   const handleBellOpenChange = (open: boolean) => {
     setBellOpen(open);
-    if (open && auth?.email) {
-      markRead(auth.email);
+    if (open) {
       queryClient.invalidateQueries({ queryKey: getListMessageThreadsQueryKey() });
     }
   };
 
-  const handleOpenThread = (applicationId: string, title: string) => {
+  const openMessages = () => {
     setBellOpen(false);
-    setOpenThreadId(applicationId);
-    setOpenThreadTitle(title);
-    if (auth?.email) markRead(auth.email);
+    navigate("/messages");
   };
 
   const handleSignOut = async () => {
@@ -89,8 +92,6 @@ export function Navbar() {
   const displayName = user?.name || auth?.name || "User";
   const displayEmail = user?.email || auth?.email || "";
   const displayRole = user?.role ? getRoleLabel(user.role as UserRole) : (auth ? getRoleLabel(auth.role) : "");
-
-  const recentThreads = threads?.slice(0, 5) ?? [];
 
   return (
     <>
@@ -148,7 +149,6 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Theme toggle */}
             <button
               type="button"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
@@ -163,56 +163,51 @@ export function Navbar() {
 
             {isSignedIn && isEligibleForMessages && (
               <>
-                {/* Chat icon — navigates to full Messages page */}
                 <TooltipProvider delayDuration={300}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         onClick={() => navigate("/messages")}
-                        className="p-2 rounded-full hover:bg-accent transition-colors"
-                        aria-label="Open messages"
+                        className="relative p-2 rounded-full hover:bg-accent transition-colors"
+                        aria-label={unreadCount > 0 ? `${unreadCount} unread messages` : "Open messages"}
                       >
                         <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                        {unreadCount > 0 && (
+                          <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white leading-none">
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                          </span>
+                        )}
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">Messages</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
-                {/* Bell — notification dropdown */}
                 <DropdownMenu open={bellOpen} onOpenChange={handleBellOpenChange}>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
                       className="relative p-2 rounded-full hover:bg-accent transition-colors"
-                      aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
+                      aria-label="Notifications"
                     >
                       <Bell className="h-5 w-5 text-muted-foreground" />
-                      {unreadCount > 0 && (
-                        <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white leading-none">
-                          {unreadCount > 9 ? "9+" : unreadCount}
-                        </span>
-                      )}
                     </button>
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent align="end" className="w-80 p-0" sideOffset={8}>
-                    {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b">
-                      <span className="text-sm font-semibold">Notifications</span>
-                      {threads && threads.length > 0 && (
-                        <button
-                          type="button"
-                          className="text-xs text-primary hover:underline"
-                          onClick={() => navigate("/messages")}
-                        >
+                      <div>
+                        <span className="text-sm font-semibold">Notifications</span>
+                        <p className="text-[11px] text-muted-foreground">Recent conversation activity</p>
+                      </div>
+                      {threads.length > 0 && (
+                        <button type="button" className="text-xs text-primary hover:underline" onClick={openMessages}>
                           View all
                         </button>
                       )}
                     </div>
 
-                    {/* Thread list */}
                     {threadsLoading ? (
                       <div className="p-3 space-y-3">
                         {[0, 1, 2].map((i) => (
@@ -228,9 +223,9 @@ export function Navbar() {
                     ) : recentThreads.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
                         <InboxIcon className="h-8 w-8 text-muted-foreground opacity-30" />
-                        <p className="text-sm text-muted-foreground">No messages yet</p>
+                        <p className="text-sm text-muted-foreground">No notifications yet</p>
                         <p className="text-xs text-muted-foreground/70">
-                          Conversations with shortlisted or hired trainers will appear here.
+                          New conversation updates will appear here.
                         </p>
                       </div>
                     ) : (
@@ -240,7 +235,7 @@ export function Navbar() {
                             <button
                               key={thread.applicationId}
                               type="button"
-                              onClick={() => handleOpenThread(thread.applicationId, thread.requirementTitle)}
+                              onClick={openMessages}
                               className="w-full flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors text-left"
                             >
                               <Avatar className="h-9 w-9 shrink-0 border">
@@ -253,14 +248,14 @@ export function Navbar() {
                                 <div className="flex items-center gap-1.5 mb-0.5">
                                   <span className="font-medium text-sm truncate leading-tight">{thread.otherPartyName}</span>
                                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${statusBadge(thread.status)}`}>
-                                    {thread.status === "hired" ? "Hired" : thread.status === "shortlisted" ? "Shortlisted" : thread.status}
+                                    {formatStatus(thread.status)}
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground truncate font-medium">{thread.requirementTitle}</p>
                                 {thread.lastMessageBody ? (
                                   <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{thread.lastMessageBody}</p>
                                 ) : (
-                                  <p className="text-xs text-muted-foreground/40 italic mt-0.5">No messages yet</p>
+                                  <p className="text-xs text-muted-foreground/40 italic mt-0.5">Conversation created</p>
                                 )}
                               </div>
                               {thread.lastMessageAt && (
@@ -274,15 +269,14 @@ export function Navbar() {
                       </ScrollArea>
                     )}
 
-                    {/* Footer */}
                     {recentThreads.length > 0 && (
                       <div className="border-t px-4 py-2.5">
                         <button
                           type="button"
-                          onClick={() => { setBellOpen(false); navigate("/messages"); }}
+                          onClick={openMessages}
                           className="w-full text-xs text-center text-primary hover:underline font-medium"
                         >
-                          Open all messages
+                          Open messages inbox
                         </button>
                       </div>
                     )}
@@ -291,7 +285,6 @@ export function Navbar() {
               </>
             )}
 
-            {/* User avatar dropdown */}
             {!isSignedIn ? (
               <div className="flex items-center gap-2 ml-2">
                 <Button variant="ghost" size="sm" onClick={() => navigate("/login")}>Sign In</Button>
@@ -361,19 +354,6 @@ export function Navbar() {
           </div>
         </div>
       </header>
-
-      {/* MessageThread dialog — opened from notification dropdown */}
-      {openThreadId && user && (
-        <MessageThread
-          applicationId={openThreadId}
-          currentUserId={user.id}
-          open={!!openThreadId}
-          onOpenChange={(open) => {
-            if (!open) setOpenThreadId(null);
-          }}
-          title={openThreadTitle || "Message Thread"}
-        />
-      )}
     </>
   );
 }
