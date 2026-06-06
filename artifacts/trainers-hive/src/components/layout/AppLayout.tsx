@@ -17,6 +17,7 @@ import {
   getTrainerCompletionItems,
   getVendorCompletionItems,
 } from "@/components/ProfileCompletion";
+import { RequirementMatchInsights } from "@/components/RequirementMatchInsights";
 import { Button } from "@/components/ui/button";
 
 function FloatingMessagesButton() {
@@ -116,6 +117,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Navbar />
       <main className="relative w-full">
         <ProfileCompletionPrompt />
+        <RequirementMatchInsights />
         <div
           key={location}
           className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
