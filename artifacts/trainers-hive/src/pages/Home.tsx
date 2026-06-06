@@ -91,6 +91,7 @@ export default function Home() {
   const recentRequirementsList = toArray(recentRequirements);
   const activityFeedList = toArray(activityFeed);
 
+  const showStatsSection = statsLoading || !!platformStats;
   const showFeaturedTrainers = isLoggedIn && (trainersLoading || featuredTrainersList.length > 0);
   const showRecentRequirements = isLoggedIn && (requirementsLoading || recentRequirementsList.length > 0);
   const showActivityFeed = isLoggedIn && (activityLoading || activityFeedList.length > 0);
@@ -138,40 +139,41 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-12 bg-muted/30 border-b">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {statsLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex flex-col items-center justify-center p-6 text-center space-y-2">
-                  <Skeleton className="h-10 w-24 mb-2" />
-                  <Skeleton className="h-4 w-32" />
-                </div>
-              ))
-            ) : platformStats ? (
-              <>
-                <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.vendorCount)}+</span>
-                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Verified Vendors</span>
-                </div>
-                <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.trainerCount)}+</span>
-                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Expert Trainers</span>
-                </div>
-                <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.openRequirementCount)}</span>
-                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Open Opportunities</span>
-                </div>
-                <div className="flex flex-col items-center justify-center p-6 text-center">
-                  <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.completedEngagements)}+</span>
-                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Completed Engagements</span>
-                </div>
-              </>
-            ) : null}
+      {showStatsSection && (
+        <section className="py-12 bg-muted/30 border-b">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              {statsLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center justify-center p-6 text-center space-y-2">
+                    <Skeleton className="h-10 w-24 mb-2" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                ))
+              ) : platformStats ? (
+                <>
+                  <div className="flex flex-col items-center justify-center p-6 text-center">
+                    <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.vendorCount)}+</span>
+                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Verified Vendors</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-6 text-center">
+                    <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.trainerCount)}+</span>
+                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Expert Trainers</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-6 text-center">
+                    <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.openRequirementCount)}</span>
+                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Open Opportunities</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-6 text-center">
+                    <span className="text-4xl font-bold text-primary mb-2">{statNumber(platformStats.completedEngagements)}+</span>
+                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Completed Engagements</span>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {showDataSections && (
         <div className="container mx-auto px-4 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-3 gap-12">
