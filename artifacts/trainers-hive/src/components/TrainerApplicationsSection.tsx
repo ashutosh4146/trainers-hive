@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { useGetCurrentUser, useListMyApplications } from "@workspace/api-client-react";
-import { CalendarDays, Clock, FileText, LogOut, MessageSquare, Search, XCircle } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, LogOut, MessageSquare, Search, XCircle } from "lucide-react";
 import { ApplicationPipeline } from "@/components/ApplicationPipeline";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
 
 const STATUS_ORDER = ["all", "submitted", "shortlisted", "hired", "completed", "rejected", "withdrawn"] as const;
+const PAGE_SIZE = 5;
 
 type Filter = typeof STATUS_ORDER[number];
 
@@ -62,11 +63,17 @@ export function TrainerApplicationsSection() {
   });
   const [filter, setFilter] = React.useState<Filter>("all");
   const [query, setQuery] = React.useState("");
+  const [page, setPage] = React.useState(1);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [filter, query]);
 
   if (user?.role !== "trainer") return null;
 
   const apps = applications ?? [];
   const counts = getCounts(apps);
+  const attentionCount = counts.shortlisted + counts.hired;
   const filtered = apps
     .filter((app) => filter === "all" || app.status === filter)
     .filter((app) => {
@@ -80,18 +87,22 @@ export function TrainerApplicationsSection() {
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   return (
-    <section id="trainer-applications-enhanced" className="container mx-auto px-4 pt-8">
+    <section id="trainer-applications-enhanced" className="container mx-auto max-w-6xl px-4 pt-8 pb-8">
       <style>{`#your-applications { display: none; }`}</style>
       <Card className="border-primary/10 shadow-sm">
         <CardHeader className="pb-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-xl">
-                <FileText className="h-5 w-5 text-primary" /> Your Applications
+                <FileText className="h-5 w-5 text-primary" /> Applications
               </CardTitle>
               <CardDescription>
-                Track every opportunity you applied to, with status, next step, and quick actions.
+                One clean place to track applications, status, next steps, and actions.
               </CardDescription>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
@@ -127,14 +138,19 @@ export function TrainerApplicationsSection() {
             </div>
           </div>
 
-          <div className="relative mt-4 max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search application, vendor, or status…"
-              className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
-            />
+          <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search application, vendor, or status…"
+                className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">{attentionCount}</span> applications need active follow-up.
+            </div>
           </div>
         </CardHeader>
 
@@ -162,7 +178,7 @@ export function TrainerApplicationsSection() {
             </div>
           ) : (
             <div className="space-y-3">
-              {filtered.map((app) => {
+              {pageItems.map((app) => {
                 const meta = statusMeta(app.status);
                 const inactive = app.status === "rejected" || app.status === "withdrawn";
                 const canMessage = app.status === "shortlisted" || app.status === "hired";
@@ -239,6 +255,23 @@ export function TrainerApplicationsSection() {
                   </div>
                 );
               })}
+
+              {filtered.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+                  <span>
+                    Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="px-2 tabular-nums">{safePage} / {totalPages}</span>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={safePage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
