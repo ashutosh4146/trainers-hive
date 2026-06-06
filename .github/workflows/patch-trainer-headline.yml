@@ -1,0 +1,78 @@
+name: Patch trainer headline field
+
+on:
+  push:
+    branches:
+      - dashboard-applications-alignment
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dashboard-applications-alignment
+      - name: Add editable trainer headline
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'artifacts/trainers-hive/src/pages/Profile.tsx';
+          let s = fs.readFileSync(path, 'utf8');
+
+          function replaceOnce(from, to, label) {
+            if (!s.includes(from)) {
+              if (!s.includes(to)) {
+                throw new Error(`Could not find ${label}`);
+              }
+              return;
+            }
+            s = s.replace(from, to);
+          }
+
+          replaceOnce(
+            'const trainerSchema = z.object({\n  name: z.string().min(2, "Full name is required"),\n  mainSkill: z.string().min(1, "Pick or add a primary skill"),',
+            'const trainerSchema = z.object({\n  name: z.string().min(2, "Full name is required"),\n  headline: z.string().trim().max(140, "Headline must be 140 characters or less").optional(),\n  mainSkill: z.string().min(1, "Pick or add a primary skill"),',
+            'trainer schema headline insertion'
+          );
+
+          replaceOnce(
+            'defaultValues: {\n      name: "",\n      mainSkill: "",',
+            'defaultValues: {\n      name: "",\n      headline: "",\n      mainSkill: "",',
+            'headline default value'
+          );
+
+          replaceOnce(
+            'form.reset({\n        name: trainer.name || "",\n        mainSkill: trainer.mainSkill || "",',
+            'form.reset({\n        name: trainer.name || "",\n        headline: trainer.headline || "",\n        mainSkill: trainer.mainSkill || "",',
+            'headline reset value'
+          );
+
+          replaceOnce(
+            'const payload: typeof data & {\n      subSkills: string[];\n      languages: string[];\n      certifications: { name: string; url?: string }[];\n    } = {\n      ...data,\n      resumeUrl: (data.resumeUrl ?? "").trim(),',
+            'const payload: typeof data & {\n      subSkills: string[];\n      languages: string[];\n      certifications: { name: string; url?: string }[];\n    } = {\n      ...data,\n      headline: (data.headline ?? "").trim(),\n      resumeUrl: (data.resumeUrl ?? "").trim(),',
+            'headline submit payload'
+          );
+
+          replaceOnce(
+            '<FormField control={form.control} name="name" render={({ field }) => (\n              <FormItem>\n                <FormLabel>Full name <span className="text-destructive">*</span></FormLabel>\n                <FormControl><Input {...field} placeholder="As you\'d like it shown to vendors" /></FormControl>\n                <FormMessage />\n              </FormItem>\n            )} />',
+            '<FormField control={form.control} name="name" render={({ field }) => (\n              <FormItem>\n                <FormLabel>Full name <span className="text-destructive">*</span></FormLabel>\n                <FormControl><Input {...field} placeholder="As you\'d like it shown to vendors" /></FormControl>\n                <FormMessage />\n              </FormItem>\n            )} />\n\n            <FormField control={form.control} name="headline" render={({ field }) => (\n              <FormItem>\n                <FormLabel>Profile headline</FormLabel>\n                <FormControl>\n                  <Input\n                    {...field}\n                    value={field.value ?? ""}\n                    maxLength={140}\n                    placeholder="e.g. AWS and Python trainer for corporate teams"\n                  />\n                </FormControl>\n                <FormDescription>\n                  This short line appears under your name on trainer cards.\n                </FormDescription>\n                <FormMessage />\n              </FormItem>\n            )} />',
+            'headline form field'
+          );
+
+          fs.writeFileSync(path, s);
+          fs.rmSync('.github/workflows/patch-trainer-headline.yml', { force: true });
+          NODE
+      - name: Commit patched file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/pages/Profile.tsx .github/workflows/patch-trainer-headline.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add editable trainer profile headline"
+            git push origin HEAD:dashboard-applications-alignment
+          fi
