@@ -27,6 +27,30 @@ import { Label } from "@/components/ui/label";
 import { Search, Star, MapPin, Briefcase, Filter, X, Users, Bookmark, Plus, ThumbsUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
+function toArray<T = any>(value: unknown): T[] {
+  if (Array.isArray(value)) return value;
+
+  if (value && typeof value === "object") {
+    const wrapped = value as {
+      data?: T[];
+      items?: T[];
+      results?: T[];
+      skills?: T[];
+      trainers?: T[];
+      savedTrainers?: T[];
+    };
+
+    if (Array.isArray(wrapped.data)) return wrapped.data;
+    if (Array.isArray(wrapped.items)) return wrapped.items;
+    if (Array.isArray(wrapped.results)) return wrapped.results;
+    if (Array.isArray(wrapped.skills)) return wrapped.skills;
+    if (Array.isArray(wrapped.trainers)) return wrapped.trainers;
+    if (Array.isArray(wrapped.savedTrainers)) return wrapped.savedTrainers;
+  }
+
+  return [];
+}
+
 // ── Multi-select skill combobox ──────────────────────────────────────────────
 function SkillMultiSelect({
   selected,
@@ -203,7 +227,8 @@ export default function Trainers() {
   const { data: savedTrainers } = useListSavedTrainers(vendorId ?? "", {
     query: { enabled: !!vendorId, queryKey: getListSavedTrainersQueryKey(vendorId ?? "") },
   });
-  const savedIds = React.useMemo(() => new Set(savedTrainers?.map((s) => s.trainerId) ?? []), [savedTrainers]);
+  const savedTrainersList = toArray<{ trainerId: string }>(savedTrainers);
+  const savedIds = React.useMemo(() => new Set(savedTrainersList.map((s) => s.trainerId)), [savedTrainersList]);
   const saveTrainer = useSaveTrainer();
   const unsaveTrainer = useUnsaveTrainer();
 
@@ -236,7 +261,9 @@ export default function Trainers() {
     }
   };
 
-  const allSkills = skillsData?.flatMap(cat => cat.skills) || [];
+  const trainersList = toArray(trainers);
+  const skillCategories = toArray<{ skills?: string[] }>(skillsData);
+  const allSkills = skillCategories.flatMap((cat) => Array.isArray(cat.skills) ? cat.skills : []);
 
   const clearFilters = () => {
     setSelectedSkills([]);
@@ -370,96 +397,103 @@ export default function Trainers() {
                 </CardContent>
               </Card>
             ))
-          ) : trainers?.length ? (
-            trainers.map((trainer) => (
-              <div key={trainer.id} className="relative">
-                {isAdmin && (
-                  <div className="absolute top-3 right-3 z-10">
-                    <AdminRemoveButton
-                      label={`trainer ${trainer.name}`}
-                      description={`This permanently removes ${trainer.name} from the marketplace, along with all their reviews and applications. This cannot be undone.`}
-                      successMessage={`${trainer.name} has been removed from the marketplace.`}
-                      onConfirm={async () => {
-                        await deleteTrainer.mutateAsync({ id: trainer.id });
-                        await queryClient.invalidateQueries({
-                          queryKey: getListTrainersQueryKey(queryParams),
-                        });
-                      }}
-                    />
-                  </div>
-                )}
-                {isVendor && (
-                  <button
-                    title={savedIds.has(trainer.id) ? "Remove from saved" : "Save trainer"}
-                    onClick={(e) => handleToggleSave(e, trainer.id, trainer.name)}
-                    disabled={saveTrainer.isPending || unsaveTrainer.isPending}
-                    className={`absolute top-3 right-3 z-10 p-1.5 rounded-md border transition-colors ${
-                      savedIds.has(trainer.id)
-                        ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-                        : "border-border bg-background text-muted-foreground hover:text-primary hover:border-primary/40"
-                    }`}
-                  >
-                    <Bookmark className={`h-4 w-4 ${savedIds.has(trainer.id) ? "fill-primary" : ""}`} />
-                  </button>
-                )}
-                <Link href={`/trainers/${trainer.id}`}>
-                <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
-                  <CardHeader className="flex flex-row items-start gap-4 pb-2">
-                    <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-12 w-12 border border-border" />
-                    <div className="flex-1 min-w-0 pr-8">
-                      <CardTitle className="text-lg flex items-center gap-2 truncate">
-                        {trainer.name}
-                        {trainer.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 px-1.5 py-0 h-5">Verified</Badge>}
-                      </CardTitle>
-                      <CardDescription className="truncate text-sm text-muted-foreground mt-1">
-                        {trainer.headline}
-                      </CardDescription>
+          ) : trainersList.length ? (
+            trainersList.map((trainer) => {
+              const subSkills = Array.isArray(trainer.subSkills) ? trainer.subSkills : [];
+              const rating = Number(trainer.rating ?? 0);
+              const reviewCount = trainer.reviewCount ?? 0;
+              const experienceYears = trainer.experienceYears ?? 0;
+
+              return (
+                <div key={trainer.id} className="relative">
+                  {isAdmin && (
+                    <div className="absolute top-3 right-3 z-10">
+                      <AdminRemoveButton
+                        label={`trainer ${trainer.name}`}
+                        description={`This permanently removes ${trainer.name} from the marketplace, along with all their reviews and applications. This cannot be undone.`}
+                        successMessage={`${trainer.name} has been removed from the marketplace.`}
+                        onConfirm={async () => {
+                          await deleteTrainer.mutateAsync({ id: trainer.id });
+                          await queryClient.invalidateQueries({
+                            queryKey: getListTrainersQueryKey(queryParams),
+                          });
+                        }}
+                      />
                     </div>
-                  </CardHeader>
-                  <CardContent className="py-2 flex-1 flex flex-col justify-between">
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      <Badge variant="outline" className="font-normal border-primary/20 bg-primary/5 text-primary">
-                        {trainer.mainSkill}
-                      </Badge>
-                      {trainer.subSkills.slice(0, 3).map((skill) => (
-                        <Badge key={skill} variant="outline" className="font-normal text-muted-foreground">
-                          {skill}
-                        </Badge>
-                      ))}
-                      {trainer.subSkills.length > 3 && (
-                        <Badge variant="outline" className="font-normal text-muted-foreground border-dashed">
-                          +{trainer.subSkills.length - 3}
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-y-3 pt-3 border-t text-sm">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-                        <span className="font-medium text-foreground">{trainer.rating.toFixed(1)}</span>
-                        <span>({trainer.reviewCount})</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Briefcase className="h-4 w-4" />
-                        <span>{trainer.experienceYears}y exp</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        <span className="truncate max-w-[100px]">{trainer.location}</span>
-                      </div>
-                      {(trainer.endorsementCount ?? 0) > 0 && (
-                        <div className="flex items-center justify-end gap-1.5 text-muted-foreground">
-                          <ThumbsUp className="h-4 w-4 text-emerald-600" />
-                          <span className="font-medium text-emerald-700">{trainer.endorsementCount}</span>
-                          <span>{trainer.endorsementCount === 1 ? "endorsement" : "endorsements"}</span>
+                  )}
+                  {isVendor && (
+                    <button
+                      title={savedIds.has(trainer.id) ? "Remove from saved" : "Save trainer"}
+                      onClick={(e) => handleToggleSave(e, trainer.id, trainer.name)}
+                      disabled={saveTrainer.isPending || unsaveTrainer.isPending}
+                      className={`absolute top-3 right-3 z-10 p-1.5 rounded-md border transition-colors ${
+                        savedIds.has(trainer.id)
+                          ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                          : "border-border bg-background text-muted-foreground hover:text-primary hover:border-primary/40"
+                      }`}
+                    >
+                      <Bookmark className={`h-4 w-4 ${savedIds.has(trainer.id) ? "fill-primary" : ""}`} />
+                    </button>
+                  )}
+                  <Link href={`/trainers/${trainer.id}`}>
+                    <Card className="h-full hover:shadow-md transition-all hover:border-primary/50 cursor-pointer group flex flex-col">
+                      <CardHeader className="flex flex-row items-start gap-4 pb-2">
+                        <TrainerAvatar name={trainer.name} avatarUrl={trainer.avatarUrl} className="h-12 w-12 border border-border" />
+                        <div className="flex-1 min-w-0 pr-8">
+                          <CardTitle className="text-lg flex items-center gap-2 truncate">
+                            {trainer.name}
+                            {trainer.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100 px-1.5 py-0 h-5">Verified</Badge>}
+                          </CardTitle>
+                          <CardDescription className="truncate text-sm text-muted-foreground mt-1">
+                            {trainer.headline}
+                          </CardDescription>
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-              </div>
-            ))
+                      </CardHeader>
+                      <CardContent className="py-2 flex-1 flex flex-col justify-between">
+                        <div className="flex flex-wrap gap-1.5 mb-4">
+                          <Badge variant="outline" className="font-normal border-primary/20 bg-primary/5 text-primary">
+                            {trainer.mainSkill}
+                          </Badge>
+                          {subSkills.slice(0, 3).map((skill: string) => (
+                            <Badge key={skill} variant="outline" className="font-normal text-muted-foreground">
+                              {skill}
+                            </Badge>
+                          ))}
+                          {subSkills.length > 3 && (
+                            <Badge variant="outline" className="font-normal text-muted-foreground border-dashed">
+                              +{subSkills.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-y-3 pt-3 border-t text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+                            <span className="font-medium text-foreground">{Number.isFinite(rating) ? rating.toFixed(1) : "0.0"}</span>
+                            <span>({reviewCount})</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Briefcase className="h-4 w-4" />
+                            <span>{experienceYears}y exp</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                            <span className="truncate max-w-[100px]">{trainer.location}</span>
+                          </div>
+                          {(trainer.endorsementCount ?? 0) > 0 && (
+                            <div className="flex items-center justify-end gap-1.5 text-muted-foreground">
+                              <ThumbsUp className="h-4 w-4 text-emerald-600" />
+                              <span className="font-medium text-emerald-700">{trainer.endorsementCount}</span>
+                              <span>{trainer.endorsementCount === 1 ? "endorsement" : "endorsements"}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                </div>
+              );
+            })
           ) : (
             <div className="col-span-1 lg:col-span-2 flex flex-col items-center justify-center py-20 text-center border rounded-lg bg-muted/30 border-dashed">
               <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />

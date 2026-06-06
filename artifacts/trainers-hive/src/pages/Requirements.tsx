@@ -23,6 +23,28 @@ import { Search, MapPin, Briefcase, Filter, X, Building, BookOpen, Clock, Users,
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 
+function toArray<T = any>(value: unknown): T[] {
+  if (Array.isArray(value)) return value;
+
+  if (value && typeof value === "object") {
+    const wrapped = value as {
+      data?: T[];
+      items?: T[];
+      results?: T[];
+      skills?: T[];
+      requirements?: T[];
+    };
+
+    if (Array.isArray(wrapped.data)) return wrapped.data;
+    if (Array.isArray(wrapped.items)) return wrapped.items;
+    if (Array.isArray(wrapped.results)) return wrapped.results;
+    if (Array.isArray(wrapped.skills)) return wrapped.skills;
+    if (Array.isArray(wrapped.requirements)) return wrapped.requirements;
+  }
+
+  return [];
+}
+
 // ── Multi-select skill combobox (shared pattern) ─────────────────────────────
 function SkillMultiSelect({
   selected,
@@ -138,7 +160,9 @@ export default function Requirements() {
   const deleteRequirement = useDeleteRequirement();
   const queryClient = useQueryClient();
 
-  const allSkills = skillsData?.flatMap(cat => cat.skills) || [];
+  const requirementsList = toArray(requirements);
+  const skillCategories = toArray<{ skills?: string[] }>(skillsData);
+  const allSkills = skillCategories.flatMap((cat) => Array.isArray(cat.skills) ? cat.skills : []);
 
   const clearFilters = () => {
     setSearch("");
@@ -279,8 +303,8 @@ export default function Requirements() {
                 </CardContent>
               </Card>
             ))
-          ) : requirements?.length ? (
-            requirements.map((req) => (
+          ) : requirementsList.length ? (
+            requirementsList.map((req) => (
               <div key={req.id} className="relative">
                 {isAdmin && (
                   <div className="absolute top-3 right-3 z-10">
