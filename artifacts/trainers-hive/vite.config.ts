@@ -28,6 +28,8 @@ if (!basePath) {
   );
 }
 
+const apiProxyTarget = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL;
+
 const nonBlockingCss = (): import("vite").Plugin => ({
   name: "non-blocking-css",
   apply: "build",
@@ -92,6 +94,15 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: apiProxyTarget
+      ? {
+          "/api": {
+            target: apiProxyTarget,
+            changeOrigin: true,
+            secure: false,
+          },
+        }
+      : undefined,
     fs: {
       strict: true,
     },
