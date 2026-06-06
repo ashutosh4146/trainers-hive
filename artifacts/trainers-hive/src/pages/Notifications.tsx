@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Bell, BadgeCheck, CheckCircle2, ClipboardCheck, CreditCard, FileSignature, InboxIcon, UserCheck } from "lucide-react";
+import { Bell, BadgeCheck, CheckCircle2, ClipboardCheck, CreditCard, FileSignature, InboxIcon, UserCheck, Briefcase } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +12,8 @@ function NotificationIcon({ type }: { type: AppNotification["type"] }) {
   switch (type) {
     case "trainer_shortlisted":
       return <UserCheck className={className} />;
+    case "trainer_hired":
+      return <Briefcase className={className} />;
     case "requirement_approved":
     case "requirement_rejected":
       return <ClipboardCheck className={className} />;
@@ -30,23 +32,51 @@ function NotificationIcon({ type }: { type: AppNotification["type"] }) {
 
 export default function Notifications() {
   const [, navigate] = useLocation();
-  const { notifications, unreadCount, isLoading, isError } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    isError,
+    markRead,
+    markAllRead,
+    isMarkingAllRead,
+  } = useNotifications();
+
+  const openNotification = async (notification: AppNotification) => {
+    if (!notification.readAt) {
+      try { await markRead(notification); } catch { /* best effort */ }
+    }
+    if (notification.href) navigate(notification.href);
+  };
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-muted/30 px-4 py-8">
       <div className="mx-auto w-full max-w-3xl">
-        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Notifications</h1>
             <p className="text-sm text-muted-foreground">
               Marketplace updates for applications, approvals, agreements, payments, and verification.
             </p>
           </div>
-          {unreadCount > 0 && (
-            <div className="text-sm font-medium text-primary">
-              {unreadCount} unread
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {unreadCount > 0 && (
+              <div className="text-sm font-medium text-primary">
+                {unreadCount} unread
+              </div>
+            )}
+            {unreadCount > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isMarkingAllRead}
+                onClick={() => markAllRead().catch(() => {})}
+              >
+                Mark all read
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -95,7 +125,7 @@ export default function Notifications() {
                 <button
                   key={notification.id}
                   type="button"
-                  onClick={() => notification.href ? navigate(notification.href) : undefined}
+                  onClick={() => openNotification(notification)}
                   className={cn(
                     "flex w-full gap-4 p-5 text-left transition-colors",
                     notification.href ? "hover:bg-accent/50" : "cursor-default",
@@ -115,6 +145,7 @@ export default function Notifications() {
                     )}
                     <span className="mt-2 block text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                      {notification.readAt ? " · Read" : " · Unread"}
                     </span>
                   </span>
                 </button>
