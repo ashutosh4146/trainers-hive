@@ -327,6 +327,51 @@ async function parseSuccessBody(
   }
 }
 
+function normalizeTrainerType(value: unknown): "trainer" | "developer" | "both" | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  if (["trainer", "full_time_trainer", "fulltime_trainer", "training", "corporate_trainer"].includes(normalized)) {
+    return "trainer";
+  }
+  if (["developer", "full_time_developer", "fulltime_developer", "dev", "engineer", "software_developer"].includes(normalized)) {
+    return "developer";
+  }
+  if (["both", "trainer_developer", "developer_trainer", "trainer_and_developer", "both_trainer_and_developer", "trainer/developer"].includes(normalized)) {
+    return "both";
+  }
+
+  return undefined;
+}
+
+function normalizeTrainerPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+
+  const record = payload as Record<string, unknown>;
+  const rawType =
+    record.trainerType ??
+    record.trainer_type ??
+    record.type ??
+    record.engagementType ??
+    record.engagement_type ??
+    record.primaryEngagementType ??
+    record.primary_engagement_type;
+
+  const trainerType = normalizeTrainerType(rawType);
+  if (!trainerType) return payload;
+
+  return {
+    ...record,
+    trainerType,
+  };
+}
+
+function normalizeApiPayload(payload: unknown, requestInfo: { method: string; url: string }): unknown {
+  if (requestInfo.method !== "GET") return payload;
+  if (!/\/api\/trainers\//.test(requestInfo.url)) return payload;
+  return normalizeTrainerPayload(payload);
+}
+
 export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
@@ -372,5 +417,6 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  const payload = await parseSuccessBody(response, responseType, requestInfo);
+  return normalizeApiPayload(payload, requestInfo) as T;
 }
