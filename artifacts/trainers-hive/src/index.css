@@ -220,15 +220,3 @@
     background-color: var(--elevate-2);
   }
 }
-
-@media (min-width: 1280px) {
-  #vendor-requirements {
-    max-height: 720px;
-    overflow: hidden;
-  }
-
-  #vendor-requirements > div:last-child {
-    max-height: 530px;
-    overflow-y: auto;
-  }
-}
