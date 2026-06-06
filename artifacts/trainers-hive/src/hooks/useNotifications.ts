@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useGetCurrentUser,
@@ -31,6 +31,14 @@ export type AppNotification = {
 };
 
 const NOTIFICATIONS_QUERY_KEY = ["notifications"] as const;
+
+function authHeaders() {
+  const token = localStorage.getItem("th_session_token");
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 function normalizeNotifications(payload: unknown): AppNotification[] {
   if (Array.isArray(payload)) return payload as AppNotification[];
@@ -151,6 +159,10 @@ function uniqueById(notifications: AppNotification[]) {
   });
 }
 
+function isBackendNotification(notification: AppNotification) {
+  return !notification.id.startsWith("application-") && !notification.id.startsWith("requirement-") && !notification.id.startsWith("agreement-") && !notification.id.startsWith("profile-verification-");
+}
+
 export function getNotificationLabel(type: NotificationType) {
   switch (type) {
     case "trainer_shortlisted": return "Trainer shortlisted";
@@ -168,6 +180,7 @@ export function getNotificationLabel(type: NotificationType) {
 export function useNotifications() {
   const { isSignedIn, auth } = useAuth();
   const enabled = isSignedIn && auth?.role !== "admin";
+  const queryClient = useQueryClient();
   const { data: currentUser } = useGetCurrentUser({ query: { enabled } });
 
   const query = useQuery({
@@ -177,8 +190,7 @@ export function useNotifications() {
     refetchOnWindowFocus: true,
     retry: false,
     queryFn: async () => {
-      const token = localStorage.getItem("th_session_token");
-      const response = await fetch("/api/notifications", { method: "GET", headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+      const response = await fetch("/api/notifications", { method: "GET", headers: authHeaders() });
       if (response.status === 404) return [];
       if (!response.ok) throw new Error("Could not load notifications");
       const contentType = response.headers.get("content-type") ?? "";
@@ -187,13 +199,14 @@ export function useNotifications() {
     },
   });
 
-  const { data: trainerApplications } = useListMyApplications({ query: { enabled: enabled && auth?.role === "trainer", refetchInterval: 60_000, refetchOnWindowFocus: true } });
-  const { data: requirements } = useListRequirements({}, { query: { enabled: enabled && auth?.role === "vendor", refetchInterval: 60_000, refetchOnWindowFocus: true } });
-  const { data: agreements } = useListMyAgreements({ query: { enabled, refetchInterval: 60_000, refetchOnWindowFocus: true } });
-  const { data: trainerProfile } = useGetTrainer(currentUser?.trainerId ?? "", { query: { enabled: enabled && auth?.role === "trainer" && !!currentUser?.trainerId, refetchInterval: 60_000, refetchOnWindowFocus: true } });
-  const { data: vendorProfile } = useGetVendor(currentUser?.vendorId ?? "", { query: { enabled: enabled && auth?.role === "vendor" && !!currentUser?.vendorId, refetchInterval: 60_000, refetchOnWindowFocus: true } });
+  const { data: trainerApplications } = useListMyApplications({ query: { enabled: enabled && auth?.role === "trainer" && query.isError, refetchInterval: 60_000, refetchOnWindowFocus: true } });
+  const { data: requirements } = useListRequirements({}, { query: { enabled: enabled && auth?.role === "vendor" && query.isError, refetchInterval: 60_000, refetchOnWindowFocus: true } });
+  const { data: agreements } = useListMyAgreements({ query: { enabled: enabled && query.isError, refetchInterval: 60_000, refetchOnWindowFocus: true } });
+  const { data: trainerProfile } = useGetTrainer(currentUser?.trainerId ?? "", { query: { enabled: enabled && auth?.role === "trainer" && !!currentUser?.trainerId && query.isError, refetchInterval: 60_000, refetchOnWindowFocus: true } });
+  const { data: vendorProfile } = useGetVendor(currentUser?.vendorId ?? "", { query: { enabled: enabled && auth?.role === "vendor" && !!currentUser?.vendorId && query.isError, refetchInterval: 60_000, refetchOnWindowFocus: true } });
 
   const derivedNotifications = useMemo(() => {
+    if (!query.isError) return [];
     const derived: AppNotification[] = [];
     if (auth?.role === "trainer") {
       derived.push(...deriveTrainerApplicationNotifications(toArray(trainerApplications)));
@@ -205,10 +218,76 @@ export function useNotifications() {
     }
     derived.push(...deriveAgreementNotifications(toArray(agreements)));
     return derived;
-  }, [auth?.role, trainerApplications, requirements, currentUser?.vendorId, trainerProfile, vendorProfile, agreements]);
+  }, [query.isError, auth?.role, trainerApplications, requirements, currentUser?.vendorId, trainerProfile, vendorProfile, agreements]);
+
+  const markReadMutation = useMutation({
+    mutationFn: async (notification: AppNotification) => {
+      if (!isBackendNotification(notification) || notification.readAt) return notification;
+      const response = await fetch(`/api/notifications/${encodeURIComponent(notification.id)}/read`, {
+        method: "PATCH",
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error("Could not mark notification read");
+      return response.json() as Promise<AppNotification>;
+    },
+    onMutate: async (notification) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+      const previous = queryClient.getQueryData<AppNotification[]>(NOTIFICATIONS_QUERY_KEY);
+      const readAt = notification.readAt ?? new Date().toISOString();
+      queryClient.setQueryData<AppNotification[]>(NOTIFICATIONS_QUERY_KEY, (current = []) =>
+        current.map((item) => item.id === notification.id ? { ...item, readAt } : item),
+      );
+      return { previous };
+    },
+    onError: (_error, _notification, context) => {
+      if (context?.previous) queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<AppNotification[]>(NOTIFICATIONS_QUERY_KEY, (current = []) =>
+        current.map((item) => item.id === updated.id ? updated : item),
+      );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    },
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/notifications/read-all", {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error("Could not mark notifications read");
+      return response.json() as Promise<{ updatedCount: number }>;
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+      const previous = queryClient.getQueryData<AppNotification[]>(NOTIFICATIONS_QUERY_KEY);
+      const readAt = new Date().toISOString();
+      queryClient.setQueryData<AppNotification[]>(NOTIFICATIONS_QUERY_KEY, (current = []) =>
+        current.map((item) => isBackendNotification(item) ? { ...item, readAt: item.readAt ?? readAt } : item),
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    },
+  });
 
   const notifications = useMemo(() => uniqueById([...(query.data ?? []), ...derivedNotifications]).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [query.data, derivedNotifications]);
   const unreadCount = useMemo(() => notifications.filter((notification) => !notification.readAt).length, [notifications]);
 
-  return { ...query, notifications, unreadCount };
+  return {
+    ...query,
+    notifications,
+    unreadCount,
+    markRead: markReadMutation.mutateAsync,
+    markAllRead: markAllReadMutation.mutateAsync,
+    isMarkingRead: markReadMutation.isPending,
+    isMarkingAllRead: markAllReadMutation.isPending,
+  };
 }
