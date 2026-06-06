@@ -12,15 +12,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
       <Navbar />
-      <main className="flex-1 flex flex-col relative w-full">
+      <main className="relative w-full">
         <div
           key={location}
-          className="flex-1 flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
+          className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
           {children}
         </div>
       </main>
-      <footer className="border-t py-10 mt-auto bg-card text-card-foreground">
+      <footer className="border-t py-10 bg-card text-card-foreground">
         <div className="container mx-auto px-4 max-w-5xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
