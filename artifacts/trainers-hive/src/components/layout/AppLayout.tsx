@@ -123,6 +123,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         >
           {children}
         </div>
+        {isSignedIn && auth?.role === "trainer" && location === "/dashboard" && (
+          <style>{`#trainer-applications-enhanced{margin-top:-5rem!important}`}</style>
+        )}
         <TrainerApplicationsSection />
       </main>
       <footer className="border-t py-10 bg-card text-card-foreground">
