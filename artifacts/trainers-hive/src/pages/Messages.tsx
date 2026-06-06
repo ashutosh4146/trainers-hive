@@ -17,13 +17,26 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Send, MessageSquare, ArrowLeft, Inbox, Briefcase, Sparkles } from "lucide-react";
+import { Search, Send, MessageSquare, ArrowLeft, Inbox, Briefcase, Sparkles, Star } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "needsReply" | "active";
+type Tab = "all" | "priority" | "needsReply" | "active";
 type QuickReply = { label: string; body: string };
+
+type MessageThread = {
+  applicationId: string;
+  otherPartyName: string;
+  otherPartyAvatarUrl?: string | null;
+  requirementTitle: string;
+  status: string;
+  lastMessageBody?: string | null;
+  lastMessageAt?: string | null;
+  lastMessageSenderUserId?: string | null;
+};
+
+const PRIORITY_STORAGE_KEY = "th_priority_conversations";
 
 function draftKey(applicationId: string) {
   return `th_message_draft_${applicationId}`;
@@ -32,6 +45,20 @@ function draftKey(applicationId: string) {
 function getSavedDraft(applicationId: string) {
   if (typeof window === "undefined") return "";
   return localStorage.getItem(draftKey(applicationId)) ?? "";
+}
+
+function readPriorityIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PRIORITY_STORAGE_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePriorityIds(ids: string[]) {
+  localStorage.setItem(PRIORITY_STORAGE_KEY, JSON.stringify(Array.from(new Set(ids))));
 }
 
 function statusLabel(status: string) {
@@ -47,135 +74,57 @@ function getQuickReplies(status: string, role?: string): QuickReply[] {
   if (isVendor) {
     if (status === "submitted" || status === "applied") {
       return [
-        {
-          label: "Ask availability",
-          body: "Thanks for applying. Please confirm your availability for the proposed training dates and preferred delivery mode.",
-        },
-        {
-          label: "Ask commercial terms",
-          body: "Your profile looks relevant. Please share your commercial expectations, availability, and any prerequisites for this requirement.",
-        },
-        {
-          label: "Schedule discussion",
-          body: "We would like to discuss the requirement in detail. Please share two suitable time slots for a short call.",
-        },
+        { label: "Ask availability", body: "Thanks for applying. Please confirm your availability for the proposed training dates and preferred delivery mode." },
+        { label: "Ask commercial terms", body: "Your profile looks relevant. Please share your commercial expectations, availability, and any prerequisites for this requirement." },
+        { label: "Schedule discussion", body: "We would like to discuss the requirement in detail. Please share two suitable time slots for a short call." },
       ];
     }
-
     if (status === "shortlisted") {
       return [
-        {
-          label: "Confirm shortlist",
-          body: "You are shortlisted for this requirement. Please confirm your availability, commercials, and readiness to proceed.",
-        },
-        {
-          label: "Finalize scope",
-          body: "Before selection, let’s finalize the agenda, delivery mode, duration, commercials, and expected outcomes.",
-        },
-        {
-          label: "Request documents",
-          body: "Please share your updated profile, relevant past training references, and any supporting material for final review.",
-        },
+        { label: "Confirm shortlist", body: "You are shortlisted for this requirement. Please confirm your availability, commercials, and readiness to proceed." },
+        { label: "Finalize scope", body: "Before selection, let’s finalize the agenda, delivery mode, duration, commercials, and expected outcomes." },
+        { label: "Request documents", body: "Please share your updated profile, relevant past training references, and any supporting material for final review." },
       ];
     }
-
     if (status === "hired") {
       return [
-        {
-          label: "Confirm kickoff",
-          body: "You are selected for this requirement. Let’s confirm kickoff date, agenda, prerequisites, and communication plan.",
-        },
-        {
-          label: "Agreement next",
-          body: "Let’s proceed with the engagement agreement. Please confirm the final scope, dates, fee, and payment terms.",
-        },
-        {
-          label: "Training readiness",
-          body: "Please share the final training plan, learner prerequisites, setup requirements, and any pre-work material needed.",
-        },
+        { label: "Confirm kickoff", body: "You are selected for this requirement. Let’s confirm kickoff date, agenda, prerequisites, and communication plan." },
+        { label: "Agreement next", body: "Let’s proceed with the engagement agreement. Please confirm the final scope, dates, fee, and payment terms." },
+        { label: "Training readiness", body: "Please share the final training plan, learner prerequisites, setup requirements, and any pre-work material needed." },
       ];
     }
-
     return [
-      {
-        label: "Ask next steps",
-        body: "Thanks for the update. Please confirm the next steps, expected timeline, and any pending details from your side.",
-      },
-      {
-        label: "Schedule call",
-        body: "Can we schedule a short call to align on scope, timeline, commercials, and delivery expectations?",
-      },
-      {
-        label: "Request details",
-        body: "Please share the pending details so we can move this engagement forward smoothly.",
-      },
+      { label: "Ask next steps", body: "Thanks for the update. Please confirm the next steps, expected timeline, and any pending details from your side." },
+      { label: "Schedule call", body: "Can we schedule a short call to align on scope, timeline, commercials, and delivery expectations?" },
+      { label: "Request details", body: "Please share the pending details so we can move this engagement forward smoothly." },
     ];
   }
 
   if (status === "submitted" || status === "applied") {
     return [
-      {
-        label: "Share availability",
-        body: "Thanks for considering my application. I am available to discuss the requirement and can share my detailed approach if needed.",
-      },
-      {
-        label: "Ask scope",
-        body: "Could you please share more details about learner profile, expected outcomes, delivery mode, and tentative dates?",
-      },
-      {
-        label: "Share approach",
-        body: "Based on the requirement, I can prepare a practical training plan covering agenda, exercises, and expected outcomes.",
-      },
+      { label: "Share availability", body: "Thanks for considering my application. I am available to discuss the requirement and can share my detailed approach if needed." },
+      { label: "Ask scope", body: "Could you please share more details about learner profile, expected outcomes, delivery mode, and tentative dates?" },
+      { label: "Share approach", body: "Based on the requirement, I can prepare a practical training plan covering agenda, exercises, and expected outcomes." },
     ];
   }
-
   if (status === "shortlisted") {
     return [
-      {
-        label: "Confirm interest",
-        body: "Thank you for shortlisting me. I am interested and available to discuss final scope, schedule, and commercials.",
-      },
-      {
-        label: "Ask call time",
-        body: "Please share a suitable time for a short discussion so we can finalize expectations and delivery details.",
-      },
-      {
-        label: "Confirm terms",
-        body: "I can proceed once we confirm the dates, batch profile, training mode, deliverables, and commercials.",
-      },
+      { label: "Confirm interest", body: "Thank you for shortlisting me. I am interested and available to discuss final scope, schedule, and commercials." },
+      { label: "Ask call time", body: "Please share a suitable time for a short discussion so we can finalize expectations and delivery details." },
+      { label: "Confirm terms", body: "I can proceed once we confirm the dates, batch profile, training mode, deliverables, and commercials." },
     ];
   }
-
   if (status === "hired") {
     return [
-      {
-        label: "Confirm readiness",
-        body: "Thank you for selecting me. I am ready to proceed and can share the final agenda, prerequisites, and training plan.",
-      },
-      {
-        label: "Ask agreement",
-        body: "Please share the engagement agreement or final terms so we can confirm scope, dates, commercials, and payment terms.",
-      },
-      {
-        label: "Setup requirements",
-        body: "For smooth delivery, please confirm platform access, learner count, expected hands-on setup, and any internal guidelines.",
-      },
+      { label: "Confirm readiness", body: "Thank you for selecting me. I am ready to proceed and can share the final agenda, prerequisites, and training plan." },
+      { label: "Ask agreement", body: "Please share the engagement agreement or final terms so we can confirm scope, dates, commercials, and payment terms." },
+      { label: "Setup requirements", body: "For smooth delivery, please confirm platform access, learner count, expected hands-on setup, and any internal guidelines." },
     ];
   }
-
   return [
-    {
-      label: "Follow up",
-      body: "Following up on this conversation. Please let me know the next step when convenient.",
-    },
-    {
-      label: "Share availability",
-      body: "I am available for a quick discussion. Please share a suitable time slot.",
-    },
-    {
-      label: "Clarify details",
-      body: "Could you please confirm the scope, timeline, delivery mode, and commercials for this engagement?",
-    },
+    { label: "Follow up", body: "Following up on this conversation. Please let me know the next step when convenient." },
+    { label: "Share availability", body: "I am available for a quick discussion. Please share a suitable time slot." },
+    { label: "Clarify details", body: "Could you please confirm the scope, timeline, delivery mode, and commercials for this engagement?" },
   ];
 }
 
@@ -249,11 +198,8 @@ function ConversationPanel({
   }, [applicationId]);
 
   useEffect(() => {
-    if (body.trim()) {
-      localStorage.setItem(draftKey(applicationId), body);
-    } else {
-      localStorage.removeItem(draftKey(applicationId));
-    }
+    if (body.trim()) localStorage.setItem(draftKey(applicationId), body);
+    else localStorage.removeItem(draftKey(applicationId));
     onDraftChange();
   }, [applicationId, body, onDraftChange]);
 
@@ -315,12 +261,7 @@ function ConversationPanel({
               const isMine = msg.senderUserId === currentUserId;
               return (
                 <div key={msg.id} className={cn("flex flex-col gap-1", isMine ? "items-end" : "items-start")}>
-                  <div
-                    className={cn(
-                      "max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
-                      isMine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground",
-                    )}
-                  >
+                  <div className={cn("max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm", isMine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground")}>
                     {msg.body}
                   </div>
                   <span className="text-[10px] text-muted-foreground">
@@ -340,25 +281,13 @@ function ConversationPanel({
         )}
       </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          sendMessage();
-        }}
-        className="border-t bg-card/50 px-4 py-3 md:px-5"
-      >
+      <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="border-t bg-card/50 px-4 py-3 md:px-5">
         <div className="mb-3 flex items-start gap-2 overflow-x-auto pb-1">
           <span className="mt-1 inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5" /> Quick replies
           </span>
           {quickReplies.map((reply) => (
-            <button
-              key={reply.label}
-              type="button"
-              title={reply.body}
-              onClick={() => setBody(reply.body)}
-              className="shrink-0 rounded-full border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-            >
+            <button key={reply.label} type="button" title={reply.body} onClick={() => setBody(reply.body)} className="shrink-0 rounded-full border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary">
               {reply.label}
             </button>
           ))}
@@ -394,6 +323,7 @@ export default function Messages() {
   const { data: currentUser } = useGetCurrentUser();
   const queryClient = useQueryClient();
   const [draftRevision, setDraftRevision] = useState(0);
+  const [priorityIds, setPriorityIds] = useState<string[]>(() => readPriorityIds());
   useUnreadMessages();
 
   const { data, isLoading } = useListMessageThreads({
@@ -404,20 +334,23 @@ export default function Messages() {
     },
   });
 
-  const threads = Array.isArray(data) ? data : [];
+  const threads = Array.isArray(data) ? (data as MessageThread[]) : [];
   const [activeApplicationId, setActiveApplicationId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>("all");
 
   useEffect(() => {
-    if (!activeApplicationId && threads.length > 0) {
-      setActiveApplicationId(threads[0].applicationId);
-    }
+    if (!activeApplicationId && threads.length > 0) setActiveApplicationId(threads[0].applicationId);
   }, [activeApplicationId, threads]);
 
+  const prioritySet = useMemo(() => new Set(priorityIds), [priorityIds]);
   const needsReplyCount = useMemo(
     () => threads.filter((t) => !!t.lastMessageBody && t.lastMessageSenderUserId !== currentUser?.id).length,
     [threads, currentUser?.id],
+  );
+  const priorityCount = useMemo(
+    () => threads.filter((t) => prioritySet.has(t.applicationId)).length,
+    [threads, prioritySet],
   );
 
   const hasDraft = (applicationId: string) => {
@@ -425,14 +358,22 @@ export default function Messages() {
     return getSavedDraft(applicationId).trim().length > 0;
   };
 
+  const togglePriority = (applicationId: string) => {
+    setPriorityIds((current) => {
+      const next = current.includes(applicationId)
+        ? current.filter((id) => id !== applicationId)
+        : [applicationId, ...current];
+      writePriorityIds(next);
+      return next;
+    });
+  };
+
   const filtered = useMemo(() => {
     let list = threads;
-    if (tab === "needsReply") {
-      list = list.filter((t) => !!t.lastMessageBody && t.lastMessageSenderUserId !== currentUser?.id);
-    }
-    if (tab === "active") {
-      list = list.filter((t) => t.status === "shortlisted" || t.status === "hired");
-    }
+    if (tab === "priority") list = list.filter((t) => prioritySet.has(t.applicationId));
+    if (tab === "needsReply") list = list.filter((t) => !!t.lastMessageBody && t.lastMessageSenderUserId !== currentUser?.id);
+    if (tab === "active") list = list.filter((t) => t.status === "shortlisted" || t.status === "hired");
+
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter(
@@ -441,7 +382,7 @@ export default function Messages() {
         t.requirementTitle.toLowerCase().includes(q) ||
         (t.lastMessageBody ?? "").toLowerCase().includes(q),
     );
-  }, [threads, search, tab, currentUser?.id]);
+  }, [threads, search, tab, currentUser?.id, prioritySet]);
 
   const activeThread = threads.find((t) => t.applicationId === activeApplicationId) ?? filtered[0];
   const isVendor = currentUser?.role === "vendor" || auth?.role === "vendor";
@@ -461,7 +402,7 @@ export default function Messages() {
     <div className="min-h-[calc(100vh-64px)] bg-muted/30">
       <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-7xl flex-col px-0 md:px-4 md:py-6">
         <div className="flex min-h-[calc(100vh-64px)] overflow-hidden border bg-background shadow-sm md:min-h-[calc(100vh-112px)] md:rounded-2xl">
-          <aside className={cn("flex w-full flex-col border-r bg-card md:w-[380px] md:max-w-[380px]", activeThread ? "hidden md:flex" : "flex")}> 
+          <aside className={cn("flex w-full flex-col border-r bg-card md:w-[400px] md:max-w-[400px]", activeThread ? "hidden md:flex" : "flex")}>
             <div className="border-b px-5 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -476,11 +417,10 @@ export default function Messages() {
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations…" className="pl-9" />
               </div>
-              <div className="mt-3 flex rounded-lg border bg-background p-1 text-sm">
+              <div className="mt-3 grid grid-cols-4 rounded-lg border bg-background p-1 text-sm">
                 <button type="button" onClick={() => setTab("all")} className={tabButtonClass("all")}>All</button>
-                <button type="button" onClick={() => setTab("needsReply")} className={tabButtonClass("needsReply")}>
-                  Reply{needsReplyCount > 0 ? ` (${needsReplyCount})` : ""}
-                </button>
+                <button type="button" onClick={() => setTab("priority")} className={tabButtonClass("priority")}>Priority{priorityCount > 0 ? ` (${priorityCount})` : ""}</button>
+                <button type="button" onClick={() => setTab("needsReply")} className={tabButtonClass("needsReply")}>Reply{needsReplyCount > 0 ? ` (${needsReplyCount})` : ""}</button>
                 <button type="button" onClick={() => setTab("active")} className={tabButtonClass("active")}>Active</button>
               </div>
             </div>
@@ -510,21 +450,19 @@ export default function Messages() {
                     const hasMessage = !!thread.lastMessageBody;
                     const needsReply = hasMessage && !isMine;
                     const draftExists = hasDraft(thread.applicationId);
+                    const isPriority = prioritySet.has(thread.applicationId);
                     const { label, cls } = statusLabel(thread.status);
                     const isActive = activeThread?.applicationId === thread.applicationId;
                     return (
-                      <button key={thread.applicationId} type="button" onClick={() => openThread(thread.applicationId)} className={cn("w-full rounded-xl border p-3 text-left transition-colors", isActive ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-accent/50", needsReply && "border-primary/30")}> 
-                        <div className="flex items-start gap-3">
+                      <div key={thread.applicationId} className={cn("rounded-xl border bg-background transition-colors hover:bg-accent/50", isActive && "border-primary/40 bg-primary/5", needsReply && "border-primary/30", isPriority && "ring-1 ring-amber-300/60")}> 
+                        <div className="flex items-start gap-3 p-3">
                           <TrainerAvatar name={thread.otherPartyName} avatarUrl={thread.otherPartyAvatarUrl} className="h-11 w-11 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-1 flex items-center gap-2">
+                          <button type="button" onClick={() => openThread(thread.applicationId)} className="min-w-0 flex-1 text-left">
+                            <div className="mb-1 flex flex-wrap items-center gap-1.5">
                               <span className="truncate text-sm font-semibold">{thread.otherPartyName}</span>
-                              {draftExists && (
-                                <span className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">Draft</span>
-                              )}
-                              {needsReply && (
-                                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">Needs reply</span>
-                              )}
+                              {isPriority && <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Priority</span>}
+                              {draftExists && <span className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">Draft</span>}
+                              {needsReply && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">Needs reply</span>}
                               <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", cls)}>{label}</span>
                             </div>
                             <p className="mb-0.5 truncate text-xs font-medium text-muted-foreground">{thread.requirementTitle}</p>
@@ -537,10 +475,21 @@ export default function Messages() {
                             ) : (
                               <p className="truncate text-xs italic text-muted-foreground/50">No messages yet — say hello.</p>
                             )}
+                          </button>
+                          <div className="flex shrink-0 flex-col items-end gap-2">
+                            {thread.lastMessageAt && <span className="whitespace-nowrap text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}</span>}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); togglePriority(thread.applicationId); }}
+                              className={cn("rounded-full p-1.5 transition-colors hover:bg-amber-100 hover:text-amber-700 dark:hover:bg-amber-900/30", isPriority ? "text-amber-500" : "text-muted-foreground")}
+                              aria-label={isPriority ? "Remove priority" : "Mark priority"}
+                              title={isPriority ? "Remove priority" : "Mark priority"}
+                            >
+                              <Star className={cn("h-4 w-4", isPriority && "fill-current")} />
+                            </button>
                           </div>
-                          {thread.lastMessageAt && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}</span>}
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
