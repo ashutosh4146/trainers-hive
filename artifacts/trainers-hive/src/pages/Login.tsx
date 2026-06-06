@@ -70,24 +70,7 @@ export default function Login() {
     return Object.keys(errs).length === 0;
   };
 
-  const completeSession = (name: string, emailForSession: string, role: UserRole, devMode = false) => {
-    if (devMode) {
-      signIn({
-        signedIn: true,
-        name,
-        email: emailForSession,
-        role,
-      });
-      toast({
-        title: "Dev sign-in active",
-        description: `Signed in locally as ${getRoleLabel(role)}.`,
-      });
-      setIsPasswordLoading(false);
-      setIsGoogleLoading(false);
-      navigate("/dashboard");
-      return;
-    }
-
+  const completeSession = (name: string, emailForSession: string, role: UserRole) => {
     switchUser.mutate(
       { data: { role: getRoleSessionKey(role), email: emailForSession, name } },
       {
@@ -174,12 +157,6 @@ export default function Login() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: normalizedEmail, password }),
       });
-
-      if (res.status === 404 && import.meta.env.DEV) {
-        const devName = normalizedEmail.split("@")[0] || "User";
-        completeSession(devName, normalizedEmail, detectedRole, true);
-        return;
-      }
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
@@ -346,7 +323,7 @@ export default function Login() {
                           <Input
                             id="password"
                             type={showPassword ? "text" : "password"}
-                            placeholder="Any password in local dev"
+                            placeholder="Your password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             autoComplete="current-password"
@@ -361,11 +338,6 @@ export default function Login() {
                           </button>
                         </div>
                         {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-                        {import.meta.env.DEV && (
-                          <p className="text-xs text-muted-foreground">
-                            Local dev shortcut: enter any password to test login if the password endpoint is unavailable.
-                          </p>
-                        )}
                       </div>
                       <Button type="submit" size="lg" className="w-full gap-2" disabled={isPasswordLoading}>
                         <KeyRound className="h-4 w-4" />
