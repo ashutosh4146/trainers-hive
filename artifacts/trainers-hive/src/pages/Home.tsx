@@ -119,7 +119,7 @@ function RecommendedForYou({ role, requirements, loading }: { role?: string; req
     ];
 
     return (
-      <Card className="sticky top-24 border-primary/10 bg-muted/20">
+      <Card className="self-start sticky top-24 border-primary/10 bg-muted/20">
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-primary" /> Recommended for you</CardTitle>
           <CardDescription>Vendor actions that move hiring forward.</CardDescription>
@@ -148,7 +148,7 @@ function RecommendedForYou({ role, requirements, loading }: { role?: string; req
   }
 
   return (
-    <Card className="sticky top-24 border-primary/10 bg-muted/20">
+    <Card className="self-start sticky top-24 border-primary/10 bg-muted/20">
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-primary" /> Recommended for you</CardTitle>
         <CardDescription>Open requirements that may be worth checking first.</CardDescription>
@@ -276,7 +276,7 @@ export default function Home() {
       )}
 
       {showDataSections && (
-        <div className="container mx-auto px-4 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="container mx-auto px-4 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
           {(showFeaturedTrainers || showRecentRequirements) && (
             <div className="lg:col-span-2 space-y-20">
               {showFeaturedTrainers && (
@@ -397,7 +397,7 @@ export default function Home() {
           {showRecommendations && <RecommendedForYou role={auth?.role} requirements={recentRequirementsList} loading={requirementsLoading} />}
           {showActivityFeed && (
             <div className={!showFeaturedTrainers && !showRecentRequirements ? "lg:col-span-3" : undefined}>
-              <Card className="sticky top-24 bg-muted/20 border-border">
+              <Card className="self-start sticky top-24 bg-muted/20 border-border">
                 <CardHeader className="pb-4"><CardTitle className="text-lg flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> Live Platform Activity</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
