@@ -22,7 +22,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "active";
+type Tab = "all" | "needsReply" | "active";
 type QuickReply = { label: string; body: string };
 
 function statusLabel(status: string) {
@@ -386,8 +386,16 @@ export default function Messages() {
     }
   }, [activeApplicationId, threads]);
 
+  const needsReplyCount = useMemo(
+    () => threads.filter((t) => !!t.lastMessageBody && t.lastMessageSenderUserId !== currentUser?.id).length,
+    [threads, currentUser?.id],
+  );
+
   const filtered = useMemo(() => {
     let list = threads;
+    if (tab === "needsReply") {
+      list = list.filter((t) => !!t.lastMessageBody && t.lastMessageSenderUserId !== currentUser?.id);
+    }
     if (tab === "active") {
       list = list.filter((t) => t.status === "shortlisted" || t.status === "hired");
     }
@@ -399,7 +407,7 @@ export default function Messages() {
         t.requirementTitle.toLowerCase().includes(q) ||
         (t.lastMessageBody ?? "").toLowerCase().includes(q),
     );
-  }, [threads, search, tab]);
+  }, [threads, search, tab, currentUser?.id]);
 
   const activeThread = threads.find((t) => t.applicationId === activeApplicationId) ?? filtered[0];
   const isVendor = currentUser?.role === "vendor" || auth?.role === "vendor";
@@ -409,6 +417,11 @@ export default function Messages() {
     if (auth?.email) markRead(auth.email);
     queryClient.invalidateQueries({ queryKey: getListMessageThreadsQueryKey() });
   };
+
+  const tabButtonClass = (value: Tab) => cn(
+    "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+    tab === value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+  );
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-muted/30">
@@ -430,8 +443,11 @@ export default function Messages() {
                 <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations…" className="pl-9" />
               </div>
               <div className="mt-3 flex rounded-lg border bg-background p-1 text-sm">
-                <button type="button" onClick={() => setTab("all")} className={cn("flex-1 rounded-md px-3 py-1.5 font-medium transition-colors", tab === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>All</button>
-                <button type="button" onClick={() => setTab("active")} className={cn("flex-1 rounded-md px-3 py-1.5 font-medium transition-colors", tab === "active" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Active</button>
+                <button type="button" onClick={() => setTab("all")} className={tabButtonClass("all")}>All</button>
+                <button type="button" onClick={() => setTab("needsReply")} className={tabButtonClass("needsReply")}>
+                  Reply{needsReplyCount > 0 ? ` (${needsReplyCount})` : ""}
+                </button>
+                <button type="button" onClick={() => setTab("active")} className={tabButtonClass("active")}>Active</button>
               </div>
             </div>
 
@@ -458,20 +474,26 @@ export default function Messages() {
                   {filtered.map((thread) => {
                     const isMine = thread.lastMessageSenderUserId === currentUser?.id;
                     const hasMessage = !!thread.lastMessageBody;
+                    const needsReply = hasMessage && !isMine;
                     const { label, cls } = statusLabel(thread.status);
                     const isActive = activeThread?.applicationId === thread.applicationId;
                     return (
-                      <button key={thread.applicationId} type="button" onClick={() => openThread(thread.applicationId)} className={cn("w-full rounded-xl border p-3 text-left transition-colors", isActive ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-accent/50")}> 
+                      <button key={thread.applicationId} type="button" onClick={() => openThread(thread.applicationId)} className={cn("w-full rounded-xl border p-3 text-left transition-colors", isActive ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-accent/50", needsReply && "border-primary/30")}> 
                         <div className="flex items-start gap-3">
                           <TrainerAvatar name={thread.otherPartyName} avatarUrl={thread.otherPartyAvatarUrl} className="h-11 w-11 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <div className="mb-1 flex items-center gap-2">
                               <span className="truncate text-sm font-semibold">{thread.otherPartyName}</span>
+                              {needsReply && (
+                                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">Needs reply</span>
+                              )}
                               <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", cls)}>{label}</span>
                             </div>
                             <p className="mb-0.5 truncate text-xs font-medium text-muted-foreground">{thread.requirementTitle}</p>
                             {hasMessage ? (
-                              <p className="truncate text-xs text-muted-foreground">{isMine ? <span className="text-foreground/50">You: </span> : null}{thread.lastMessageBody}</p>
+                              <p className={cn("truncate text-xs", needsReply ? "font-medium text-foreground" : "text-muted-foreground")}>
+                                {isMine ? <span className="text-foreground/50">You: </span> : null}{thread.lastMessageBody}
+                              </p>
                             ) : (
                               <p className="truncate text-xs italic text-muted-foreground/50">No messages yet — say hello.</p>
                             )}
