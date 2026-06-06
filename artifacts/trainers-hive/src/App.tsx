@@ -67,7 +67,7 @@ const queryClient = new QueryClient({
         return failureCount < 3;
       },
     },
-  },
+  }
 });
 
 const Home = React.lazy(() => import("./pages/Home"));
@@ -89,6 +89,7 @@ const Support = React.lazy(() => import("./pages/Support"));
 const AboutUs = React.lazy(() => import("./pages/AboutUs"));
 const TermsAndConditions = React.lazy(() => import("./pages/TermsAndConditions"));
 const Messages = React.lazy(() => import("./pages/Messages"));
+const Notifications = React.lazy(() => import("./pages/Notifications"));
 const SkillsDemand = React.lazy(() => import("./pages/SkillsDemand"));
 const InquiryDetail = React.lazy(() => import("./pages/InquiryDetail"));
 const MyAgreements = React.lazy(() => import("./pages/MyAgreements"));
@@ -178,6 +179,9 @@ function Router() {
               <Route path="/messages">
                 <PrivateRoute component={Messages} />
               </Route>
+              <Route path="/notifications">
+                <PrivateRoute component={Notifications} />
+              </Route>
               <Route path="/inquiries/:id">
                 <PrivateRoute component={InquiryDetail} />
               </Route>
@@ -247,7 +251,7 @@ function App() {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}> 
             <Router />
           </WouterRouter>
           <Toaster />
