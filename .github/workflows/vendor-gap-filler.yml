@@ -1,0 +1,36 @@
+name: Vendor gap filler
+
+on:
+  push:
+    branches:
+      - dashboard-applications-alignment
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dashboard-applications-alignment
+      - name: Patch vendor dashboard file
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('artifacts/trainers-hive/src/components/VendorDashboardPolish.tsx')
+          text = path.read_text()
+          needle = 'href="/agreements" icon={<FileSignature className="h-5 w-5" />} cta="View agreements" /></CardContent></Card></div>'
+          insert = 'href="/agreements" icon={<FileSignature className="h-5 w-5" />} cta="View agreements" /></CardContent></Card><Card className="border-primary/10"><CardHeader><CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" /> Payment snapshot</CardTitle><CardDescription>Quick payment status before the full payment section.</CardDescription></CardHeader><CardContent><div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-xl border bg-primary/5 p-3"><p className="truncate text-sm font-bold">{money(totalCommitted)}</p><p className="mt-1 text-[10px] text-muted-foreground">committed</p></div><div className="rounded-xl border p-3"><p className="truncate text-sm font-bold text-emerald-700">{money(totalPaid)}</p><p className="mt-1 text-[10px] text-muted-foreground">paid</p></div><div className="rounded-xl border p-3"><p className="truncate text-sm font-bold text-amber-700">{money(totalOutstanding)}</p><p className="mt-1 text-[10px] text-muted-foreground">due</p></div></div></CardContent></Card></div>'
+          if 'Payment snapshot' not in text and needle in text:
+              text = text.replace(needle, insert)
+          path.write_text(text)
+          Path('.github/workflows/vendor-gap-filler.yml').unlink(missing_ok=True)
+          PY
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/components/VendorDashboardPolish.tsx .github/workflows/vendor-gap-filler.yml
+          git diff --cached --quiet || (git commit -m "Fill vendor dashboard right column gap" && git push origin HEAD:dashboard-applications-alignment)
