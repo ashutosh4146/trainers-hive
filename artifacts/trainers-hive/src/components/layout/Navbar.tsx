@@ -66,6 +66,7 @@ export function Navbar() {
   const { resolvedTheme, setTheme } = useTheme();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
 
   const recentNotifications = notifications.slice(0, 5);
   const showNotifications = isSignedIn && auth?.role !== "admin";
@@ -79,11 +80,17 @@ export function Navbar() {
   };
 
   const openNotification = async (notification: AppNotification) => {
+    setNotificationsOpen(false);
     if (!notification.readAt) {
       try { await markRead(notification); } catch { /* best effort */ }
     }
     if (notification.href) navigate(notification.href);
     else navigate("/notifications");
+  };
+
+  const openAllNotifications = () => {
+    setNotificationsOpen(false);
+    navigate("/notifications");
   };
 
   const displayName = user?.name || auth?.name || "User";
@@ -158,7 +165,7 @@ export function Navbar() {
           </button>
 
           {showNotifications && (
-            <DropdownMenu>
+            <DropdownMenu open={notificationsOpen} onOpenChange={setNotificationsOpen}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
@@ -173,13 +180,13 @@ export function Navbar() {
                   )}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0" sideOffset={8}>
-                <div className="flex items-center justify-between px-4 py-3 border-b">
-                  <div>
+              <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden p-0" sideOffset={8}>
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold">Notifications</p>
-                    <p className="text-[11px] text-muted-foreground">System and marketplace updates</p>
+                    <p className="truncate text-[11px] text-muted-foreground">System and marketplace updates</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-3">
                     {notificationUnreadCount > 0 && (
                       <button
                         type="button"
@@ -190,7 +197,7 @@ export function Navbar() {
                         Mark all read
                       </button>
                     )}
-                    <button type="button" className="text-xs text-primary hover:underline" onClick={() => navigate("/notifications")}>View all</button>
+                    <button type="button" className="text-xs text-primary hover:underline" onClick={openAllNotifications}>View all</button>
                   </div>
                 </div>
 
@@ -212,10 +219,13 @@ export function Navbar() {
                       {recentNotifications.map((notification) => (
                         <button key={notification.id} type="button" onClick={() => openNotification(notification)} className="flex w-full gap-3 px-4 py-3 text-left hover:bg-accent/50 transition-colors">
                           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><NotificationIcon type={notification.type} /></span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-2"><span className="truncate text-sm font-medium">{notification.title || getNotificationLabel(notification.type)}</span>{!notification.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}</span>
-                            {notification.body && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{notification.body}</span>}
-                            <span className="mt-1 block text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</span>
+                          <span className="min-w-0 flex-1 overflow-hidden">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium">{notification.title || getNotificationLabel(notification.type)}</span>
+                              {!notification.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                            </span>
+                            {notification.body && <span className="mt-0.5 block max-w-full truncate text-xs text-muted-foreground">{notification.body}</span>}
+                            <span className="mt-1 block truncate text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</span>
                           </span>
                         </button>
                       ))}
