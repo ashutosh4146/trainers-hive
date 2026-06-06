@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { markRead, useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { useAuth } from "@/hooks/useAuth";
 import { TrainerAvatar } from "@/components/TrainerAvatar";
+import { ApplicationPipeline } from "@/components/ApplicationPipeline";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ type Tab = "all" | "active";
 function statusLabel(status: string) {
   if (status === "hired") return { label: "Hired", cls: "bg-primary/10 text-primary" };
   if (status === "shortlisted") return { label: "Shortlisted", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" };
-  if (status === "applied") return { label: "Applied", cls: "bg-muted text-muted-foreground" };
+  if (status === "applied" || status === "submitted") return { label: "Applied", cls: "bg-muted text-muted-foreground" };
   return { label: status || "Open", cls: "bg-muted text-muted-foreground" };
 }
 
@@ -61,7 +62,7 @@ function ConversationPanel({
   applicationId,
   currentUserId,
   title,
-  subtitle,
+  status,
   otherPartyName,
   otherPartyAvatarUrl,
   onBack,
@@ -69,7 +70,7 @@ function ConversationPanel({
   applicationId: string;
   currentUserId: string;
   title: string;
-  subtitle: string;
+  status: string;
   otherPartyName: string;
   otherPartyAvatarUrl?: string | null;
   onBack: () => void;
@@ -113,11 +114,7 @@ function ConversationPanel({
           queryClient.invalidateQueries({ queryKey: getListMessageThreadsQueryKey() });
         },
         onError: () => {
-          toast({
-            title: "Message not sent",
-            description: "Please try again.",
-            variant: "destructive",
-          });
+          toast({ title: "Message not sent", description: "Please try again.", variant: "destructive" });
         },
       },
     );
@@ -125,15 +122,18 @@ function ConversationPanel({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
-      <header className="flex items-center gap-3 border-b px-4 py-3 md:px-5">
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <TrainerAvatar name={otherPartyName} avatarUrl={otherPartyAvatarUrl ?? undefined} className="h-10 w-10" />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold">{otherPartyName}</h2>
-          <p className="truncate text-xs text-muted-foreground">{title}</p>
+      <header className="border-b px-4 py-3 md:px-5">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <TrainerAvatar name={otherPartyName} avatarUrl={otherPartyAvatarUrl ?? undefined} className="h-10 w-10" />
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-semibold">{otherPartyName}</h2>
+            <p className="truncate text-xs text-muted-foreground">{title}</p>
+          </div>
         </div>
+        <ApplicationPipeline status={status} compact className="mt-3" />
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
@@ -152,9 +152,7 @@ function ConversationPanel({
                   <div
                     className={cn(
                       "max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
-                      isMine
-                        ? "rounded-br-sm bg-primary text-primary-foreground"
-                        : "rounded-bl-sm bg-muted text-foreground",
+                      isMine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground",
                     )}
                   >
                     {msg.body}
@@ -260,12 +258,7 @@ export default function Messages() {
     <div className="min-h-[calc(100vh-64px)] bg-muted/30">
       <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-7xl flex-col px-0 md:px-4 md:py-6">
         <div className="flex min-h-[calc(100vh-64px)] overflow-hidden border bg-background shadow-sm md:min-h-[calc(100vh-112px)] md:rounded-2xl">
-          <aside
-            className={cn(
-              "flex w-full flex-col border-r bg-card md:w-[380px] md:max-w-[380px]",
-              activeThread ? "hidden md:flex" : "flex",
-            )}
-          >
+          <aside className={cn("flex w-full flex-col border-r bg-card md:w-[380px] md:max-w-[380px]", activeThread ? "hidden md:flex" : "flex")}> 
             <div className="border-b px-5 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -278,34 +271,11 @@ export default function Messages() {
               </div>
               <div className="relative mt-4">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search conversations…"
-                  className="pl-9"
-                />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations…" className="pl-9" />
               </div>
               <div className="mt-3 flex rounded-lg border bg-background p-1 text-sm">
-                <button
-                  type="button"
-                  onClick={() => setTab("all")}
-                  className={cn(
-                    "flex-1 rounded-md px-3 py-1.5 font-medium transition-colors",
-                    tab === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("active")}
-                  className={cn(
-                    "flex-1 rounded-md px-3 py-1.5 font-medium transition-colors",
-                    tab === "active" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  Active
-                </button>
+                <button type="button" onClick={() => setTab("all")} className={cn("flex-1 rounded-md px-3 py-1.5 font-medium transition-colors", tab === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>All</button>
+                <button type="button" onClick={() => setTab("active")} className={cn("flex-1 rounded-md px-3 py-1.5 font-medium transition-colors", tab === "active" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Active</button>
               </div>
             </div>
 
@@ -315,11 +285,7 @@ export default function Messages() {
                   {[0, 1, 2, 3].map((i) => (
                     <div key={i} className="flex items-center gap-3 rounded-xl border bg-background p-3">
                       <Skeleton className="h-11 w-11 rounded-full" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-3.5 w-32" />
-                        <Skeleton className="h-3 w-48" />
-                        <Skeleton className="h-3 w-40" />
-                      </div>
+                      <div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-3 w-48" /><Skeleton className="h-3 w-40" /></div>
                     </div>
                   ))}
                 </div>
@@ -329,9 +295,7 @@ export default function Messages() {
                 <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
                   <Search className="mb-3 h-8 w-8 opacity-30" />
                   <p className="text-sm font-medium text-foreground">No matching conversations</p>
-                  <button type="button" onClick={() => { setSearch(""); setTab("all"); }} className="mt-2 text-sm text-primary hover:underline">
-                    Clear filters
-                  </button>
+                  <button type="button" onClick={() => { setSearch(""); setTab("all"); }} className="mt-2 text-sm text-primary hover:underline">Clear filters</button>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -340,17 +304,8 @@ export default function Messages() {
                     const hasMessage = !!thread.lastMessageBody;
                     const { label, cls } = statusLabel(thread.status);
                     const isActive = activeThread?.applicationId === thread.applicationId;
-
                     return (
-                      <button
-                        key={thread.applicationId}
-                        type="button"
-                        onClick={() => openThread(thread.applicationId)}
-                        className={cn(
-                          "w-full rounded-xl border p-3 text-left transition-colors",
-                          isActive ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-accent/50",
-                        )}
-                      >
+                      <button key={thread.applicationId} type="button" onClick={() => openThread(thread.applicationId)} className={cn("w-full rounded-xl border p-3 text-left transition-colors", isActive ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-accent/50")}> 
                         <div className="flex items-start gap-3">
                           <TrainerAvatar name={thread.otherPartyName} avatarUrl={thread.otherPartyAvatarUrl} className="h-11 w-11 shrink-0" />
                           <div className="min-w-0 flex-1">
@@ -360,19 +315,12 @@ export default function Messages() {
                             </div>
                             <p className="mb-0.5 truncate text-xs font-medium text-muted-foreground">{thread.requirementTitle}</p>
                             {hasMessage ? (
-                              <p className="truncate text-xs text-muted-foreground">
-                                {isMine ? <span className="text-foreground/50">You: </span> : null}
-                                {thread.lastMessageBody}
-                              </p>
+                              <p className="truncate text-xs text-muted-foreground">{isMine ? <span className="text-foreground/50">You: </span> : null}{thread.lastMessageBody}</p>
                             ) : (
                               <p className="truncate text-xs italic text-muted-foreground/50">No messages yet — say hello.</p>
                             )}
                           </div>
-                          {thread.lastMessageAt && (
-                            <span className="mt-0.5 shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">
-                              {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
-                            </span>
-                          )}
+                          {thread.lastMessageAt && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}</span>}
                         </div>
                       </button>
                     );
@@ -382,13 +330,13 @@ export default function Messages() {
             </div>
           </aside>
 
-          <main className={cn("min-w-0 flex-1", activeThread ? "flex" : "hidden md:flex")}>
+          <main className={cn("min-w-0 flex-1", activeThread ? "flex" : "hidden md:flex")}> 
             {activeThread && currentUser ? (
               <ConversationPanel
                 applicationId={activeThread.applicationId}
                 currentUserId={currentUser.id}
                 title={activeThread.requirementTitle}
-                subtitle={activeThread.status}
+                status={activeThread.status}
                 otherPartyName={activeThread.otherPartyName}
                 otherPartyAvatarUrl={activeThread.otherPartyAvatarUrl}
                 onBack={() => setActiveApplicationId(null)}
