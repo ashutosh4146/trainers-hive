@@ -71,6 +71,23 @@ export default function Login() {
   };
 
   const completeSession = (name: string, emailForSession: string, role: UserRole, devMode = false) => {
+    if (devMode) {
+      signIn({
+        signedIn: true,
+        name,
+        email: emailForSession,
+        role,
+      });
+      toast({
+        title: "Dev sign-in active",
+        description: `Signed in locally as ${getRoleLabel(role)}.`,
+      });
+      setIsPasswordLoading(false);
+      setIsGoogleLoading(false);
+      navigate("/dashboard");
+      return;
+    }
+
     switchUser.mutate(
       { data: { role: getRoleSessionKey(role), email: emailForSession, name } },
       {
@@ -83,7 +100,7 @@ export default function Login() {
             role,
           });
           toast({
-            title: devMode ? "Dev sign-in active" : "Welcome back!",
+            title: "Welcome back!",
             description: `Signed in as ${getRoleLabel(role)}.`,
           });
           navigate("/dashboard");
