@@ -13,6 +13,7 @@ import verificationRequestsRouter from "./verification-requests";
 import adminUsersRouter from "./admin-users";
 import adminExportsRouter from "./admin-exports";
 import engagementAgreementsRouter from "./engagement-agreements";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(verificationRequestsRouter);
 router.use(adminUsersRouter);
 router.use(adminExportsRouter);
 router.use(engagementAgreementsRouter);
+router.use(notificationsRouter);
 
 export default router;
