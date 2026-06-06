@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
-import { useGetCurrentUser, useListMyApplications } from "@workspace/api-client-react";
+import { customFetch, getListMyApplicationsQueryKey, useGetCurrentUser, useListMyApplications } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, LogOut, MessageSquare, Search, XCircle } from "lucide-react";
 import { ApplicationPipeline } from "@/components/ApplicationPipeline";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -15,6 +17,8 @@ const STATUS_ORDER = ["all", "submitted", "shortlisted", "hired", "completed", "
 const PAGE_SIZE = 5;
 
 type Filter = typeof STATUS_ORDER[number] | "attention" | "closed";
+
+type TrainerApplication = NonNullable<ReturnType<typeof useListMyApplications>["data"]>[number];
 
 function statusMeta(status: string) {
   switch (status) {
@@ -45,7 +49,7 @@ function nextStep(status: string) {
   return "Track progress and next steps here.";
 }
 
-function getCounts(apps: any[]) {
+function getCounts(apps: TrainerApplication[]) {
   return {
     submitted: apps.filter((app) => app.status === "submitted").length,
     shortlisted: apps.filter((app) => app.status === "shortlisted").length,
@@ -60,7 +64,7 @@ function canWithdrawApplication(status: string) {
   return status === "submitted" || status === "shortlisted";
 }
 
-function matchesFilter(app: any, filter: Filter) {
+function matchesFilter(app: TrainerApplication, filter: Filter) {
   if (filter === "all") return true;
   if (filter === "attention") return app.status === "shortlisted" || app.status === "hired";
   if (filter === "closed") return app.status === "completed" || app.status === "rejected" || app.status === "withdrawn";
@@ -72,9 +76,12 @@ export function TrainerApplicationsSection() {
   const { data: applications, isLoading } = useListMyApplications({
     query: { enabled: user?.role === "trainer" },
   });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [filter, setFilter] = React.useState<Filter>("all");
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [withdrawingId, setWithdrawingId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setPage(1);
@@ -103,6 +110,32 @@ export function TrainerApplicationsSection() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const handleWithdraw = async (app: TrainerApplication) => {
+    if (!canWithdrawApplication(app.status) || withdrawingId) return;
+
+    const reason = window.prompt(
+      `Withdraw your application for ${app.requirement.title}?\n\nOptional: add a short reason for the vendor.`,
+      "",
+    );
+    if (reason === null) return;
+
+    setWithdrawingId(app.id);
+    try {
+      await customFetch(`/api/applications/${app.id}/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() || undefined }),
+      });
+      toast({ title: "Application withdrawn", description: "The vendor has been notified." });
+      queryClient.invalidateQueries({ queryKey: getListMyApplicationsQueryKey() });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : "Please try again.";
+      toast({ title: "Could not withdraw application", description, variant: "destructive" });
+    } finally {
+      setWithdrawingId(null);
+    }
+  };
 
   return (
     <section id="trainer-applications-enhanced" className="pt-6 pb-8">
@@ -217,6 +250,7 @@ export function TrainerApplicationsSection() {
                 const inactive = app.status === "rejected" || app.status === "withdrawn";
                 const canMessage = app.status === "shortlisted" || app.status === "hired";
                 const canWithdraw = canWithdrawApplication(app.status);
+                const isWithdrawing = withdrawingId === app.id;
                 return (
                   <div
                     key={app.id}
@@ -267,8 +301,14 @@ export function TrainerApplicationsSection() {
                           </Button>
                         )}
                         {canWithdraw && (
-                          <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
-                            <LogOut className="h-3.5 w-3.5" /> Withdraw application
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                            disabled={!!withdrawingId}
+                            onClick={() => handleWithdraw(app)}
+                          >
+                            <LogOut className="h-3.5 w-3.5" /> {isWithdrawing ? "Withdrawing..." : "Withdraw application"}
                           </Button>
                         )}
                         <Button asChild size="sm">
