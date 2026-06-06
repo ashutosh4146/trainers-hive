@@ -16,10 +16,34 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Activity, LayoutDashboard, Settings, User as UserIcon, LogOut, Plus, Sun, Moon, FileSignature, Users, Building, Briefcase } from "lucide-react";
+import { Activity, LayoutDashboard, Settings, User as UserIcon, LogOut, Plus, Sun, Moon, FileSignature, Users, Building, Briefcase, Bell, CheckCircle2, BadgeCheck, CreditCard, UserCheck, ClipboardCheck, InboxIcon } from "lucide-react";
 import { useAuth, getRoleLabel, type UserRole } from "@/hooks/useAuth";
 import { signOutFirebase } from "@/lib/firebase";
+import { useNotifications, getNotificationLabel, type AppNotification } from "@/hooks/useNotifications";
+import { formatDistanceToNow } from "date-fns";
+
+function NotificationIcon({ type }: { type: AppNotification["type"] }) {
+  const className = "h-4 w-4";
+  switch (type) {
+    case "trainer_shortlisted":
+      return <UserCheck className={className} />;
+    case "requirement_approved":
+    case "requirement_rejected":
+      return <ClipboardCheck className={className} />;
+    case "agreement_signed":
+      return <FileSignature className={className} />;
+    case "payment_released":
+      return <CreditCard className={className} />;
+    case "profile_verification_update":
+      return <BadgeCheck className={className} />;
+    case "new_application_received":
+      return <InboxIcon className={className} />;
+    default:
+      return <CheckCircle2 className={className} />;
+  }
+}
 
 export function Navbar() {
   const { auth, signOut, isSignedIn } = useAuth();
@@ -29,9 +53,13 @@ export function Navbar() {
       queryKey: getGetCurrentUserQueryKey(),
     },
   });
+  const { notifications, unreadCount: notificationUnreadCount, isLoading: notificationsLoading } = useNotifications();
   const { resolvedTheme, setTheme } = useTheme();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+
+  const recentNotifications = notifications.slice(0, 5);
+  const showNotifications = isSignedIn && auth?.role !== "admin";
 
   const handleSignOut = async () => {
     localStorage.removeItem("th_session_token");
@@ -39,6 +67,11 @@ export function Navbar() {
     queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
     navigate("/");
     try { await signOutFirebase(); } catch { /* ignore */ }
+  };
+
+  const openNotification = (notification: AppNotification) => {
+    if (notification.href) navigate(notification.href);
+    else navigate("/notifications");
   };
 
   const displayName = user?.name || auth?.name || "User";
@@ -111,6 +144,87 @@ export function Navbar() {
               : <Moon className="h-5 w-5 text-muted-foreground" />
             }
           </button>
+
+          {showNotifications && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="relative p-2 rounded-full hover:bg-accent transition-colors"
+                  aria-label={notificationUnreadCount > 0 ? `${notificationUnreadCount} unread notifications` : "Notifications"}
+                >
+                  <Bell className="h-5 w-5 text-muted-foreground" />
+                  {notificationUnreadCount > 0 && (
+                    <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white leading-none">
+                      {notificationUnreadCount > 9 ? "9+" : notificationUnreadCount}
+                    </span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-84 max-w-[calc(100vw-2rem)] p-0" sideOffset={8}>
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <div>
+                    <p className="text-sm font-semibold">Notifications</p>
+                    <p className="text-[11px] text-muted-foreground">System and marketplace updates</p>
+                  </div>
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => navigate("/notifications")}>
+                    View all
+                  </button>
+                </div>
+
+                {notificationsLoading ? (
+                  <div className="p-4 space-y-3">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="flex gap-3">
+                        <div className="h-8 w-8 rounded-full bg-muted" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-32 rounded bg-muted" />
+                          <div className="h-3 w-48 rounded bg-muted" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : recentNotifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                    <Bell className="h-8 w-8 text-muted-foreground opacity-30" />
+                    <p className="mt-2 text-sm text-muted-foreground">No notifications yet</p>
+                    <p className="mt-1 text-xs text-muted-foreground/70">
+                      Updates like shortlists, approvals, agreements, payments, and applications will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <ScrollArea className="max-h-80">
+                    <div className="py-1">
+                      {recentNotifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          type="button"
+                          onClick={() => openNotification(notification)}
+                          className="flex w-full gap-3 px-4 py-3 text-left hover:bg-accent/50 transition-colors"
+                        >
+                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <NotificationIcon type={notification.type} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium">{notification.title || getNotificationLabel(notification.type)}</span>
+                              {!notification.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                            </span>
+                            {notification.body && (
+                              <span className="mt-0.5 block truncate text-xs text-muted-foreground">{notification.body}</span>
+                            )}
+                            <span className="mt-1 block text-[10px] text-muted-foreground">
+                              {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {!isSignedIn ? (
             <div className="flex items-center gap-2 ml-2">
