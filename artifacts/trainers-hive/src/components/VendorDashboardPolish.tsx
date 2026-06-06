@@ -346,7 +346,7 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
   React.useEffect(() => setPage(1), [filter, search]);
   React.useEffect(() => setPaymentPage(1), [signedAgreements.length]);
 
-  const pageSize = 5;
+  const pageSize = 8;
   const totalPages = Math.max(1, Math.ceil(filteredReqs.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageItems = filteredReqs.slice((safePage - 1) * pageSize, safePage * pageSize);
