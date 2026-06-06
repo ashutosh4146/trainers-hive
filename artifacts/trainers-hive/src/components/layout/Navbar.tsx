@@ -55,7 +55,14 @@ export function Navbar() {
       queryKey: getGetCurrentUserQueryKey(),
     },
   });
-  const { notifications, unreadCount: notificationUnreadCount, isLoading: notificationsLoading } = useNotifications();
+  const {
+    notifications,
+    unreadCount: notificationUnreadCount,
+    isLoading: notificationsLoading,
+    markRead,
+    markAllRead,
+    isMarkingAllRead,
+  } = useNotifications();
   const { resolvedTheme, setTheme } = useTheme();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -71,7 +78,10 @@ export function Navbar() {
     try { await signOutFirebase(); } catch { /* ignore */ }
   };
 
-  const openNotification = (notification: AppNotification) => {
+  const openNotification = async (notification: AppNotification) => {
+    if (!notification.readAt) {
+      try { await markRead(notification); } catch { /* best effort */ }
+    }
     if (notification.href) navigate(notification.href);
     else navigate("/notifications");
   };
@@ -169,7 +179,19 @@ export function Navbar() {
                     <p className="text-sm font-semibold">Notifications</p>
                     <p className="text-[11px] text-muted-foreground">System and marketplace updates</p>
                   </div>
-                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => navigate("/notifications")}>View all</button>
+                  <div className="flex items-center gap-3">
+                    {notificationUnreadCount > 0 && (
+                      <button
+                        type="button"
+                        disabled={isMarkingAllRead}
+                        className="text-xs text-muted-foreground hover:text-primary disabled:opacity-50"
+                        onClick={() => markAllRead().catch(() => {})}
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                    <button type="button" className="text-xs text-primary hover:underline" onClick={() => navigate("/notifications")}>View all</button>
+                  </div>
                 </div>
 
                 {notificationsLoading ? (
