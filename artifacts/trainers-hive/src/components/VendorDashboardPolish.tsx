@@ -7,7 +7,9 @@ import {
   useGetVendorStats,
   useListMyAgreements,
   useListRequirements,
+  useRecordAgreementPayment,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Area,
   AreaChart,
@@ -40,11 +42,23 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 type RequirementFilter = "all" | "open" | "closed" | "withApplicants" | "needsAction";
+
+type PaymentTarget = {
+  id: string;
+  counterpartyName: string;
+  requirementTitle: string;
+  agreedFee?: number | null;
+  paidAmount?: number | null;
+};
 
 function money(value: number | null | undefined) {
   return `₹${Number(value ?? 0).toLocaleString("en-IN")}`;
@@ -91,33 +105,37 @@ function KpiCard({ title, value, icon, description, href, emphasis }: {
   return href ? <Link href={href}>{body}</Link> : body;
 }
 
-function ActionCard({ title, description, href, icon, cta, tone = "default" }: {
+function ActionCard({ title, description, href, icon, cta, tone = "default", onClick }: {
   title: string;
   description: string;
-  href: string;
+  href?: string;
   icon: React.ReactNode;
   cta: string;
   tone?: "default" | "primary";
+  onClick?: () => void;
 }) {
-  return (
-    <Link href={href}>
-      <div className={cn(
-        "rounded-xl border p-4 transition-all hover:border-primary/40 hover:shadow-sm",
-        tone === "primary" ? "bg-primary/5" : "bg-background",
-      )}>
-        <div className="flex gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">{icon}</span>
-          <div className="min-w-0">
-            <p className="font-semibold leading-tight">{title}</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
-            <p className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary">
-              {cta} <ArrowRight className="h-3.5 w-3.5" />
-            </p>
-          </div>
+  const body = (
+    <div className={cn(
+      "rounded-xl border p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm",
+      tone === "primary" ? "bg-primary/5" : "bg-background",
+    )}>
+      <div className="flex gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">{icon}</span>
+        <div className="min-w-0">
+          <p className="font-semibold leading-tight">{title}</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+          <p className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary">
+            {cta} <ArrowRight className="h-3.5 w-3.5" />
+          </p>
         </div>
       </div>
-    </Link>
+    </div>
   );
+
+  if (onClick) {
+    return <button type="button" className="block w-full" onClick={onClick}>{body}</button>;
+  }
+  return <Link href={href ?? "#"}>{body}</Link>;
 }
 
 function RequirementCard({ req }: { req: any }) {
@@ -185,7 +203,83 @@ function MiniPagination({ page, totalPages, onPage }: { page: number; totalPages
   );
 }
 
+function RecordPaymentDialog({ target, open, onOpenChange, onSuccess }: {
+  target: PaymentTarget | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const mutation = useRecordAgreementPayment();
+  const [amount, setAmount] = React.useState("");
+  const [paidAt, setPaidAt] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [note, setNote] = React.useState("");
+  const outstanding = target ? Math.max(0, Number(target.agreedFee ?? 0) - Number(target.paidAmount ?? 0)) : 0;
+
+  React.useEffect(() => {
+    if (open) {
+      setAmount(outstanding > 0 ? String(outstanding) : "");
+      setPaidAt(new Date().toISOString().slice(0, 10));
+      setNote("");
+    }
+  }, [open, outstanding]);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!target) return;
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      toast({ title: "Enter a valid payment amount", variant: "destructive" });
+      return;
+    }
+    try {
+      await mutation.mutateAsync({
+        agreementId: target.id,
+        data: { amount: parsed, paidAt, note: note.trim() || null },
+      });
+      toast({ title: "Payment recorded" });
+      onSuccess();
+      onOpenChange(false);
+    } catch {
+      toast({ title: "Could not record payment", description: "Please try again.", variant: "destructive" });
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record payment</DialogTitle>
+          <DialogDescription>
+            {target ? `For ${target.counterpartyName} · ${target.requirementTitle}` : "Record a payment against this agreement."}
+            {target && <span className="mt-1 block">Outstanding: <strong>{money(outstanding)}</strong></span>}
+          </DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-1.5">
+            <Label htmlFor="vendor-payment-amount">Amount</Label>
+            <Input id="vendor-payment-amount" type="number" min={1} value={amount} onChange={(event) => setAmount(event.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vendor-payment-date">Payment date</Label>
+            <Input id="vendor-payment-date" type="date" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vendor-payment-note">Note optional</Label>
+            <Textarea id="vendor-payment-note" rows={2} value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. First instalment via NEFT" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={mutation.isPending} onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Saving…" : "Record payment"}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
+  const queryClient = useQueryClient();
   const { data: vendor } = useGetVendor(vendorId);
   const { data: stats, isLoading: statsLoading } = useGetVendorStats();
   const { data: hiringStats, isLoading: hiringLoading } = useGetVendorHiringStats(vendorId);
@@ -197,12 +291,18 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
   const [filter, setFilter] = React.useState<RequirementFilter>("all");
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [paymentTarget, setPaymentTarget] = React.useState<PaymentTarget | null>(null);
 
   const reqs = requirements ?? [];
   const signedAgreements = (agreements ?? []).filter((agreement: any) => agreement.status === "accepted");
   const totalCommitted = signedAgreements.reduce((sum: number, agreement: any) => sum + Number(agreement.agreedFee ?? 0), 0);
   const totalPaid = signedAgreements.reduce((sum: number, agreement: any) => sum + Number(agreement.paidAmount ?? 0), 0);
   const totalOutstanding = Math.max(0, totalCommitted - totalPaid);
+
+  const scrollToPipeline = React.useCallback(() => {
+    setFilter("needsAction");
+    window.setTimeout(() => document.getElementById("vendor-requirements")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }, []);
 
   const counts = React.useMemo(() => ({
     all: reqs.length,
@@ -232,11 +332,7 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
   const applicantCount = reqs.reduce((sum: number, req: any) => sum + Number(req.applicationCount ?? 0), 0);
   const openCount = counts.open;
   const needsActionCount = counts.needsAction;
-  const averageTimeLabel = hiringLoading
-    ? "Loading"
-    : hiringStats?.hiredCount
-      ? `${hiringStats.avgDays} days`
-      : "No hires yet";
+  const averageTimeLabel = hiringLoading ? "Loading" : hiringStats?.hiredCount ? `${hiringStats.avgDays} days` : "No hires yet";
 
   if (statsLoading) {
     return (
@@ -258,20 +354,12 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
               {vendor?.verified && <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"><ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verified</Badge>}
             </div>
             <h1 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">{vendor?.companyName || "Vendor workspace"}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Manage requirements, review applicants, move trainers through shortlist and hire, and keep spend under control.
-            </p>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Manage requirements, review applicants, move trainers through shortlist and hire, and keep spend under control.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild>
-              <Link href="/requirements/new"><Plus className="mr-2 h-4 w-4" /> Post requirement</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/messages"><MessageSquare className="mr-2 h-4 w-4" /> Messages</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/agreements"><FileSignature className="mr-2 h-4 w-4" /> Agreements</Link>
-            </Button>
+            <Button asChild><Link href="/requirements/new"><Plus className="mr-2 h-4 w-4" /> Post requirement</Link></Button>
+            <Button asChild variant="outline"><Link href="/messages"><MessageSquare className="mr-2 h-4 w-4" /> Messages</Link></Button>
+            <Button asChild variant="outline"><Link href="/agreements"><FileSignature className="mr-2 h-4 w-4" /> Agreements</Link></Button>
           </div>
         </div>
       </section>
@@ -284,8 +372,8 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
         <KpiCard title="Hired" value={stats?.hiredTrainers ?? 0} icon={<CheckCircle className="h-5 w-5" />} href="#vendor-requirements" description="Selected trainers." />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-        <Card id="vendor-requirements" className="border-primary/10">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+        <Card id="vendor-requirements" className="self-start border-primary/10">
           <CardHeader className="space-y-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -294,27 +382,10 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
               </div>
               <Button asChild size="sm"><Link href="/requirements/new"><Plus className="mr-2 h-4 w-4" /> Post new</Link></Button>
             </div>
-
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
               <div className="flex flex-wrap gap-2">
-                {([
-                  ["all", "All", counts.all],
-                  ["needsAction", "Needs review", counts.needsAction],
-                  ["withApplicants", "With applicants", counts.withApplicants],
-                  ["open", "Open", counts.open],
-                  ["closed", "Closed", counts.closed],
-                ] as [RequirementFilter, string, number][]).map(([value, label, count]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setFilter(value)}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-                      filter === value ? "border-primary bg-primary/10 text-primary" : "bg-background text-muted-foreground hover:border-primary/40 hover:text-primary",
-                    )}
-                  >
-                    {label}: {count}
-                  </button>
+                {([ ["all", "All", counts.all], ["needsAction", "Needs review", counts.needsAction], ["withApplicants", "With applicants", counts.withApplicants], ["open", "Open", counts.open], ["closed", "Closed", counts.closed] ] as [RequirementFilter, string, number][]).map(([value, label, count]) => (
+                  <button key={value} type="button" onClick={() => setFilter(value)} className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors", filter === value ? "border-primary bg-primary/10 text-primary" : "bg-background text-muted-foreground hover:border-primary/40 hover:text-primary")}>{label}: {count}</button>
                 ))}
               </div>
               <div className="relative">
@@ -327,17 +398,9 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
             {reqsLoading ? (
               <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}</div>
             ) : reqs.length === 0 ? (
-              <div className="rounded-xl border border-dashed py-12 text-center">
-                <Briefcase className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-                <h3 className="font-semibold">No requirements yet</h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Post your first training requirement so interested trainers can apply.</p>
-                <Button asChild className="mt-4"><Link href="/requirements/new">Post requirement</Link></Button>
-              </div>
+              <div className="rounded-xl border border-dashed py-12 text-center"><Briefcase className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" /><h3 className="font-semibold">No requirements yet</h3><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Post your first training requirement so interested trainers can apply.</p><Button asChild className="mt-4"><Link href="/requirements/new">Post requirement</Link></Button></div>
             ) : pageItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
-                No requirements match the current filters.
-                <div><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setFilter("all"); setSearch(""); }}>Clear filters</Button></div>
-              </div>
+              <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">No requirements match the current filters.<div><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setFilter("all"); setSearch(""); }}>Clear filters</Button></div></div>
             ) : (
               <div className="space-y-3">
                 {pageItems.map((req: any) => <RequirementCard key={req.id} req={req} />)}
@@ -349,31 +412,16 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
 
         <div className="space-y-6">
           <Card className="border-primary/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Hiring health</CardTitle>
-              <CardDescription>Current marketplace momentum for your vendor account.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Hiring health</CardTitle><CardDescription>Current marketplace momentum for your vendor account.</CardDescription></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <div className="rounded-xl border bg-background p-4">
-                <p className="text-xs font-medium text-muted-foreground">Average time to hire</p>
-                <p className="mt-1 text-2xl font-bold">{averageTimeLabel}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{hiringStats?.hiredCount ? `${hiringStats.hiredCount} hired requirements measured` : "Appears after your first hire"}</p>
-              </div>
-              <div className="rounded-xl border bg-background p-4">
-                <p className="text-xs font-medium text-muted-foreground">Spend outstanding</p>
-                <p className="mt-1 text-2xl font-bold">{agreementsLoading ? "…" : money(totalOutstanding)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{signedAgreements.length} signed agreement{signedAgreements.length === 1 ? "" : "s"}</p>
-              </div>
+              <div className="rounded-xl border bg-background p-4"><p className="text-xs font-medium text-muted-foreground">Average time to hire</p><p className="mt-1 text-2xl font-bold">{averageTimeLabel}</p><p className="mt-1 text-xs text-muted-foreground">{hiringStats?.hiredCount ? `${hiringStats.hiredCount} hired requirements measured` : "Appears after your first hire"}</p></div>
+              <div className="rounded-xl border bg-background p-4"><p className="text-xs font-medium text-muted-foreground">Spend outstanding</p><p className="mt-1 text-2xl font-bold">{agreementsLoading ? "…" : money(totalOutstanding)}</p><p className="mt-1 text-xs text-muted-foreground">{signedAgreements.length} signed agreement{signedAgreements.length === 1 ? "" : "s"}</p></div>
             </CardContent>
           </Card>
-
           <Card className="border-primary/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" /> Recommended actions</CardTitle>
-              <CardDescription>Use these to keep your hiring pipeline moving.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-primary" /> Recommended actions</CardTitle><CardDescription>Use these to keep your hiring pipeline moving.</CardDescription></CardHeader>
             <CardContent className="space-y-3">
-              <ActionCard title="Review waiting applicants" description="Open requirements with applicants and shortlist or reject quickly." href="#vendor-requirements" icon={<Users className="h-5 w-5" />} cta="Review pipeline" tone="primary" />
+              <ActionCard title="Review waiting applicants" description="Open requirements with applicants and shortlist or reject quickly." onClick={scrollToPipeline} icon={<Users className="h-5 w-5" />} cta="Review pipeline" tone="primary" />
               <ActionCard title="Reply to trainer messages" description="Clarify availability, pricing, and delivery plan before hiring." href="/messages" icon={<MessageSquare className="h-5 w-5" />} cta="Open messages" />
               <ActionCard title="Finalize agreements" description="After hiring, confirm scope, dates, commercials, and payment terms." href="/agreements" icon={<FileSignature className="h-5 w-5" />} cta="View agreements" />
             </CardContent>
@@ -382,24 +430,34 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" /> Spend snapshot</CardTitle>
-          <CardDescription>Committed, paid, and outstanding value across signed agreements.</CardDescription>
-        </CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" /> Spend and payments</CardTitle><CardDescription>Committed, paid, outstanding, and quick payment recording.</CardDescription></CardHeader>
         <CardContent>
-          {agreementsLoading ? (
-            <Skeleton className="h-28 w-full rounded-xl" />
-          ) : signedAgreements.length === 0 ? (
-            <div className="rounded-xl border border-dashed py-10 text-center">
-              <Wallet className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-              <p className="font-medium">No signed agreements yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Spend appears after you hire trainers and complete engagement agreements.</p>
-            </div>
+          {agreementsLoading ? <Skeleton className="h-28 w-full rounded-xl" /> : signedAgreements.length === 0 ? (
+            <div className="rounded-xl border border-dashed py-10 text-center"><Wallet className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" /><p className="font-medium">No signed agreements yet</p><p className="mt-1 text-sm text-muted-foreground">Spend appears after you hire trainers and complete engagement agreements.</p></div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border bg-primary/5 p-4"><p className="text-xs text-muted-foreground">Committed</p><p className="mt-1 text-2xl font-bold">{money(totalCommitted)}</p></div>
-              <div className="rounded-xl border p-4"><p className="text-xs text-muted-foreground">Paid</p><p className="mt-1 text-2xl font-bold text-emerald-700">{money(totalPaid)}</p></div>
-              <div className="rounded-xl border p-4"><p className="text-xs text-muted-foreground">Outstanding</p><p className="mt-1 text-2xl font-bold text-amber-700">{money(totalOutstanding)}</p></div>
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border bg-primary/5 p-4"><p className="text-xs text-muted-foreground">Committed</p><p className="mt-1 text-2xl font-bold">{money(totalCommitted)}</p></div>
+                <div className="rounded-xl border p-4"><p className="text-xs text-muted-foreground">Paid</p><p className="mt-1 text-2xl font-bold text-emerald-700">{money(totalPaid)}</p></div>
+                <div className="rounded-xl border p-4"><p className="text-xs text-muted-foreground">Outstanding</p><p className="mt-1 text-2xl font-bold text-amber-700">{money(totalOutstanding)}</p></div>
+              </div>
+              <div className="space-y-2">
+                {signedAgreements.slice(0, 5).map((agreement: any) => {
+                  const fee = Number(agreement.agreedFee ?? 0);
+                  const paid = Number(agreement.paidAmount ?? 0);
+                  const outstanding = Math.max(0, fee - paid);
+                  return (
+                    <div key={agreement.id} className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <Link href={`/requirements/${agreement.requirementId}`} className="font-medium hover:underline">{agreement.counterpartyName}</Link>
+                        <p className="truncate text-xs text-muted-foreground">{agreement.requirementTitle}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Paid {money(paid)} · Outstanding {money(outstanding)}</p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => setPaymentTarget(agreement)}>+ Record payment</Button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </CardContent>
@@ -408,39 +466,15 @@ export function VendorDashboardPolish({ vendorId }: { vendorId: string }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Applications trend</CardTitle><CardDescription>Applications received over time.</CardDescription></CardHeader>
-          <CardContent className="h-[280px]">
-            {stats?.applicationsTrend && stats.applicationsTrend.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats.applicationsTrend}>
-                  <defs><linearGradient id="vendorApps" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} /><stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} /></linearGradient></defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tickFormatter={(val) => format(new Date(val), "MMM d")} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} />
-                  <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#vendorApps)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No application trend yet</div>}
-          </CardContent>
+          <CardContent className="h-[280px]">{stats?.applicationsTrend && stats.applicationsTrend.length > 0 ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={stats.applicationsTrend}><defs><linearGradient id="vendorApps" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} /><stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" /><XAxis dataKey="date" tickFormatter={(val) => format(new Date(val), "MMM d")} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} /><YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} /><Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} /><Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#vendorApps)" strokeWidth={2} /></AreaChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No application trend yet</div>}</CardContent>
         </Card>
-
         <Card>
           <CardHeader><CardTitle>Skill demand</CardTitle><CardDescription>Skills requested across your requirements.</CardDescription></CardHeader>
-          <CardContent className="h-[280px]">
-            {stats?.skillBreakdown && stats.skillBreakdown.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.skillBreakdown} layout="vertical" margin={{ top: 0, right: 0, left: 40, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis dataKey="skill" type="category" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} cursor={{ fill: "hsl(var(--muted))" }} />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No skill data yet</div>}
-          </CardContent>
+          <CardContent className="h-[280px]">{stats?.skillBreakdown && stats.skillBreakdown.length > 0 ? <ResponsiveContainer width="100%" height="100%"><BarChart data={stats.skillBreakdown} layout="vertical" margin={{ top: 0, right: 0, left: 40, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" /><XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} /><YAxis dataKey="skill" type="category" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} /><Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} cursor={{ fill: "hsl(var(--muted))" }} /><Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={24} /></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No skill data yet</div>}</CardContent>
         </Card>
       </div>
+
+      <RecordPaymentDialog target={paymentTarget} open={!!paymentTarget} onOpenChange={(open) => { if (!open) setPaymentTarget(null); }} onSuccess={() => { void queryClient.invalidateQueries({ queryKey: getListMyAgreementsQueryKey() }); }} />
     </div>
   );
 }
