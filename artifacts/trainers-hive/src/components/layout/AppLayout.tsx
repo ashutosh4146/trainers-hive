@@ -20,6 +20,7 @@ import {
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function FloatingMessagesButton() {
   const [location, navigate] = useLocation();
@@ -47,6 +48,20 @@ function FloatingMessagesButton() {
         </span>
       )}
     </button>
+  );
+}
+
+function DashboardLoadingShell() {
+  return (
+    <div className="container mx-auto max-w-6xl space-y-6 px-4 py-8">
+      <Skeleton className="h-24 w-full rounded-2xl" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Skeleton key={index} className="h-24 rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-72 w-full rounded-2xl" />
+    </div>
   );
 }
 
@@ -112,8 +127,12 @@ function ProfileCompletionPrompt() {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { isSignedIn, auth } = useAuth();
+  const { data: currentUser, isLoading: currentUserLoading } = useGetCurrentUser({ query: { enabled: isSignedIn } });
   const isVendorOrCollege = isSignedIn && auth?.role === "vendor";
-  const useTrainerDashboard = isSignedIn && auth?.role === "trainer" && location === "/dashboard";
+  const isDashboard = location === "/dashboard";
+  const dashboardRole = auth?.role ?? currentUser?.role;
+  const useTrainerDashboard = isDashboard && dashboardRole === "trainer";
+  const waitForDashboardRole = isDashboard && isSignedIn && currentUserLoading && !dashboardRole;
   const usePaginatedTrainers = location === "/trainers";
 
   return (
@@ -125,7 +144,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           key={location}
           className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
-          {useTrainerDashboard ? <TrainerDashboardRedesign /> : usePaginatedTrainers ? <PaginatedTrainersDirectory /> : children}
+          {waitForDashboardRole ? (
+            <DashboardLoadingShell />
+          ) : useTrainerDashboard ? (
+            <TrainerDashboardRedesign />
+          ) : usePaginatedTrainers ? (
+            <PaginatedTrainersDirectory />
+          ) : (
+            children
+          )}
         </div>
       </main>
       <footer className="border-t py-10 bg-card text-card-foreground">
