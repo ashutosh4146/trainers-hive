@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TrainerAvatar } from "@/components/TrainerAvatar";
-import { ArrowRight, BookOpen, Briefcase, Users, Star, MapPin, Building, Activity, Clock, ShieldCheck } from "lucide-react";
+import { ArrowRight, BookOpen, Briefcase, Star, MapPin, Building, Activity, Clock, ShieldCheck, Sparkles, MessageSquare, FileSignature, ClipboardList } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
@@ -55,16 +55,110 @@ function statNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function RequirementRecommendation({ req }: { req: any }) {
+  return (
+    <Link href={`/requirements/${req.id}`}>
+      <div className="rounded-xl border bg-background p-3 transition-colors hover:border-primary/40 hover:bg-primary/5">
+        <div className="flex items-start gap-3">
+          <Avatar className="h-9 w-9 rounded-md border bg-card">
+            <AvatarImage src={req.vendorLogoUrl} alt={req.vendorName} className="object-contain p-1" loading="lazy" />
+            <AvatarFallback className="rounded-md bg-muted text-muted-foreground"><Building className="h-4 w-4" /></AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{req.title}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{req.vendorName}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">{req.skill}</Badge>
+              {req.remote && <Badge variant="outline">Remote</Badge>}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span>{req.durationDays} days</span>
+              <span>{req.budget > 0 ? `₹${Number(req.budget).toLocaleString("en-IN")}` : req.trainingMode ?? "Discuss payout"}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function RecommendedForYou({ role, requirements, loading }: { role?: string; requirements: any[]; loading: boolean }) {
+  const isVendor = role === "vendor";
+
+  if (isVendor) {
+    const items = [
+      { title: "Post a clear requirement", description: "Add scope, skill, duration, location, budget, and deadline to attract relevant trainers.", href: "/requirements/new", icon: ClipboardList, cta: "Post requirement" },
+      { title: "Review applicants", description: "Open your requirements and move applicants to shortlisted, hired, or rejected quickly.", href: "/dashboard", icon: Briefcase, cta: "Open dashboard" },
+      { title: "Reply to messages", description: "Use messages to finalize availability, commercials, delivery mode, and next steps.", href: "/messages", icon: MessageSquare, cta: "Open messages" },
+      { title: "Complete agreements", description: "After selection, keep agreements and payment follow-ups organized in one place.", href: "/agreements", icon: FileSignature, cta: "View agreements" },
+    ];
+
+    return (
+      <Card className="sticky top-24 border-primary/10 bg-muted/20">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-primary" /> Recommended for you</CardTitle>
+          <CardDescription>Vendor actions that move hiring forward.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {items.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.title} href={item.href}>
+                <div className="rounded-xl border bg-background p-3 transition-colors hover:border-primary/40 hover:bg-primary/5">
+                  <div className="flex gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+                      <p className="mt-2 text-xs font-medium text-primary">{item.cta} →</p>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="sticky top-24 border-primary/10 bg-muted/20">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-2 text-lg"><Sparkles className="h-5 w-5 text-primary" /> Recommended for you</CardTitle>
+        <CardDescription>Open requirements that may be worth checking first.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)
+        ) : requirements.length > 0 ? (
+          requirements.slice(0, 4).map((req) => <RequirementRecommendation key={req.id} req={req} />)
+        ) : (
+          <div className="rounded-xl border border-dashed bg-background p-4 text-center">
+            <BookOpen className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium">No recommendations yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">New opportunities will appear here as vendors post requirements.</p>
+          </div>
+        )}
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/requirements">View all requirements</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Home() {
   const { isSignedIn, auth } = useAuth();
   const isLoggedIn = isSignedIn;
   const isAdmin = auth?.role === "admin";
+  const showRecommendations = isLoggedIn && !isAdmin;
 
   const { data: stats, isLoading: statsLoading } = useGetPlatformStats({ query: { queryKey: getGetPlatformStatsQueryKey() }});
   const { data: featuredTrainers, isLoading: trainersLoading } = useListFeaturedTrainers({ query: { queryKey: getListFeaturedTrainersQueryKey(), enabled: isAdmin }});
   const { data: recentRequirements, isLoading: requirementsLoading } = useListRecentRequirements({ query: { queryKey: getListRecentRequirementsQueryKey() }});
   const { data: activityFeed, isLoading: activityLoading } = useListActivity({
-    query: { queryKey: getListActivityQueryKey(), enabled: isLoggedIn },
+    query: { queryKey: getListActivityQueryKey(), enabled: isAdmin },
   });
 
   const platformStats = toRecord<PlatformStats>(stats);
@@ -75,8 +169,8 @@ export default function Home() {
   const showStatsSection = statsLoading || !!platformStats;
   const showFeaturedTrainers = isAdmin && (trainersLoading || featuredTrainersList.length > 0);
   const showRecentRequirements = isLoggedIn && (requirementsLoading || recentRequirementsList.length > 0);
-  const showActivityFeed = isLoggedIn && (activityLoading || activityFeedList.length > 0);
-  const showDataSections = showFeaturedTrainers || showRecentRequirements || showActivityFeed;
+  const showActivityFeed = isAdmin && (activityLoading || activityFeedList.length > 0);
+  const showDataSections = showFeaturedTrainers || showRecentRequirements || showActivityFeed || showRecommendations;
   const browseRequirementsHref = isLoggedIn ? "/requirements" : "/login";
 
   return (
@@ -275,6 +369,7 @@ export default function Home() {
               )}
             </div>
           )}
+          {showRecommendations && <RecommendedForYou role={auth?.role} requirements={recentRequirementsList} loading={requirementsLoading} />}
           {showActivityFeed && (
             <div className={!showFeaturedTrainers && !showRecentRequirements ? "lg:col-span-3" : undefined}>
               <Card className="sticky top-24 bg-muted/20 border-border">
