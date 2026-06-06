@@ -18,7 +18,6 @@ import {
   getVendorCompletionItems,
 } from "@/components/ProfileCompletion";
 import { TrainerApplicationsSection } from "@/components/TrainerApplicationsSection";
-import { TrainerApplicationTracker } from "@/components/TrainerApplicationTracker";
 import { Button } from "@/components/ui/button";
 
 function FloatingMessagesButton() {
@@ -125,7 +124,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
         <TrainerApplicationsSection />
-        <TrainerApplicationTracker />
       </main>
       <footer className="border-t py-10 bg-card text-card-foreground">
         <div className="container mx-auto px-4 max-w-5xl">
