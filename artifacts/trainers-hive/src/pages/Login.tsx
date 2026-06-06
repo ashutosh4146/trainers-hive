@@ -70,6 +70,33 @@ export default function Login() {
     return Object.keys(errs).length === 0;
   };
 
+  const completeSession = (name: string, emailForSession: string, role: UserRole, devMode = false) => {
+    switchUser.mutate(
+      { data: { role: getRoleSessionKey(role), email: emailForSession, name } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+          signIn({
+            signedIn: true,
+            name,
+            email: emailForSession,
+            role,
+          });
+          toast({
+            title: devMode ? "Dev sign-in active" : "Welcome back!",
+            description: `Signed in as ${getRoleLabel(role)}.`,
+          });
+          navigate("/dashboard");
+        },
+        onError: () => {
+          toast({ title: "Sign in failed", description: "Please try again.", variant: "destructive" });
+          setIsPasswordLoading(false);
+          setIsGoogleLoading(false);
+        },
+      }
+    );
+  };
+
   const handleSendLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -105,32 +132,7 @@ export default function Login() {
       const user = await signInWithGoogle();
       const googleEmail = (user.email || "").trim().toLowerCase();
       const role = getDetectedRole(googleEmail);
-      switchUser.mutate(
-        {
-          data: {
-            role: getRoleSessionKey(role),
-            name: user.displayName || googleEmail.split("@")[0] || "User",
-            email: googleEmail,
-          },
-        },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-            signIn({
-              signedIn: true,
-              name: user.displayName || googleEmail.split("@")[0] || "User",
-              email: googleEmail,
-              role,
-            });
-            toast({ title: "Welcome back!", description: `Signed in as ${getRoleLabel(role)}.` });
-            navigate("/dashboard");
-          },
-          onError: () => {
-            toast({ title: "Sign in failed", description: "Please try again.", variant: "destructive" });
-            setIsGoogleLoading(false);
-          },
-        }
-      );
+      completeSession(user.displayName || googleEmail.split("@")[0] || "User", googleEmail, role);
     } catch (err) {
       const msg = (err as Error).message;
       if (!msg.includes("popup-closed")) {
@@ -156,6 +158,12 @@ export default function Login() {
         body: JSON.stringify({ email: normalizedEmail, password }),
       });
 
+      if (res.status === 404 && import.meta.env.DEV) {
+        const devName = normalizedEmail.split("@")[0] || "User";
+        completeSession(devName, normalizedEmail, detectedRole, true);
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
         setErrors({ password: data.error ?? "Invalid email or password." });
@@ -173,26 +181,7 @@ export default function Login() {
         setAuthTokenGetter(() => Promise.resolve(sessionToken));
       }
 
-      switchUser.mutate(
-        { data: { role: getRoleSessionKey(detectedRole), email: user.email, name: user.name } },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-            signIn({
-              signedIn: true,
-              name: user.name,
-              email: user.email,
-              role: detectedRole,
-            });
-            toast({ title: "Welcome back!", description: `Signed in as ${detectedRoleLabel}.` });
-            navigate("/dashboard");
-          },
-          onError: () => {
-            toast({ title: "Sign in failed", description: "Please try again.", variant: "destructive" });
-            setIsPasswordLoading(false);
-          },
-        }
-      );
+      completeSession(user.name, user.email, detectedRole);
     } catch (err) {
       toast({ title: "Sign in failed", description: (err as Error).message, variant: "destructive" });
       setIsPasswordLoading(false);
@@ -340,7 +329,7 @@ export default function Login() {
                           <Input
                             id="password"
                             type={showPassword ? "text" : "password"}
-                            placeholder="Your password"
+                            placeholder="Any password in local dev"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             autoComplete="current-password"
@@ -355,6 +344,11 @@ export default function Login() {
                           </button>
                         </div>
                         {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+                        {import.meta.env.DEV && (
+                          <p className="text-xs text-muted-foreground">
+                            Local dev shortcut: enter any password to test login if the password endpoint is unavailable.
+                          </p>
+                        )}
                       </div>
                       <Button type="submit" size="lg" className="w-full gap-2" disabled={isPasswordLoading}>
                         <KeyRound className="h-4 w-4" />
