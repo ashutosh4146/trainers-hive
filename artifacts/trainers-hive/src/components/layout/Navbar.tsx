@@ -161,7 +161,7 @@ export function Navbar() {
                   )}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-84 max-w-[calc(100vw-2rem)] p-0" sideOffset={8}>
+              <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0" sideOffset={8}>
                 <div className="flex items-center justify-between px-4 py-3 border-b">
                   <div>
                     <p className="text-sm font-semibold">Notifications</p>
