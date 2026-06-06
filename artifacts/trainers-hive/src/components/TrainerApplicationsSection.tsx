@@ -96,8 +96,8 @@ export function TrainerApplicationsSection() {
   const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
-    <section id="trainer-applications-enhanced" className="container mx-auto max-w-6xl px-4 pt-8 pb-8">
-      <style>{`#your-applications { display: none; }`}</style>
+    <section id="trainer-applications-enhanced" className="container mx-auto max-w-6xl px-4 -mt-20 pb-8 lg:-mt-24">
+      <style>{`#your-applications { display: none !important; margin: 0 !important; }`}</style>
       <Card className="border-primary/10 shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
