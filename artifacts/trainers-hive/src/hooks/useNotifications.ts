@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export type NotificationType =
@@ -65,15 +64,20 @@ export function useNotifications() {
     enabled,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
+    retry: false,
     queryFn: async () => {
-      try {
-        const payload = await customFetch<unknown>("/api/notifications", { method: "GET" });
-        return normalizeNotifications(payload);
-      } catch (err) {
-        const status = (err as { status?: number })?.status;
-        if (status === 404) return [];
-        throw err;
-      }
+      const response = await fetch("/api/notifications", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+
+      if (response.status === 404) return [];
+      if (!response.ok) throw new Error("Could not load notifications");
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) return [];
+
+      return normalizeNotifications(await response.json());
     },
   });
 
