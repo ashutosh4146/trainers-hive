@@ -56,24 +56,49 @@ function statNumber(value: unknown): number {
 }
 
 function RequirementRecommendation({ req }: { req: any }) {
+  const budgetLabel = req.budget > 0
+    ? `₹${Number(req.budget).toLocaleString("en-IN")}`
+    : req.trainingMode ?? "Discuss payout";
+  const deadlineLabel = req.deadline ? new Date(req.deadline).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Flexible";
+
   return (
     <Link href={`/requirements/${req.id}`}>
-      <div className="rounded-xl border bg-background p-3 transition-colors hover:border-primary/40 hover:bg-primary/5">
+      <div className="group rounded-xl border bg-background p-4 transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm">
         <div className="flex items-start gap-3">
-          <Avatar className="h-9 w-9 rounded-md border bg-card">
+          <Avatar className="h-10 w-10 shrink-0 rounded-lg border bg-card">
             <AvatarImage src={req.vendorLogoUrl} alt={req.vendorName} className="object-contain p-1" loading="lazy" />
-            <AvatarFallback className="rounded-md bg-muted text-muted-foreground"><Building className="h-4 w-4" /></AvatarFallback>
+            <AvatarFallback className="rounded-lg bg-muted text-muted-foreground"><Building className="h-4 w-4" /></AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{req.title}</p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{req.vendorName}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="line-clamp-2 text-sm font-semibold leading-snug group-hover:text-primary">{req.title}</p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">{req.vendorName}</p>
+              </div>
+              <span className="hidden shrink-0 rounded-full border border-primary/20 bg-primary/5 px-2 py-1 text-[11px] font-medium text-primary sm:inline-flex">
+                Open
+              </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
               <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">{req.skill}</Badge>
               {req.remote && <Badge variant="outline">Remote</Badge>}
+              {req.applicationCount != null && <Badge variant="outline" className="text-muted-foreground">{req.applicationCount} applicants</Badge>}
             </div>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>{req.durationDays} days</span>
-              <span>{req.budget > 0 ? `₹${Number(req.budget).toLocaleString("en-IN")}` : req.trainingMode ?? "Discuss payout"}</span>
+
+            <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-lg border bg-muted/20 text-center text-xs">
+              <div className="px-2 py-2">
+                <p className="font-semibold text-foreground">{req.durationDays ?? "—"}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">days</p>
+              </div>
+              <div className="border-l px-2 py-2">
+                <p className="truncate font-semibold text-foreground">{budgetLabel}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">budget</p>
+              </div>
+              <div className="border-l px-2 py-2">
+                <p className="truncate font-semibold text-foreground">{deadlineLabel}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">deadline</p>
+              </div>
             </div>
           </div>
         </div>
