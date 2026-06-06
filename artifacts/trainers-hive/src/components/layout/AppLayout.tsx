@@ -17,7 +17,7 @@ import {
   getTrainerCompletionItems,
   getVendorCompletionItems,
 } from "@/components/ProfileCompletion";
-import { TrainerApplicationsSection } from "@/components/TrainerApplicationsSection";
+import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { Button } from "@/components/ui/button";
 
 function FloatingMessagesButton() {
@@ -69,6 +69,7 @@ function ProfileCompletionPrompt() {
   if (
     dismissed ||
     !isSignedIn ||
+    location === "/dashboard" ||
     location === "/profile" ||
     location === "/messages" ||
     (auth?.role !== "trainer" && auth?.role !== "vendor")
@@ -111,6 +112,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { isSignedIn, auth } = useAuth();
   const isVendorOrCollege = isSignedIn && auth?.role === "vendor";
+  const useTrainerDashboard = isSignedIn && auth?.role === "trainer" && location === "/dashboard";
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
@@ -121,12 +123,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           key={location}
           className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
-          {children}
+          {useTrainerDashboard ? <TrainerDashboardRedesign /> : children}
         </div>
-        {isSignedIn && auth?.role === "trainer" && location === "/dashboard" && (
-          <style>{`#trainer-applications-enhanced{margin-top:-5rem!important}`}</style>
-        )}
-        <TrainerApplicationsSection />
       </main>
       <footer className="border-t py-10 bg-card text-card-foreground">
         <div className="container mx-auto px-4 max-w-5xl">
