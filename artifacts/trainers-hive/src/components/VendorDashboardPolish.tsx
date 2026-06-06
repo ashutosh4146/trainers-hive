@@ -19,15 +19,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import {
   ArrowRight,
   Briefcase,
   CheckCircle,
+  ClipboardList,
   Clock,
   FileSignature,
   FileText,
-  IndianRupee,
   MessageSquare,
   Plus,
   Search,
