@@ -24,7 +24,6 @@ export function getTrainerCompletionItems(trainer: any): CompletionItem[] {
     { key: "bio", label: "Professional bio", done: !!trainer?.bio?.trim?.() || !!trainer?.about?.trim?.() },
     { key: "languages", label: "Languages", done: Array.isArray(trainer?.languages) && trainer.languages.length > 0 },
     { key: "skills", label: "Additional skills", done: Array.isArray(trainer?.subSkills) && trainer.subSkills.length > 0 },
-    { key: "certifications", label: "Certifications", done: Array.isArray(trainer?.certifications) && trainer.certifications.length > 0 },
   ];
 }
 
