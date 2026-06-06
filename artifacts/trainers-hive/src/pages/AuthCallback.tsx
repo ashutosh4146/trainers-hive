@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSwitchUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth, isBusinessEmail, getRoleSessionKey, type UserRole } from "@/hooks/useAuth";
+import { useAuth, getRoleLabel, getRoleSessionKey, type UserRole } from "@/hooks/useAuth";
 import {
   isEmailLinkCallback,
   completeEmailLinkSignIn,
@@ -17,64 +17,16 @@ import {
 
 type Status = "verifying" | "needs-email" | "completing" | "success" | "error";
 
-type ResolvedProfile = {
-  exists: boolean;
-  role?: UserRole;
-  name?: string;
-  email: string;
-  orgName?: string;
-  orgType?: string;
-};
-
-function toUserRole(role: unknown): UserRole | null {
-  return role === "trainer" || role === "vendor" || role === "admin" ? role : null;
-}
-
-function fallbackRoleFromEmail(email: string): UserRole {
-  return isBusinessEmail(email) ? "vendor" : "trainer";
-}
-
-async function resolveProfileForLogin(email: string): Promise<ResolvedProfile> {
-  const normalizedEmail = email.trim().toLowerCase();
-
-  try {
-    const res = await fetch(`/api/auth/resolve-profile?email=${encodeURIComponent(normalizedEmail)}`);
-    if (res.ok) {
-      const profile = await res.json().catch(() => null) as Partial<ResolvedProfile> | null;
-      const role = toUserRole(profile?.role);
-
-      if (profile?.exists && role) {
-        return {
-          exists: true,
-          role,
-          name: profile.name,
-          email: profile.email || normalizedEmail,
-          orgName: profile.orgName,
-          orgType: profile.orgType,
-        };
-      }
-
-      if (profile?.exists === false) {
-        return { exists: false, email: normalizedEmail };
-      }
-    }
-  } catch {
-    // The resolve endpoint is not available in older/local preview builds.
-    // Fall through to the app's current login rule so existing magic-link login keeps working.
-  }
-
-  return {
-    exists: true,
-    role: fallbackRoleFromEmail(normalizedEmail),
-    email: normalizedEmail,
-    name: normalizedEmail.split("@")[0] || "User",
-  };
-}
+const ROLES: { value: UserRole; label: string }[] = [
+  { value: "trainer", label: "Trainer" },
+  { value: "vendor",  label: "Organisation" },
+];
 
 export default function AuthCallback() {
   const [status, setStatus] = useState<Status>("verifying");
   const [errorMsg, setErrorMsg] = useState("");
   const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryRole, setRecoveryRole] = useState<UserRole>("trainer");
   const [, navigate] = useLocation();
   const { signIn } = useAuth();
   const queryClient = useQueryClient();
@@ -124,7 +76,7 @@ export default function AuthCallback() {
 
       const pending = loadPendingAuth();
       if (!pending) {
-        // Link opened in a different browser — ask for email to recover and auto-detect role.
+        // Link opened in a different browser — ask for email to recover
         setStatus("needs-email");
         return;
       }
@@ -145,41 +97,17 @@ export default function AuthCallback() {
 
   const handleRecoverySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const email = recoveryEmail.trim().toLowerCase();
+    const email = recoveryEmail.trim();
     if (!email) return;
-
     setStatus("completing");
-    let profile: ResolvedProfile;
     try {
-      profile = await resolveProfileForLogin(email);
-    } catch (err) {
-      setStatus("error");
-      setErrorMsg((err as Error).message || "Could not detect your profile. Please request a new sign-in link.");
-      return;
-    }
-
-    if (!profile.exists || !profile.role) {
-      setStatus("error");
-      setErrorMsg("We could not find an account for this email. Please create an account first.");
-      return;
-    }
-
-    try {
-      await completeEmailLinkSignIn(profile.email);
+      await completeEmailLinkSignIn(email);
     } catch (err) {
       setStatus("error");
       setErrorMsg((err as Error).message || "Could not verify email. The link may have expired — please request a new one.");
       return;
     }
-
-    completeSignIn({
-      type: "login",
-      role: profile.role,
-      email: profile.email,
-      name: profile.name,
-      orgName: profile.orgName,
-      orgType: profile.orgType,
-    });
+    completeSignIn({ type: "login", role: recoveryRole, email });
   };
 
   return (
@@ -207,7 +135,7 @@ export default function AuthCallback() {
               <Mail className="h-12 w-12 text-primary mx-auto" />
               <h2 className="text-xl font-semibold">Confirm your email</h2>
               <p className="text-muted-foreground text-sm">
-                The sign-in link was opened in a different browser. Enter the email you used to request the link and we'll detect your profile automatically.
+                The sign-in link was opened in a different browser. Enter the email you used to request the link.
               </p>
               <form onSubmit={handleRecoverySubmit} className="space-y-4 text-left pt-2">
                 <div className="space-y-1.5">
@@ -221,6 +149,25 @@ export default function AuthCallback() {
                     required
                     autoFocus
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Sign in as</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {ROLES.map(r => (
+                      <button
+                        key={r.value}
+                        type="button"
+                        onClick={() => setRecoveryRole(r.value)}
+                        className={`rounded-lg border py-2 px-1 text-xs font-medium transition-colors ${
+                          recoveryRole === r.value
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:border-primary/50"
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <Button type="submit" className="w-full">Continue</Button>
               </form>
