@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 const STATUSES = ["submitted", "shortlisted", "hired", "completed", "rejected", "withdrawn"] as const;
 
 type Status = typeof STATUSES[number];
+type Filter = Status | "all";
 
 function statusMeta(status: string) {
   switch (status) {
@@ -67,9 +68,17 @@ function nextAction(status: string) {
   return "Open";
 }
 
+function scrollToAllApplications() {
+  const target = document.getElementById("your-applications");
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
 export function TrainerApplicationTracker() {
   const [location] = useLocation();
   const { data: user } = useGetCurrentUser();
+  const [filter, setFilter] = React.useState<Filter>("all");
   const { data: applications, isLoading } = useListMyApplications({
     query: { enabled: user?.role === "trainer" && location === "/dashboard" },
   });
@@ -78,13 +87,14 @@ export function TrainerApplicationTracker() {
 
   const apps = applications ?? [];
   const activeApps = apps.filter((app) => app.status === "shortlisted" || app.status === "hired");
-  const recentApps = [...apps]
+  const filteredApps = filter === "all" ? apps : apps.filter((app) => app.status === filter);
+  const shownApps = [...filteredApps]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 3);
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 pt-4">
+      <div className="container mx-auto px-4 py-6">
         <Card>
           <CardHeader>
             <Skeleton className="h-5 w-48" />
@@ -101,7 +111,7 @@ export function TrainerApplicationTracker() {
   if (apps.length === 0) return null;
 
   return (
-    <div className="container mx-auto px-4 pt-4">
+    <div className="container mx-auto px-4 py-6">
       <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -114,21 +124,40 @@ export function TrainerApplicationTracker() {
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                  filter === "all" ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-primary",
+                )}
+              >
+                All: {apps.length}
+              </button>
               {STATUSES.map((status) => {
                 const count = apps.filter((app) => app.status === status).length;
                 if (count === 0) return null;
                 const meta = statusMeta(status);
                 return (
-                  <Badge key={status} variant="outline" className={cn("capitalize", meta.tone)}>
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setFilter(status)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-semibold transition-transform hover:scale-[1.02] active:scale-[0.98]",
+                      meta.tone,
+                      filter === status && "ring-2 ring-primary/40",
+                    )}
+                  >
                     {meta.label}: {count}
-                  </Badge>
+                  </button>
                 );
               })}
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {activeApps.length > 0 && (
+          {filter === "all" && activeApps.length > 0 && (
             <div className="rounded-lg border bg-background/80 p-3">
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
                 <CheckCircle2 className="h-4 w-4 text-primary" /> Needs attention
@@ -162,48 +191,63 @@ export function TrainerApplicationTracker() {
             </div>
           )}
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            {recentApps.map((app) => {
-              const meta = statusMeta(app.status);
-              const inactive = app.status === "rejected" || app.status === "withdrawn";
-              return (
-                <div key={app.id} className={cn("rounded-lg border bg-background/80 p-3", inactive && "opacity-80")}>
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link href={`/requirements/${app.requirementId}`} className="line-clamp-1 text-sm font-semibold hover:underline">
-                        {app.requirement.title}
-                      </Link>
-                      <p className="truncate text-xs text-muted-foreground">{app.requirement.vendorName}</p>
-                    </div>
-                    <Badge variant="outline" className={cn("shrink-0", meta.tone)}>{meta.label}</Badge>
-                  </div>
-
-                  <ApplicationPipeline status={app.status} compact />
-
-                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      {inactive ? <XCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                      {meta.next}
-                    </span>
-                  </div>
-
-                  <Button asChild variant="outline" size="sm" className="mt-3 h-8 w-full gap-1 text-xs">
-                    <Link href={app.status === "shortlisted" || app.status === "hired" ? "/messages" : `/requirements/${app.requirementId}`}>
-                      {nextAction(app.status)}
-                    </Link>
-                  </Button>
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">
+              {filter === "all" ? "Recent applications" : `${statusMeta(filter).label} applications`}
+            </p>
+            {filter !== "all" && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFilter("all")}>Clear filter</Button>
+            )}
           </div>
+
+          {shownApps.length === 0 ? (
+            <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+              No applications in this status.
+            </div>
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-3">
+              {shownApps.map((app) => {
+                const meta = statusMeta(app.status);
+                const inactive = app.status === "rejected" || app.status === "withdrawn";
+                return (
+                  <div key={app.id} className={cn("rounded-lg border bg-background/80 p-3", inactive && "opacity-80")}>
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link href={`/requirements/${app.requirementId}`} className="line-clamp-1 text-sm font-semibold hover:underline">
+                          {app.requirement.title}
+                        </Link>
+                        <p className="truncate text-xs text-muted-foreground">{app.requirement.vendorName}</p>
+                      </div>
+                      <Badge variant="outline" className={cn("shrink-0", meta.tone)}>{meta.label}</Badge>
+                    </div>
+
+                    <ApplicationPipeline status={app.status} compact />
+
+                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        {inactive ? <XCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                        {meta.next}
+                      </span>
+                    </div>
+
+                    <Button asChild variant="outline" size="sm" className="mt-3 h-8 w-full gap-1 text-xs">
+                      <Link href={app.status === "shortlisted" || app.status === "hired" ? "/messages" : `/requirements/${app.requirementId}`}>
+                        {nextAction(app.status)}
+                      </Link>
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Briefcase className="h-4 w-4" />
-              {apps.length} total application{apps.length === 1 ? "" : "s"}
+              Showing {shownApps.length} of {filteredApps.length} application{filteredApps.length === 1 ? "" : "s"}
             </div>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="#your-applications">View all applications</Link>
+            <Button type="button" variant="ghost" size="sm" onClick={scrollToAllApplications}>
+              View all applications
             </Button>
           </div>
         </CardContent>
