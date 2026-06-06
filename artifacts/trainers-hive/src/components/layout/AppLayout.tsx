@@ -17,7 +17,6 @@ import {
   getTrainerCompletionItems,
   getVendorCompletionItems,
 } from "@/components/ProfileCompletion";
-import { ApplicationWorkflowGuide } from "@/components/ApplicationWorkflowGuide";
 import { Button } from "@/components/ui/button";
 
 function FloatingMessagesButton() {
@@ -107,34 +106,6 @@ function ProfileCompletionPrompt() {
   );
 }
 
-function DashboardWorkflowGuide() {
-  const [location] = useLocation();
-  const { isSignedIn, auth } = useAuth();
-  const [dismissed, setDismissed] = React.useState(false);
-
-  if (dismissed || !isSignedIn || location !== "/dashboard" || (auth?.role !== "trainer" && auth?.role !== "vendor")) {
-    return null;
-  }
-
-  return (
-    <div className="container mx-auto px-4 pt-4">
-      <div className="relative">
-        <ApplicationWorkflowGuide />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-2 top-2 h-7 w-7"
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss application workflow guide"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { isSignedIn, auth } = useAuth();
@@ -145,7 +116,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Navbar />
       <main className="relative w-full">
         <ProfileCompletionPrompt />
-        <DashboardWorkflowGuide />
         <div
           key={location}
           className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
