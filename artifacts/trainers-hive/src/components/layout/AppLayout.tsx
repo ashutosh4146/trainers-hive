@@ -117,13 +117,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Navbar />
       <main className="relative w-full">
         <ProfileCompletionPrompt />
-        <TrainerApplicationTracker />
         <div
           key={location}
           className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
           {children}
         </div>
+        <TrainerApplicationTracker />
       </main>
       <footer className="border-t py-10 bg-card text-card-foreground">
         <div className="container mx-auto px-4 max-w-5xl">
