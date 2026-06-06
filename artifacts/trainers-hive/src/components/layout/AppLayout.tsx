@@ -2,7 +2,38 @@ import React from "react";
 import { Navbar } from "./Navbar";
 import { Link } from "wouter";
 import { useLocation } from "wouter";
+import { MessageSquare } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+
+function FloatingMessagesButton() {
+  const [location, navigate] = useLocation();
+  const { isSignedIn, auth } = useAuth();
+  const { count } = useUnreadMessages();
+
+  const canShow =
+    isSignedIn &&
+    (auth?.role === "trainer" || auth?.role === "vendor") &&
+    location !== "/messages";
+
+  if (!canShow) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/messages")}
+      aria-label={count > 0 ? `${count} unread messages` : "Open messages"}
+      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg border border-primary-border transition-transform hover:scale-105 active:scale-95"
+    >
+      <MessageSquare className="h-6 w-6" />
+      {count > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-white leading-none ring-2 ring-background">
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -37,6 +68,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </footer>
+      <FloatingMessagesButton />
     </div>
   );
 }
