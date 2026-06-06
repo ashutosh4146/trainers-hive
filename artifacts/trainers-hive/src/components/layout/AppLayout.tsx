@@ -88,6 +88,8 @@ function ProfileCompletionPrompt() {
     location === "/dashboard" ||
     location === "/profile" ||
     location === "/messages" ||
+    location === "/trainers" ||
+    location.startsWith("/trainers/") ||
     (auth?.role !== "trainer" && auth?.role !== "vendor")
   ) {
     return null;
