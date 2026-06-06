@@ -25,6 +25,15 @@ import { cn } from "@/lib/utils";
 type Tab = "all" | "needsReply" | "active";
 type QuickReply = { label: string; body: string };
 
+function draftKey(applicationId: string) {
+  return `th_message_draft_${applicationId}`;
+}
+
+function getSavedDraft(applicationId: string) {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(draftKey(applicationId)) ?? "";
+}
+
 function statusLabel(status: string) {
   if (status === "hired") return { label: "Hired", cls: "bg-primary/10 text-primary" };
   if (status === "shortlisted") return { label: "Shortlisted", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" };
@@ -205,6 +214,7 @@ function ConversationPanel({
   otherPartyName,
   otherPartyAvatarUrl,
   onBack,
+  onDraftChange,
 }: {
   applicationId: string;
   currentUserId: string;
@@ -213,11 +223,12 @@ function ConversationPanel({
   otherPartyName: string;
   otherPartyAvatarUrl?: string | null;
   onBack: () => void;
+  onDraftChange: () => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { auth } = useAuth();
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(() => getSavedDraft(applicationId));
   const bottomRef = useRef<HTMLDivElement>(null);
   const quickReplies = getQuickReplies(status, auth?.role);
 
@@ -232,6 +243,19 @@ function ConversationPanel({
 
   const messages = Array.isArray(data) ? data : [];
   const sendMutation = useSendApplicationMessage();
+
+  useEffect(() => {
+    setBody(getSavedDraft(applicationId));
+  }, [applicationId]);
+
+  useEffect(() => {
+    if (body.trim()) {
+      localStorage.setItem(draftKey(applicationId), body);
+    } else {
+      localStorage.removeItem(draftKey(applicationId));
+    }
+    onDraftChange();
+  }, [applicationId, body, onDraftChange]);
 
   useEffect(() => {
     if (auth?.email) markRead(auth.email);
@@ -249,7 +273,9 @@ function ConversationPanel({
       { id: applicationId, data: { body: trimmed } },
       {
         onSuccess: () => {
+          localStorage.removeItem(draftKey(applicationId));
           setBody("");
+          onDraftChange();
           queryClient.invalidateQueries({ queryKey: getListApplicationMessagesQueryKey(applicationId) });
           queryClient.invalidateQueries({ queryKey: getListMessageThreadsQueryKey() });
         },
@@ -355,7 +381,9 @@ function ConversationPanel({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">Press Enter to send. Shift + Enter for a new line.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {body.trim() ? "Draft saved automatically. " : ""}Press Enter to send. Shift + Enter for a new line.
+        </p>
       </form>
     </section>
   );
@@ -365,6 +393,7 @@ export default function Messages() {
   const { auth } = useAuth();
   const { data: currentUser } = useGetCurrentUser();
   const queryClient = useQueryClient();
+  const [draftRevision, setDraftRevision] = useState(0);
   useUnreadMessages();
 
   const { data, isLoading } = useListMessageThreads({
@@ -390,6 +419,11 @@ export default function Messages() {
     () => threads.filter((t) => !!t.lastMessageBody && t.lastMessageSenderUserId !== currentUser?.id).length,
     [threads, currentUser?.id],
   );
+
+  const hasDraft = (applicationId: string) => {
+    void draftRevision;
+    return getSavedDraft(applicationId).trim().length > 0;
+  };
 
   const filtered = useMemo(() => {
     let list = threads;
@@ -475,6 +509,7 @@ export default function Messages() {
                     const isMine = thread.lastMessageSenderUserId === currentUser?.id;
                     const hasMessage = !!thread.lastMessageBody;
                     const needsReply = hasMessage && !isMine;
+                    const draftExists = hasDraft(thread.applicationId);
                     const { label, cls } = statusLabel(thread.status);
                     const isActive = activeThread?.applicationId === thread.applicationId;
                     return (
@@ -484,13 +519,18 @@ export default function Messages() {
                           <div className="min-w-0 flex-1">
                             <div className="mb-1 flex items-center gap-2">
                               <span className="truncate text-sm font-semibold">{thread.otherPartyName}</span>
+                              {draftExists && (
+                                <span className="shrink-0 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">Draft</span>
+                              )}
                               {needsReply && (
                                 <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">Needs reply</span>
                               )}
                               <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", cls)}>{label}</span>
                             </div>
                             <p className="mb-0.5 truncate text-xs font-medium text-muted-foreground">{thread.requirementTitle}</p>
-                            {hasMessage ? (
+                            {draftExists ? (
+                              <p className="truncate text-xs font-medium text-orange-700 dark:text-orange-300">Draft: {getSavedDraft(thread.applicationId)}</p>
+                            ) : hasMessage ? (
                               <p className={cn("truncate text-xs", needsReply ? "font-medium text-foreground" : "text-muted-foreground")}>
                                 {isMine ? <span className="text-foreground/50">You: </span> : null}{thread.lastMessageBody}
                               </p>
@@ -518,6 +558,7 @@ export default function Messages() {
                 otherPartyName={activeThread.otherPartyName}
                 otherPartyAvatarUrl={activeThread.otherPartyAvatarUrl}
                 onBack={() => setActiveApplicationId(null)}
+                onDraftChange={() => setDraftRevision((value) => value + 1)}
               />
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center text-center text-muted-foreground">
