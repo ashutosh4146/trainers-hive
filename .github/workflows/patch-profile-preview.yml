@@ -1,0 +1,94 @@
+name: Patch profile preview
+
+on:
+  push:
+    branches:
+      - dashboard-applications-alignment
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dashboard-applications-alignment
+      - name: Patch Profile page
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/trainers-hive/src/pages/Profile.tsx')
+          s = p.read_text()
+          marker = '''  const isProfileComplete = React.useMemo(() => {
+    if (!trainer) return false;
+    const t = trainer as typeof trainer & { trainerType?: string; languages?: string[] };
+    return !!(
+      t.name?.trim() &&
+      t.mainSkill?.trim() &&
+      t.location?.trim() &&
+      t.trainerType &&
+      (t.languages ?? []).length > 0
+    );
+  }, [trainer]);
+'''
+          add = marker + '''
+  const previewName = form.watch("name")?.trim() || trainer?.name || "Your name";
+  const previewHeadline = form.watch("headline")?.trim() || "Add a short headline so vendors understand your expertise at a glance.";
+  const previewMainSkill = form.watch("mainSkill")?.trim() || "Primary skill";
+  const previewExperience = Number(form.watch("experienceYears") ?? 0);
+  const previewLocation = form.watch("location")?.trim() || "Location";
+'''
+          if 'const previewHeadline = form.watch("headline")' not in s:
+              s = s.replace(marker, add)
+          anchor = '''        <Form {...form}>
+'''
+          card = '''        <div className="mb-6 rounded-xl border bg-muted/30 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Public trainer card preview</p>
+              <p className="text-xs text-muted-foreground">This is how vendors will see your trainer summary.</p>
+            </div>
+            {trainer?.verified && <Badge variant="secondary" className="bg-blue-100 text-blue-800">Verified</Badge>}
+          </div>
+          <div className="rounded-lg border bg-background p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                {previewName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-semibold">{previewName}</p>
+                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{previewHeadline}</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              <Badge variant="outline" className="border-primary/20 bg-primary/5 font-normal text-primary">{previewMainSkill}</Badge>
+              {subSkills.slice(0, 3).map((skill) => <Badge key={skill} variant="outline" className="font-normal text-muted-foreground">{skill}</Badge>)}
+              {subSkills.length > 3 && <Badge variant="outline" className="border-dashed font-normal text-muted-foreground">+{subSkills.length - 3}</Badge>}
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-y-2 border-t pt-3 text-sm text-muted-foreground">
+              <span>{Number.isFinite(previewExperience) ? previewExperience : 0}y training exp</span>
+              <span className="truncate text-right">{previewLocation}</span>
+            </div>
+          </div>
+        </div>
+
+'''
+          if 'Public trainer card preview' not in s:
+              s = s.replace(anchor, card + anchor)
+          p.write_text(s)
+          Path('.github/workflows/patch-profile-preview.yml').unlink(missing_ok=True)
+          Path('tmp-profile-preview-trigger.txt').unlink(missing_ok=True)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/pages/Profile.tsx .github/workflows/patch-profile-preview.yml tmp-profile-preview-trigger.txt
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Add trainer profile preview card"
+            git push origin HEAD:dashboard-applications-alignment
+          fi
