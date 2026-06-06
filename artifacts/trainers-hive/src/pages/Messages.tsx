@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "active";
+type QuickReply = { label: string; body: string };
 
 function statusLabel(status: string) {
   if (status === "hired") return { label: "Hired", cls: "bg-primary/10 text-primary" };
@@ -31,32 +32,141 @@ function statusLabel(status: string) {
   return { label: status || "Open", cls: "bg-muted text-muted-foreground" };
 }
 
-function getQuickReplies(status: string) {
+function getQuickReplies(status: string, role?: string): QuickReply[] {
+  const isVendor = role === "vendor";
+
+  if (isVendor) {
+    if (status === "submitted" || status === "applied") {
+      return [
+        {
+          label: "Ask availability",
+          body: "Thanks for applying. Please confirm your availability for the proposed training dates and preferred delivery mode.",
+        },
+        {
+          label: "Ask commercial terms",
+          body: "Your profile looks relevant. Please share your commercial expectations, availability, and any prerequisites for this requirement.",
+        },
+        {
+          label: "Schedule discussion",
+          body: "We would like to discuss the requirement in detail. Please share two suitable time slots for a short call.",
+        },
+      ];
+    }
+
+    if (status === "shortlisted") {
+      return [
+        {
+          label: "Confirm shortlist",
+          body: "You are shortlisted for this requirement. Please confirm your availability, commercials, and readiness to proceed.",
+        },
+        {
+          label: "Finalize scope",
+          body: "Before selection, let’s finalize the agenda, delivery mode, duration, commercials, and expected outcomes.",
+        },
+        {
+          label: "Request documents",
+          body: "Please share your updated profile, relevant past training references, and any supporting material for final review.",
+        },
+      ];
+    }
+
+    if (status === "hired") {
+      return [
+        {
+          label: "Confirm kickoff",
+          body: "You are selected for this requirement. Let’s confirm kickoff date, agenda, prerequisites, and communication plan.",
+        },
+        {
+          label: "Agreement next",
+          body: "Let’s proceed with the engagement agreement. Please confirm the final scope, dates, fee, and payment terms.",
+        },
+        {
+          label: "Training readiness",
+          body: "Please share the final training plan, learner prerequisites, setup requirements, and any pre-work material needed.",
+        },
+      ];
+    }
+
+    return [
+      {
+        label: "Ask next steps",
+        body: "Thanks for the update. Please confirm the next steps, expected timeline, and any pending details from your side.",
+      },
+      {
+        label: "Schedule call",
+        body: "Can we schedule a short call to align on scope, timeline, commercials, and delivery expectations?",
+      },
+      {
+        label: "Request details",
+        body: "Please share the pending details so we can move this engagement forward smoothly.",
+      },
+    ];
+  }
+
   if (status === "submitted" || status === "applied") {
     return [
-      "Thanks for your application. I’ll review your profile and get back shortly.",
-      "Could you share your availability and expected commercial terms for this requirement?",
-      "Your profile looks relevant. Let’s discuss the training scope and timelines.",
+      {
+        label: "Share availability",
+        body: "Thanks for considering my application. I am available to discuss the requirement and can share my detailed approach if needed.",
+      },
+      {
+        label: "Ask scope",
+        body: "Could you please share more details about learner profile, expected outcomes, delivery mode, and tentative dates?",
+      },
+      {
+        label: "Share approach",
+        body: "Based on the requirement, I can prepare a practical training plan covering agenda, exercises, and expected outcomes.",
+      },
     ];
   }
+
   if (status === "shortlisted") {
     return [
-      "You have been shortlisted. Please confirm your availability for the proposed dates.",
-      "Let’s finalize scope, delivery mode, and commercials before moving ahead.",
-      "Can we schedule a quick call to discuss the requirement in detail?",
+      {
+        label: "Confirm interest",
+        body: "Thank you for shortlisting me. I am interested and available to discuss final scope, schedule, and commercials.",
+      },
+      {
+        label: "Ask call time",
+        body: "Please share a suitable time for a short discussion so we can finalize expectations and delivery details.",
+      },
+      {
+        label: "Confirm terms",
+        body: "I can proceed once we confirm the dates, batch profile, training mode, deliverables, and commercials.",
+      },
     ];
   }
+
   if (status === "hired") {
     return [
-      "You are selected for this requirement. Let’s confirm agreement terms and next steps.",
-      "Please share any prerequisites or setup needs before the training starts.",
-      "Let’s align on dates, agenda, deliverables, and communication plan.",
+      {
+        label: "Confirm readiness",
+        body: "Thank you for selecting me. I am ready to proceed and can share the final agenda, prerequisites, and training plan.",
+      },
+      {
+        label: "Ask agreement",
+        body: "Please share the engagement agreement or final terms so we can confirm scope, dates, commercials, and payment terms.",
+      },
+      {
+        label: "Setup requirements",
+        body: "For smooth delivery, please confirm platform access, learner count, expected hands-on setup, and any internal guidelines.",
+      },
     ];
   }
+
   return [
-    "Thanks for the update. Let’s discuss next steps.",
-    "Please share your availability for a quick discussion.",
-    "Can you confirm the scope, timeline, and commercials?",
+    {
+      label: "Follow up",
+      body: "Following up on this conversation. Please let me know the next step when convenient.",
+    },
+    {
+      label: "Share availability",
+      body: "I am available for a quick discussion. Please share a suitable time slot.",
+    },
+    {
+      label: "Clarify details",
+      body: "Could you please confirm the scope, timeline, delivery mode, and commercials for this engagement?",
+    },
   ];
 }
 
@@ -109,7 +219,7 @@ function ConversationPanel({
   const { auth } = useAuth();
   const [body, setBody] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const quickReplies = getQuickReplies(status);
+  const quickReplies = getQuickReplies(status, auth?.role);
 
   const { data, isLoading } = useListApplicationMessages(applicationId, {
     query: {
@@ -217,12 +327,13 @@ function ConversationPanel({
           </span>
           {quickReplies.map((reply) => (
             <button
-              key={reply}
+              key={reply.label}
               type="button"
-              onClick={() => setBody(reply)}
+              title={reply.body}
+              onClick={() => setBody(reply.body)}
               className="shrink-0 rounded-full border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
             >
-              {reply.length > 42 ? `${reply.slice(0, 42)}…` : reply}
+              {reply.label}
             </button>
           ))}
         </div>
