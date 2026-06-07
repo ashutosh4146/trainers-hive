@@ -1,5 +1,12 @@
 import { pgTable, text, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 
+export type VendorProfileExtras = {
+  mobileNumber?: string;
+  locality?: string;
+  fullAddress?: string;
+  onlineProfiles?: Array<{ label: string; url: string }>;
+};
+
 export const vendorsTable = pgTable("vendors", {
   id: text("id").primaryKey(),
   companyName: text("company_name").notNull(),
@@ -13,6 +20,10 @@ export const vendorsTable = pgTable("vendors", {
   logoUrl: text("logo_url").notNull(),
   websiteUrl: text("website_url"),
   verified: boolean("verified").notNull().default(false),
+  profileExtras: jsonb("profile_extras")
+    .$type<VendorProfileExtras>()
+    .notNull()
+    .default({}),
   emailPrefs: jsonb("email_prefs")
     .$type<{
       newApplication: boolean;
