@@ -18,6 +18,7 @@ import {
   getVendorCompletionItems,
 } from "@/components/ProfileCompletion";
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
+import { ProfileExtrasPanel } from "@/components/ProfileExtrasPanel";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { TrainerProfilePolishPage } from "@/components/TrainerProfilePolishPage";
 import { VendorDashboardPolish } from "@/components/VendorDashboardPolish";
@@ -165,11 +166,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <VendorDashboardPolish vendorId={vendorDashboardId} />
             </div>
           ) : useVendorProfile ? (
-            <div className="container mx-auto max-w-7xl px-4 py-8">
-              <VendorProfileRequired vendorId={vendorProfileId} />
-            </div>
+            <>
+              <div className="container mx-auto max-w-7xl px-4 py-8">
+                <VendorProfileRequired vendorId={vendorProfileId} />
+              </div>
+              <div className="container mx-auto max-w-7xl px-4 pb-8">
+                <ProfileExtrasPanel role="vendor" id={vendorProfileId} />
+              </div>
+            </>
           ) : useTrainerProfile ? (
-            <TrainerProfilePolishPage trainerId={trainerProfileId} registeredEmail={currentUser?.email ?? ""} />
+            <>
+              <TrainerProfilePolishPage trainerId={trainerProfileId} registeredEmail={currentUser?.email ?? ""} />
+              <div className="container mx-auto max-w-7xl px-4 pb-8">
+                <ProfileExtrasPanel role="trainer" id={trainerProfileId} />
+              </div>
+            </>
           ) : usePaginatedTrainers ? (
             <PaginatedTrainersDirectory />
           ) : (
