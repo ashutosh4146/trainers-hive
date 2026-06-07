@@ -1,0 +1,47 @@
+name: Temporary profile anchors
+
+on:
+  push:
+    branches:
+      - vendor-profile-polish-ui
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: vendor-profile-polish-ui
+      - name: Add profile section anchors
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          trainer = Path('artifacts/trainers-hive/src/components/TrainerProfilePolishPage.tsx')
+          s = trainer.read_text()
+          s = s.replace('<div className="container mx-auto max-w-7xl space-y-6 px-4 py-8">', '<div id="profile-overview" className="container mx-auto max-w-7xl space-y-6 px-4 py-8 scroll-mt-24">', 1)
+          s = s.replace('<Card className="border-primary/10">\n          <CardHeader><CardTitle>Professional details</CardTitle>', '<Card id="profile-professional" className="border-primary/10 scroll-mt-24">\n          <CardHeader><CardTitle>Professional details</CardTitle>', 1)
+          s = s.replace('<TrainerAvailabilityPolish trainerId={trainerId} />', '<div id="profile-availability" className="scroll-mt-24"><TrainerAvailabilityPolish trainerId={trainerId} /></div>')
+          trainer.write_text(s)
+
+          vendor = Path('artifacts/trainers-hive/src/components/VendorProfileRequired.tsx')
+          if vendor.exists():
+              v = vendor.read_text()
+              v = v.replace('<div className="space-y-6">\n    <section className=', '<div id="profile-overview" className="space-y-6 scroll-mt-24">\n    <section className=', 1)
+              v = v.replace('<Card className="border-primary/10"><CardHeader><CardTitle>Company details</CardTitle>', '<Card id="profile-company" className="border-primary/10 scroll-mt-24"><CardHeader><CardTitle>Company details</CardTitle>', 1)
+              vendor.write_text(v)
+          Path('tmp-profile-anchors.txt').unlink(missing_ok=True)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/components/TrainerProfilePolishPage.tsx artifacts/trainers-hive/src/components/VendorProfileRequired.tsx tmp-profile-anchors.txt
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Add profile section anchors"
+            git push origin HEAD:vendor-profile-polish-ui
+          fi
