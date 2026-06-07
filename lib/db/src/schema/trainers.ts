@@ -11,7 +11,9 @@ import {
 export type OnlineProfile = { label: string; url: string };
 export type WorkSample = { title: string; url: string; fromYear?: string; fromMonth?: string; toYear?: string; toMonth?: string; current?: boolean; description?: string };
 export type Presentation = { title: string; url: string; description?: string };
+export type Publication = { title: string; url: string; description?: string };
 export type Patent = { title: string; url?: string; year?: string; description?: string };
+export type ExtraCertification = { title: string; url?: string; description?: string };
 export type EmploymentDetail = { company: string; title: string; from?: string; to?: string; current?: boolean; description?: string };
 export type EducationDetail = { degree: string; institute: string; year?: string; description?: string };
 
@@ -23,8 +25,10 @@ export type TrainerProfileExtras = {
   fullAddress?: string;
   onlineProfiles?: OnlineProfile[];
   workSamples?: WorkSample[];
+  publications?: Publication[];
   presentations?: Presentation[];
   patents?: Patent[];
+  extraCertifications?: ExtraCertification[];
   employmentDetails?: EmploymentDetail[];
   educationDetails?: EducationDetail[];
 };
