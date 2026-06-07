@@ -20,6 +20,7 @@ import {
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { VendorDashboardPolish } from "@/components/VendorDashboardPolish";
+import { VendorProfilePolish } from "@/components/VendorProfilePolish";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -133,11 +134,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: currentUser, isLoading: currentUserLoading } = useGetCurrentUser({ query: { enabled: isSignedIn } });
   const isVendorOrCollege = isSignedIn && auth?.role === "vendor";
   const isDashboard = location === "/dashboard";
+  const isProfile = location === "/profile";
   const dashboardRole = auth?.role ?? currentUser?.role;
   const useTrainerDashboard = isDashboard && dashboardRole === "trainer";
   const vendorDashboardId = isDashboard && dashboardRole === "vendor" ? (currentUser?.vendorId ?? auth?.vendorId ?? "") : "";
+  const vendorProfileId = isProfile && dashboardRole === "vendor" ? (currentUser?.vendorId ?? auth?.vendorId ?? "") : "";
   const useVendorDashboard = !!vendorDashboardId;
-  const waitForDashboardRole = isDashboard && isSignedIn && currentUserLoading && !dashboardRole;
+  const useVendorProfile = !!vendorProfileId;
+  const waitForDashboardRole = (isDashboard || isProfile) && isSignedIn && currentUserLoading && !dashboardRole;
   const usePaginatedTrainers = location === "/trainers" && dashboardRole === "admin";
 
   return (
@@ -156,6 +160,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ) : useVendorDashboard ? (
             <div className="container mx-auto max-w-7xl px-4 py-8">
               <VendorDashboardPolish vendorId={vendorDashboardId} />
+            </div>
+          ) : useVendorProfile ? (
+            <div className="container mx-auto max-w-7xl px-4 py-8">
+              <VendorProfilePolish vendorId={vendorProfileId} />
             </div>
           ) : usePaginatedTrainers ? (
             <PaginatedTrainersDirectory />
