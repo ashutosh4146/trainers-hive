@@ -19,6 +19,7 @@ import {
 } from "@/components/ProfileCompletion";
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
+import { TrainerProfilePolishPage } from "@/components/TrainerProfilePolishPage";
 import { VendorDashboardPolish } from "@/components/VendorDashboardPolish";
 import { VendorProfileRequired } from "@/components/VendorProfileRequired";
 import { Button } from "@/components/ui/button";
@@ -139,8 +140,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const useTrainerDashboard = isDashboard && dashboardRole === "trainer";
   const vendorDashboardId = isDashboard && dashboardRole === "vendor" ? (currentUser?.vendorId ?? auth?.vendorId ?? "") : "";
   const vendorProfileId = isProfile && dashboardRole === "vendor" ? (currentUser?.vendorId ?? auth?.vendorId ?? "") : "";
+  const trainerProfileId = isProfile && dashboardRole === "trainer" ? (currentUser?.trainerId ?? auth?.trainerId ?? "") : "";
   const useVendorDashboard = !!vendorDashboardId;
   const useVendorProfile = !!vendorProfileId;
+  const useTrainerProfile = !!trainerProfileId;
   const waitForDashboardRole = (isDashboard || isProfile) && isSignedIn && currentUserLoading && !dashboardRole;
   const usePaginatedTrainers = location === "/trainers" && dashboardRole === "admin";
 
@@ -165,6 +168,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="container mx-auto max-w-7xl px-4 py-8">
               <VendorProfileRequired vendorId={vendorProfileId} />
             </div>
+          ) : useTrainerProfile ? (
+            <TrainerProfilePolishPage trainerId={trainerProfileId} registeredEmail={currentUser?.email ?? ""} />
           ) : usePaginatedTrainers ? (
             <PaginatedTrainersDirectory />
           ) : (
