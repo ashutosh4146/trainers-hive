@@ -6,8 +6,25 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "next-themes";
-import { Bell, Moon, Sun, Lock, User, Monitor, KeyRound, Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Lock,
+  Mail,
+  Monitor,
+  Moon,
+  Palette,
+  ShieldCheck,
+  Sun,
+  User,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface TrainerEmailPrefs {
@@ -36,8 +53,64 @@ const DEFAULT_VENDOR_PREFS: VendorEmailPrefs = {
   messages: true,
 };
 
+type PreferenceItem = {
+  id: string;
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+};
+
+function SummaryCard({ title, value, helper, icon }: { title: string; value: React.ReactNode; helper: string; icon: React.ReactNode }) {
+  return (
+    <Card className="border-primary/10">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">{title}</p>
+            <p className="mt-2 text-2xl font-bold leading-none">{value}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{helper}</p>
+          </div>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {icon}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PreferenceRow({ item, disabled }: { item: PreferenceItem; disabled?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border bg-background p-4">
+      <div className="min-w-0">
+        <Label htmlFor={item.id} className="font-semibold">{item.title}</Label>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.description}</p>
+      </div>
+      <Switch id={item.id} checked={item.checked} onCheckedChange={item.onChange} disabled={disabled} />
+    </div>
+  );
+}
+
+function ThemeButton({ value, label, active, icon, onClick }: { value: string; label: string; active: boolean; icon: React.ReactNode; onClick: (value: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(value)}
+      className={`rounded-2xl border p-4 text-left transition-colors ${active ? "border-primary bg-primary/10 text-primary" : "bg-background hover:border-primary/40"}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">{icon}</span>
+        {active && <CheckCircle2 className="h-4 w-4" />}
+      </div>
+      <p className="mt-3 font-semibold">{label}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{value === "system" ? "Follow your device setting." : `Use ${label.toLowerCase()} mode.`}</p>
+    </button>
+  );
+}
+
 export default function Settings() {
-  const { data: user } = useGetCurrentUser();
+  const { data: user, isLoading: userLoading } = useGetCurrentUser();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
 
@@ -118,8 +191,8 @@ export default function Settings() {
     }
   };
 
-  const handleSetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSetPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (password.length < 6) {
       toast({ title: "Password too short", description: "Must be at least 6 characters.", variant: "destructive" });
       return;
@@ -144,265 +217,222 @@ export default function Settings() {
     }
   };
 
+  const activeNotificationCount = isTrainer
+    ? Object.values(trainerEmailPrefs).filter(Boolean).length
+    : isVendor
+    ? Object.values(vendorEmailPrefs).filter(Boolean).length
+    : 0;
+
+  const notificationItems: PreferenceItem[] = isTrainer
+    ? [
+        { id: "pref-endorsements", title: "Endorsement emails", description: "Get notified when a vendor endorses your profile.", checked: trainerEmailPrefs.endorsements, onChange: (v) => handleToggleTrainerPref("endorsements", v) },
+        { id: "pref-appstatus", title: "Application status emails", description: "Get notified when you are shortlisted, hired, or not selected.", checked: trainerEmailPrefs.applicationStatus, onChange: (v) => handleToggleTrainerPref("applicationStatus", v) },
+        { id: "pref-newreq", title: "New requirement match emails", description: "Alerts for new requirements that match your skills.", checked: trainerEmailPrefs.newRequirementMatch, onChange: (v) => handleToggleTrainerPref("newRequirementMatch", v) },
+        { id: "pref-messages", title: "Message emails", description: "Get notified by email when you receive a new message.", checked: trainerEmailPrefs.messages, onChange: (v) => handleToggleTrainerPref("messages", v) },
+      ]
+    : isVendor
+    ? [
+        { id: "pref-newapp", title: "New application emails", description: "Get notified when a trainer applies to one of your requirements.", checked: vendorEmailPrefs.newApplication, onChange: (v) => handleToggleVendorPref("newApplication", v) },
+        { id: "pref-withdrew", title: "Trainer withdrawal emails", description: "Get notified when a trainer withdraws their application.", checked: vendorEmailPrefs.trainerWithdrew, onChange: (v) => handleToggleVendorPref("trainerWithdrew", v) },
+        { id: "pref-vendor-messages", title: "Message emails", description: "Get notified by email when you receive a new message from a trainer.", checked: vendorEmailPrefs.messages, onChange: (v) => handleToggleVendorPref("messages", v) },
+      ]
+    : [];
+
+  if (userLoading) {
+    return (
+      <div className="container mx-auto max-w-7xl space-y-6 px-4 py-8 md:py-12">
+        <Skeleton className="h-40 w-full rounded-2xl" />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+          <Skeleton className="h-[560px] rounded-2xl" />
+          <Skeleton className="h-[560px] rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 md:py-12 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account preferences and application settings.</p>
+    <div className="container mx-auto max-w-7xl space-y-6 px-4 py-8 md:py-12">
+      <section className="overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/15 via-background to-background p-5 md:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">Settings</Badge>
+              {user?.role && <Badge variant="outline" className="capitalize">{user.role} account</Badge>}
+            </div>
+            <h1 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">Account preferences</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Manage appearance, email notifications, privacy visibility, and password login from one clean place.
+            </p>
+          </div>
+          {user && (
+            <div className="rounded-2xl border bg-background/80 p-4 shadow-sm lg:min-w-[240px]">
+              <p className="text-xs font-medium text-muted-foreground">Signed in as</p>
+              <p className="mt-1 truncate font-semibold">{user.name || "User"}</p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">{user.email}</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <SummaryCard title="Theme" value={theme === "system" ? "System" : theme === "light" ? "Light" : "Dark"} helper="Current appearance preference." icon={<Palette className="h-5 w-5" />} />
+        <SummaryCard title="Notifications" value={activeNotificationCount} helper="Email channels currently enabled." icon={<Bell className="h-5 w-5" />} />
+        <SummaryCard title="Security" value="Password" helper="Email/password login can be set here." icon={<ShieldCheck className="h-5 w-5" />} />
       </div>
 
-      <div className="grid gap-8">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sun className="h-5 w-5 text-primary" /> Appearance
-              </CardTitle>
-              <CardDescription>Customize how the platform looks on your device.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Theme Preference</Label>
-                  <p className="text-sm text-muted-foreground">Select your preferred color theme.</p>
-                </div>
-                <div className="flex bg-muted p-1 rounded-lg">
-                  <Button variant={theme === 'light' ? 'default' : 'ghost'} size="sm" onClick={() => setTheme('light')} className="h-8 px-3">
-                    <Sun className="h-4 w-4 mr-2" /> Light
-                  </Button>
-                  <Button variant={theme === 'dark' ? 'default' : 'ghost'} size="sm" onClick={() => setTheme('dark')} className="h-8 px-3">
-                    <Moon className="h-4 w-4 mr-2" /> Dark
-                  </Button>
-                  <Button variant={theme === 'system' ? 'default' : 'ghost'} size="sm" onClick={() => setTheme('system')} className="h-8 px-3">
-                    <Monitor className="h-4 w-4 mr-2" /> System
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-primary" /> Email Notifications
-                {isSavingPrefs && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
-              </CardTitle>
-              <CardDescription>
-                {isTrainer
-                  ? "Choose which email notifications you want to receive."
-                  : isVendor
-                  ? "Choose which email notifications you want to receive."
-                  : "Choose what updates you want to receive."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {isLoadingPrefs ? (
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading preferences…
-                </div>
-              ) : isTrainer ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="pref-endorsements">Endorsement Emails</Label>
-                      <p className="text-sm text-muted-foreground">Get notified when a vendor endorses your profile.</p>
-                    </div>
-                    <Switch
-                      id="pref-endorsements"
-                      checked={trainerEmailPrefs.endorsements}
-                      onCheckedChange={(v) => handleToggleTrainerPref("endorsements", v)}
-                      disabled={isSavingPrefs}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="pref-appstatus">Application Status Emails</Label>
-                      <p className="text-sm text-muted-foreground">Get notified when you are shortlisted, hired, or not selected.</p>
-                    </div>
-                    <Switch
-                      id="pref-appstatus"
-                      checked={trainerEmailPrefs.applicationStatus}
-                      onCheckedChange={(v) => handleToggleTrainerPref("applicationStatus", v)}
-                      disabled={isSavingPrefs}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="pref-newreq">New Requirement Match Emails</Label>
-                      <p className="text-sm text-muted-foreground">Alerts for new requirements that match your skills.</p>
-                    </div>
-                    <Switch
-                      id="pref-newreq"
-                      checked={trainerEmailPrefs.newRequirementMatch}
-                      onCheckedChange={(v) => handleToggleTrainerPref("newRequirementMatch", v)}
-                      disabled={isSavingPrefs}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="pref-messages">Message Emails</Label>
-                      <p className="text-sm text-muted-foreground">Get notified by email when you receive a new message.</p>
-                    </div>
-                    <Switch
-                      id="pref-messages"
-                      checked={trainerEmailPrefs.messages}
-                      onCheckedChange={(v) => handleToggleTrainerPref("messages", v)}
-                      disabled={isSavingPrefs}
-                    />
-                  </div>
-                </>
-              ) : isVendor ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="pref-newapp">New Application Emails</Label>
-                      <p className="text-sm text-muted-foreground">Get notified when a trainer applies to one of your requirements.</p>
-                    </div>
-                    <Switch
-                      id="pref-newapp"
-                      checked={vendorEmailPrefs.newApplication}
-                      onCheckedChange={(v) => handleToggleVendorPref("newApplication", v)}
-                      disabled={isSavingPrefs}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="pref-withdrew">Trainer Withdrawal Emails</Label>
-                      <p className="text-sm text-muted-foreground">Get notified when a trainer withdraws their application.</p>
-                    </div>
-                    <Switch
-                      id="pref-withdrew"
-                      checked={vendorEmailPrefs.trainerWithdrew}
-                      onCheckedChange={(v) => handleToggleVendorPref("trainerWithdrew", v)}
-                      disabled={isSavingPrefs}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="pref-vendor-messages">Message Emails</Label>
-                      <p className="text-sm text-muted-foreground">Get notified by email when you receive a new message from a trainer.</p>
-                    </div>
-                    <Switch
-                      id="pref-vendor-messages"
-                      checked={vendorEmailPrefs.messages}
-                      onCheckedChange={(v) => handleToggleVendorPref("messages", v)}
-                      disabled={isSavingPrefs}
-                    />
-                  </div>
-                </>
-              ) : null}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-primary" /> Privacy
-              </CardTitle>
-              <CardDescription>Manage your visibility on the platform.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="profile-vis">Profile Visibility</Label>
-                  <p className="text-sm text-muted-foreground">Allow others to find your profile in search.</p>
-                </div>
-                <Switch id="profile-vis" defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="contact-platform">Direct Contact</Label>
-                  <p className="text-sm text-muted-foreground">Allow verified users to message you directly.</p>
-                </div>
-                <Switch id="contact-platform" defaultChecked />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {(user?.role === "trainer" || user?.role === "vendor") && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-            <Card>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+        <div className="space-y-6">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+            <Card className="border-primary/10">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <KeyRound className="h-5 w-5 text-primary" /> Password Login
-                </CardTitle>
-                <CardDescription>
-                  Set a password so you can sign in with your email and password instead of a magic link every time.
-                </CardDescription>
+                <CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5 text-primary" /> Appearance</CardTitle>
+                <CardDescription>Customize how Trainers Hive looks on your device.</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSetPassword} className="space-y-4 max-w-sm">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="new-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Min. 6 characters"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        autoComplete="new-password"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        onClick={() => setShowPassword((v) => !v)}
-                        tabIndex={-1}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="confirm-password">Confirm Password</Label>
-                    <Input
-                      id="confirm-password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Re-enter password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      autoComplete="new-password"
-                    />
-                  </div>
-                  <Button type="submit" disabled={isSavingPassword || !password || !confirmPassword}>
-                    {isSavingPassword ? "Saving…" : "Save Password"}
-                  </Button>
-                </form>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <ThemeButton value="light" label="Light" active={theme === "light"} icon={<Sun className="h-5 w-5" />} onClick={setTheme} />
+                  <ThemeButton value="dark" label="Dark" active={theme === "dark"} icon={<Moon className="h-5 w-5" />} onClick={setTheme} />
+                  <ThemeButton value="system" label="System" active={theme === "system" || !theme} icon={<Monitor className="h-5 w-5" />} onClick={setTheme} />
+                </div>
               </CardContent>
             </Card>
           </motion.div>
-        )}
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-primary" /> Account
-              </CardTitle>
-              <CardDescription>Manage your current session.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {user && (
-                <div className="bg-muted/50 p-4 rounded-lg flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                    <div className="mt-1">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary capitalize">
-                        {user.role} Account
-                      </span>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Card className="border-primary/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-primary" /> Email notifications
+                  {isSavingPrefs && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </CardTitle>
+                <CardDescription>Choose the emails that are useful for your role.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {isLoadingPrefs ? (
+                  <div className="flex items-center gap-2 rounded-xl border p-4 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading preferences…
+                  </div>
+                ) : notificationItems.length > 0 ? (
+                  notificationItems.map((item) => <PreferenceRow key={item.id} item={item} disabled={isSavingPrefs} />)
+                ) : (
+                  <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No role-specific notification settings available.</div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        <div className="space-y-6">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <Card className="border-primary/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary" /> Password login</CardTitle>
+                <CardDescription>Set or update a password for email/password sign in.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(user?.role === "trainer" || user?.role === "vendor") ? (
+                  <form onSubmit={handleSetPassword} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-password">New password</Label>
+                      <div className="relative">
+                        <Input
+                          id="new-password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Min. 6 characters"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowPassword((value) => !value)}
+                          tabIndex={-1}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="confirm-password">Confirm password</Label>
+                      <Input
+                        id="confirm-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Re-enter password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isSavingPassword || !password || !confirmPassword}>
+                      {isSavingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      {isSavingPassword ? "Saving…" : "Save password"}
+                    </Button>
+                  </form>
+                ) : (
+                  <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">Password login is available for trainer and vendor accounts.</div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <Card className="border-primary/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5 text-primary" /> Privacy</CardTitle>
+                <CardDescription>Current visibility rules for your role.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-xl border bg-background p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <Label className="font-semibold">Profile visibility</Label>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {isTrainer ? "Vendors can see your profile only after you apply or are part of a hiring flow." : isVendor ? "Trainer-facing company details are shown where relevant to requirements and applicants." : "Visibility depends on account role."}
+                      </p>
+                    </div>
+                    <Badge variant="outline">Policy</Badge>
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
+                <div className="rounded-xl border bg-background p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <Label className="font-semibold">Direct contact</Label>
+                      <p className="mt-1 text-sm text-muted-foreground">Messages stay inside Trainers Hive so both sides have context and history.</p>
+                    </div>
+                    <Badge variant="outline">Protected</Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+            <Card className="border-primary/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><User className="h-5 w-5 text-primary" /> Account</CardTitle>
+                <CardDescription>Your current account identity.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {user && (
+                  <div className="rounded-2xl border bg-primary/5 p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <User className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{user.name}</p>
+                        <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-muted-foreground"><Mail className="h-3.5 w-3.5" /> {user.email}</p>
+                        <Badge variant="outline" className="mt-2 capitalize">{user.role} account</Badge>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
       </div>
     </div>
   );
