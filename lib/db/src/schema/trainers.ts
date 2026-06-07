@@ -8,6 +8,27 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 
+export type OnlineProfile = { label: string; url: string };
+export type WorkSample = { title: string; url: string; fromYear?: string; fromMonth?: string; toYear?: string; toMonth?: string; current?: boolean; description?: string };
+export type Presentation = { title: string; url: string; description?: string };
+export type Patent = { title: string; url?: string; year?: string; description?: string };
+export type EmploymentDetail = { company: string; title: string; from?: string; to?: string; current?: boolean; description?: string };
+export type EducationDetail = { degree: string; institute: string; year?: string; description?: string };
+
+export type TrainerProfileExtras = {
+  mobileNumber?: string;
+  dateOfBirth?: string;
+  workPermit?: string;
+  locality?: string;
+  fullAddress?: string;
+  onlineProfiles?: OnlineProfile[];
+  workSamples?: WorkSample[];
+  presentations?: Presentation[];
+  patents?: Patent[];
+  employmentDetails?: EmploymentDetail[];
+  educationDetails?: EducationDetail[];
+};
+
 export const trainersTable = pgTable("trainers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -41,6 +62,10 @@ export const trainersTable = pgTable("trainers", {
     .$type<Array<{ startDate: string; endDate: string; note?: string }>>()
     .notNull()
     .default([]),
+  profileExtras: jsonb("profile_extras")
+    .$type<TrainerProfileExtras>()
+    .notNull()
+    .default({}),
   emailPrefs: jsonb("email_prefs")
     .$type<{
       endorsements: boolean;
