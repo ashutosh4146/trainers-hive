@@ -18,7 +18,9 @@ const WorkSampleSchema = z.object({
   description: z.string().optional(),
 });
 const PresentationSchema = z.object({ title: z.string().trim().min(1), url: z.string().trim().url(), description: z.string().optional() });
+const PublicationSchema = z.object({ title: z.string().trim().min(1), url: z.string().trim().url(), description: z.string().optional() });
 const PatentSchema = z.object({ title: z.string().trim().min(1), url: z.string().trim().url().optional().or(z.literal("")), year: z.string().optional(), description: z.string().optional() });
+const ExtraCertificationSchema = z.object({ title: z.string().trim().min(1), url: z.string().trim().url().optional().or(z.literal("")), description: z.string().optional() });
 const EmploymentSchema = z.object({ company: z.string().trim().min(1), title: z.string().trim().min(1), from: z.string().optional(), to: z.string().optional(), current: z.boolean().optional(), description: z.string().optional() });
 const EducationSchema = z.object({ degree: z.string().trim().min(1), institute: z.string().trim().min(1), year: z.string().optional(), description: z.string().optional() });
 
@@ -30,8 +32,10 @@ const TrainerProfileExtrasSchema = z.object({
   fullAddress: z.string().optional(),
   onlineProfiles: z.array(LinkSchema).optional(),
   workSamples: z.array(WorkSampleSchema).optional(),
+  publications: z.array(PublicationSchema).optional(),
   presentations: z.array(PresentationSchema).optional(),
   patents: z.array(PatentSchema).optional(),
+  extraCertifications: z.array(ExtraCertificationSchema).optional(),
   employmentDetails: z.array(EmploymentSchema).optional(),
   educationDetails: z.array(EducationSchema).optional(),
 });
