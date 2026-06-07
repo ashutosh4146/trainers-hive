@@ -20,7 +20,7 @@ import {
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { VendorDashboardPolish } from "@/components/VendorDashboardPolish";
-import { VendorProfilePolish } from "@/components/VendorProfilePolish";
+import { VendorProfileRequired } from "@/components/VendorProfileRequired";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -163,7 +163,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           ) : useVendorProfile ? (
             <div className="container mx-auto max-w-7xl px-4 py-8">
-              <VendorProfilePolish vendorId={vendorProfileId} />
+              <VendorProfileRequired vendorId={vendorProfileId} />
             </div>
           ) : usePaginatedTrainers ? (
             <PaginatedTrainersDirectory />
