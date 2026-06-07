@@ -235,18 +235,4 @@
     line-height: 1.8;
     font-size: 0.95rem;
   }
-
-  [class*="xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.85fr)]"] > :first-child form::after {
-    content: "Profile writing guide\A • Mention your company background and training categories\A • Explain learner audience, batch size, and delivery mode\A • Add trainer expectations such as availability, reporting, and completion criteria\A • Keep website and company name consistent for verification\A • Save this profile before posting or reviewing requirements";
-    display: block;
-    white-space: pre-line;
-    margin-top: 2rem;
-    padding: 1.5rem;
-    border: 1px solid hsl(var(--border));
-    border-radius: calc(var(--radius) + 4px);
-    background: hsl(var(--background));
-    color: hsl(var(--muted-foreground));
-    line-height: 1.8;
-    font-size: 0.95rem;
-  }
 }
