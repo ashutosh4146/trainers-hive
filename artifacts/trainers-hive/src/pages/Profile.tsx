@@ -57,6 +57,7 @@ import {
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { VendorProfilePolish } from "@/components/VendorProfilePolish";
+import { TrainerAvailabilityPolish } from "@/components/TrainerAvailabilityPolish";
 
 // =========================
 // Vendor Form (unchanged)
@@ -1394,7 +1395,7 @@ export default function Profile() {
         {user.role === "trainer" && user.trainerId && (
           <>
             <TrainerProfile trainerId={user.trainerId} registeredEmail={user.email} />
-            <TrainerAvailability trainerId={user.trainerId} />
+            <TrainerAvailabilityPolish trainerId={user.trainerId} />
           </>
         )}
         {user.role === "admin" && (
