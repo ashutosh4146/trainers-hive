@@ -134,6 +134,18 @@ function SectionRow({ title, description, count, summary, onAdd, icon }: { title
   );
 }
 
+function SidebarLink({ href, icon, title, helper }: { href: string; icon: React.ReactNode; title: string; helper: string }) {
+  return (
+    <a href={href} className="group flex gap-3 rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold group-hover:text-primary">{title}</span>
+        <span className="block text-xs leading-relaxed text-muted-foreground">{helper}</span>
+      </span>
+    </a>
+  );
+}
+
 function ModalShell({ title, description, children, onClose, onSave, saving }: { title: string; description: string; children: React.ReactNode; onClose: () => void; onSave: () => void; saving: boolean }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 py-6">
@@ -337,38 +349,56 @@ export function ProfileExtrasPanel({ role, id }: Props) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> Additional profile details</CardTitle>
-            <CardDescription>Everything stays inside the profile page. Click Add to open a clean popup form.</CardDescription>
+            <CardDescription>Everything stays inside the profile page. Use the left menu or click Add to open a clean popup form.</CardDescription>
           </div>
           <Badge variant="outline">{role === "trainer" ? "Trainer" : "Vendor"}</Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-8">
-        <section>
-          <h3 className="mb-2 text-lg font-bold">Contact and address</h3>
-          <SectionRow title={role === "trainer" ? "Mobile, DOB, work permit, address and photo" : "Mobile, address and logo"} description="Manage contact details, location, full address, and profile image/logo." count={[extras.mobileNumber, extras.locality, extras.fullAddress, imageUrl].filter(Boolean).length} summary={extras.mobileNumber || extras.locality || undefined} onAdd={() => openModal("contact")} icon={role === "trainer" ? <UserRound className="h-5 w-5" /> : <Building2 className="h-5 w-5" />} />
-        </section>
+      <CardContent>
+        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <div className="rounded-2xl border bg-muted/20 p-3">
+              <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profile sections</p>
+              <div className="space-y-2">
+                <SidebarLink href="#profile-contact" title="Contact" helper="Mobile, address, image" icon={<Phone className="h-4 w-4" />} />
+                <SidebarLink href="#profile-accomplishments" title="Accomplishments" helper="Profiles, work, patents" icon={<Sparkles className="h-4 w-4" />} />
+                {role === "trainer" && <SidebarLink href="#profile-experience" title="Experience" helper="Employment, education" icon={<BriefcaseBusiness className="h-4 w-4" />} />}
+              </div>
+              <div className="mt-4 rounded-xl border bg-background p-3 text-xs leading-relaxed text-muted-foreground">
+                Keep high-signal details here. Vendors see stronger proof after you apply.
+              </div>
+            </div>
+          </aside>
 
-        <section>
-          <h3 className="mb-2 text-lg font-bold">Accomplishments</h3>
-          <SectionRow title="Online profile" description="Add link to online professional profiles, for example LinkedIn, GitHub, etc." count={listCount(onlineProfiles)} summary={itemSummary(onlineProfiles)} onAdd={() => openModal("onlineProfiles")} icon={<Link2 className="h-5 w-5" />} />
-          {role === "trainer" && (
-            <>
-              <SectionRow title="Work sample" description="Link relevant work samples, for example GitHub or Behance." count={listCount(trainerExtras.workSamples)} summary={itemSummary(trainerExtras.workSamples)} onAdd={() => openModal("workSamples")} icon={<ImagePlus className="h-5 w-5" />} />
-              <SectionRow title="White paper / Research publication / Journal entry" description="Add links to your online publications." count={listCount(trainerExtras.publications)} summary={itemSummary(trainerExtras.publications)} onAdd={() => openModal("publications")} icon={<FileText className="h-5 w-5" />} />
-              <SectionRow title="Presentation" description="Add links to online presentations, for example slide-share presentation links." count={listCount(trainerExtras.presentations)} summary={itemSummary(trainerExtras.presentations)} onAdd={() => openModal("presentations")} icon={<Presentation className="h-5 w-5" />} />
-              <SectionRow title="Patent" description="Add details of patents you have filed." count={listCount(trainerExtras.patents)} summary={itemSummary(trainerExtras.patents)} onAdd={() => openModal("patents")} icon={<ShieldCheck className="h-5 w-5" />} />
-              <SectionRow title="Certification" description="Add details of certifications you have completed." count={listCount(trainerExtras.extraCertifications)} summary={itemSummary(trainerExtras.extraCertifications)} onAdd={() => openModal("certifications")} icon={<Award className="h-5 w-5" />} />
-            </>
-          )}
-        </section>
+          <div className="space-y-8">
+            <section id="profile-contact" className="scroll-mt-24 rounded-2xl border bg-background p-5">
+              <div className="mb-2 flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Contact and address</h3></div>
+              <SectionRow title={role === "trainer" ? "Mobile, DOB, work permit, address and photo" : "Mobile, address and logo"} description="Manage contact details, location, full address, and profile image/logo." count={[extras.mobileNumber, extras.locality, extras.fullAddress, imageUrl].filter(Boolean).length} summary={extras.mobileNumber || extras.locality || undefined} onAdd={() => openModal("contact")} icon={role === "trainer" ? <UserRound className="h-5 w-5" /> : <Building2 className="h-5 w-5" />} />
+            </section>
 
-        {role === "trainer" && (
-          <section>
-            <h3 className="mb-2 text-lg font-bold">Experience and education</h3>
-            <SectionRow title="Employment details" description="Add current or past work experience details." count={listCount(trainerExtras.employmentDetails)} summary={itemSummary(trainerExtras.employmentDetails)} onAdd={() => openModal("employment")} icon={<BriefcaseBusiness className="h-5 w-5" />} />
-            <SectionRow title="Education" description="Add education, institute, and completion details." count={listCount(trainerExtras.educationDetails)} summary={itemSummary(trainerExtras.educationDetails)} onAdd={() => openModal("education")} icon={<GraduationCap className="h-5 w-5" />} />
-          </section>
-        )}
+            <section id="profile-accomplishments" className="scroll-mt-24 rounded-2xl border bg-background p-5">
+              <div className="mb-2 flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Accomplishments</h3></div>
+              <SectionRow title="Online profile" description="Add link to online professional profiles, for example LinkedIn, GitHub, etc." count={listCount(onlineProfiles)} summary={itemSummary(onlineProfiles)} onAdd={() => openModal("onlineProfiles")} icon={<Link2 className="h-5 w-5" />} />
+              {role === "trainer" && (
+                <>
+                  <SectionRow title="Work sample" description="Link relevant work samples, for example GitHub or Behance." count={listCount(trainerExtras.workSamples)} summary={itemSummary(trainerExtras.workSamples)} onAdd={() => openModal("workSamples")} icon={<ImagePlus className="h-5 w-5" />} />
+                  <SectionRow title="White paper / Research publication / Journal entry" description="Add links to your online publications." count={listCount(trainerExtras.publications)} summary={itemSummary(trainerExtras.publications)} onAdd={() => openModal("publications")} icon={<FileText className="h-5 w-5" />} />
+                  <SectionRow title="Presentation" description="Add links to online presentations, for example slide-share presentation links." count={listCount(trainerExtras.presentations)} summary={itemSummary(trainerExtras.presentations)} onAdd={() => openModal("presentations")} icon={<Presentation className="h-5 w-5" />} />
+                  <SectionRow title="Patent" description="Add details of patents you have filed." count={listCount(trainerExtras.patents)} summary={itemSummary(trainerExtras.patents)} onAdd={() => openModal("patents")} icon={<ShieldCheck className="h-5 w-5" />} />
+                  <SectionRow title="Certification" description="Add details of certifications you have completed." count={listCount(trainerExtras.extraCertifications)} summary={itemSummary(trainerExtras.extraCertifications)} onAdd={() => openModal("certifications")} icon={<Award className="h-5 w-5" />} />
+                </>
+              )}
+            </section>
+
+            {role === "trainer" && (
+              <section id="profile-experience" className="scroll-mt-24 rounded-2xl border bg-background p-5">
+                <div className="mb-2 flex items-center gap-2"><BriefcaseBusiness className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Experience and education</h3></div>
+                <SectionRow title="Employment details" description="Add current or past work experience details." count={listCount(trainerExtras.employmentDetails)} summary={itemSummary(trainerExtras.employmentDetails)} onAdd={() => openModal("employment")} icon={<BriefcaseBusiness className="h-5 w-5" />} />
+                <SectionRow title="Education" description="Add education, institute, and completion details." count={listCount(trainerExtras.educationDetails)} summary={itemSummary(trainerExtras.educationDetails)} onAdd={() => openModal("education")} icon={<GraduationCap className="h-5 w-5" />} />
+              </section>
+            )}
+          </div>
+        </div>
       </CardContent>
       {renderModal()}
     </Card>
