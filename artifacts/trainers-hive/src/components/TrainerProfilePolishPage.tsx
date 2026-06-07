@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
+  customFetch,
   getGetCurrentUserQueryKey,
   getGetTrainerQueryKey,
   useGetCurrentUser,
@@ -21,7 +22,7 @@ import {
   GraduationCap,
   Languages,
   Loader2,
-  MapPin,
+  Phone,
   Sparkles,
   UserRound,
   X,
@@ -39,6 +40,34 @@ import { useToast } from "@/hooks/use-toast";
 import { TrainerAvailabilityPolish } from "@/components/TrainerAvailabilityPolish";
 
 type Cert = { name: string; url?: string };
+type TrainerExtras = { mobileNumber?: string; [key: string]: unknown };
+
+type ProfileExtrasResponse = {
+  avatarUrl?: string;
+  profileExtras?: TrainerExtras;
+};
+
+const LANGUAGE_OPTIONS = [
+  "English",
+  "Hindi",
+  "Marathi",
+  "Gujarati",
+  "Punjabi",
+  "Bengali",
+  "Tamil",
+  "Telugu",
+  "Kannada",
+  "Malayalam",
+  "Urdu",
+  "Odia",
+  "Assamese",
+  "Spanish",
+  "French",
+  "German",
+  "Arabic",
+  "Japanese",
+  "Mandarin",
+];
 
 const trainerSchema = z.object({
   name: z.string().min(2, "Full name is required"),
@@ -91,6 +120,69 @@ function MetricCard({ label, value, helper, icon }: { label: string; value: Reac
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function LanguagePicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const [query, setQuery] = React.useState("");
+  const cleanQuery = query.trim();
+  const suggestions = React.useMemo(() => {
+    if (cleanQuery.length < 2) return [];
+    const lower = cleanQuery.toLowerCase();
+    return LANGUAGE_OPTIONS.filter((language) => language.toLowerCase().includes(lower) && !value.some((selected) => selected.toLowerCase() === language.toLowerCase())).slice(0, 6);
+  }, [cleanQuery, value]);
+
+  const addLanguage = (language: string) => {
+    const clean = language.trim();
+    if (clean.length < 2) return;
+    if (value.some((item) => item.toLowerCase() === clean.toLowerCase())) {
+      setQuery("");
+      return;
+    }
+    const fullMatch = LANGUAGE_OPTIONS.find((item) => item.toLowerCase() === clean.toLowerCase()) || LANGUAGE_OPTIONS.find((item) => item.toLowerCase().startsWith(clean.toLowerCase()));
+    onChange([...value, fullMatch || clean]);
+    setQuery("");
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addLanguage(suggestions[0] || query);
+            }
+          }}
+          placeholder="Type 2 letters, e.g. en, hi, ma"
+        />
+        <Button type="button" variant="outline" onClick={() => addLanguage(suggestions[0] || query)} disabled={cleanQuery.length < 2}>Add</Button>
+      </div>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {suggestions.map((language) => (
+            <button key={language} type="button" onClick={() => addLanguage(language)} className="rounded-full border bg-background px-3 py-1 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+              {language}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex min-h-10 flex-wrap gap-2 rounded-xl border bg-background p-2">
+        {value.length === 0 ? (
+          <span className="px-2 py-1 text-sm text-muted-foreground">No languages added yet</span>
+        ) : value.map((language) => (
+          <Badge key={language} variant="secondary" className="gap-1 rounded-full px-3 py-1">
+            {language}
+            <button type="button" onClick={() => onChange(value.filter((item) => item !== language))} aria-label={`Remove ${language}`}>
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">Start typing at least 2 letters to see full language suggestions, then click Add.</p>
+    </div>
   );
 }
 
@@ -154,8 +246,11 @@ export function TrainerProfilePolishPage({ trainerId, registeredEmail }: { train
   const { toast } = useToast();
 
   const [subSkillsText, setSubSkillsText] = React.useState("");
-  const [languagesText, setLanguagesText] = React.useState("");
+  const [languages, setLanguages] = React.useState<string[]>([]);
   const [certifications, setCertifications] = React.useState<Cert[]>([]);
+  const [mobileNumber, setMobileNumber] = React.useState("");
+  const [profileExtras, setProfileExtras] = React.useState<TrainerExtras>({});
+  const [avatarUrl, setAvatarUrl] = React.useState("");
 
   const form = useForm<TrainerFormValues>({
     resolver: zodResolver(trainerSchema),
@@ -186,13 +281,24 @@ export function TrainerProfilePolishPage({ trainerId, registeredEmail }: { train
       resumeUrl: trainer.resumeUrl || "",
     });
     setSubSkillsText(joinTags(trainer.subSkills));
-    setLanguagesText(joinTags(trainer.languages));
+    setLanguages(Array.isArray(trainer.languages) ? trainer.languages : []);
     setCertifications(Array.isArray(trainer.certifications) ? trainer.certifications : []);
   }, [trainer, form]);
 
+  React.useEffect(() => {
+    if (!trainerId) return;
+    customFetch<ProfileExtrasResponse>(`/api/trainers/${trainerId}/profile-extras`)
+      .then((data) => {
+        const extras = data.profileExtras ?? {};
+        setProfileExtras(extras);
+        setMobileNumber(extras.mobileNumber ?? "");
+        setAvatarUrl(data.avatarUrl ?? "");
+      })
+      .catch(() => {});
+  }, [trainerId]);
+
   const watched = form.watch();
   const subSkills = splitTags(subSkillsText);
-  const languages = splitTags(languagesText);
   const skillSuggestions = React.useMemo(() => {
     const items: string[] = [];
     for (const group of skillsData ?? []) {
@@ -205,6 +311,7 @@ export function TrainerProfilePolishPage({ trainerId, registeredEmail }: { train
     { label: "Full name", done: !!watched.name?.trim(), helper: "Shown on applications and profile cards." },
     { label: "Primary skill", done: !!watched.mainSkill?.trim(), helper: "Improves requirement matching." },
     { label: "Location", done: !!watched.location?.trim(), helper: "Helps vendors plan delivery and travel." },
+    { label: "Mobile number", done: !!mobileNumber.trim(), helper: "Helps coordination after hiring." },
     { label: "Languages", done: languages.length > 0, helper: "At least one training language is required." },
     { label: "Engagement type", done: !!watched.trainerType, helper: "Clarifies whether you train, develop, or both." },
     { label: "Profile headline", done: !!watched.headline?.trim(), helper: "A short line improves profile conversion." },
@@ -231,7 +338,17 @@ export function TrainerProfilePolishPage({ trainerId, registeredEmail }: { train
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
+          const nextExtras = { ...profileExtras, mobileNumber: mobileNumber.trim() };
+          setProfileExtras(nextExtras);
+          try {
+            await customFetch(`/api/trainers/${trainerId}/profile-extras`, {
+              method: "PATCH",
+              body: JSON.stringify({ avatarUrl, profileExtras: nextExtras }),
+            });
+          } catch {
+            toast({ title: "Profile saved, but mobile number was not updated", variant: "destructive" });
+          }
           toast({ title: "Profile updated", description: "Your trainer profile has been saved." });
           queryClient.invalidateQueries({ queryKey: getGetTrainerQueryKey(trainerId) });
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
@@ -286,12 +403,13 @@ export function TrainerProfilePolishPage({ trainerId, registeredEmail }: { train
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                 <div className="space-y-4">
-                  <div><h3 className="text-sm font-semibold">Identity</h3><p className="mt-1 text-xs text-muted-foreground">Your name, headline, email, and location.</p></div>
+                  <div><h3 className="text-sm font-semibold">Identity</h3><p className="mt-1 text-xs text-muted-foreground">Your name, headline, email, mobile, and location.</p></div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <FormField control={form.control} name="name" render={({ field }) => <FormItem><FormLabel>Full name <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} placeholder="As shown to vendors" /></FormControl><FormMessage /></FormItem>} />
                     <FormField control={form.control} name="headline" render={({ field }) => <FormItem><FormLabel>Profile headline</FormLabel><FormControl><Input {...field} value={field.value ?? ""} maxLength={140} placeholder="e.g. AWS and Python trainer for corporate teams" /></FormControl><FormDescription>Appears under your name on cards.</FormDescription><FormMessage /></FormItem>} />
                     <div className="space-y-2"><Label>Registered email</Label><Input value={registeredEmail} disabled className="bg-muted" /><p className="text-xs text-muted-foreground">Contact support to update this email.</p></div>
-                    <FormField control={form.control} name="location" render={({ field }) => <FormItem><FormLabel>Location <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} placeholder="City, Country" /></FormControl><FormMessage /></FormItem>} />
+                    <div className="space-y-2"><Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-primary" /> Mobile number</Label><Input value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value)} placeholder="+91..." /><p className="text-xs text-muted-foreground">Used for coordination after hiring.</p></div>
+                    <FormField control={form.control} name="location" render={({ field }) => <FormItem className="md:col-span-2"><FormLabel>Location <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} placeholder="City, Country" /></FormControl><FormMessage /></FormItem>} />
                   </div>
                 </div>
 
@@ -301,7 +419,7 @@ export function TrainerProfilePolishPage({ trainerId, registeredEmail }: { train
                     <FormField control={form.control} name="mainSkill" render={({ field }) => <FormItem><FormLabel>Primary skill <span className="text-destructive">*</span></FormLabel><FormControl><Input {...field} list="trainer-skill-suggestions" placeholder="Type or choose a skill" /></FormControl><datalist id="trainer-skill-suggestions">{skillSuggestions.map((skill) => <option key={skill} value={skill} />)}</datalist><FormMessage /></FormItem>} />
                     <FormField control={form.control} name="trainerType" render={({ field }) => <FormItem><FormLabel>Primary engagement <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Select your primary engagement" /></SelectTrigger></FormControl><SelectContent><SelectItem value="trainer">Full-time trainer</SelectItem><SelectItem value="developer">Full-time developer</SelectItem><SelectItem value="both">Both — trainer and developer</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
                     <div className="space-y-2 md:col-span-2"><Label>Sub-skills</Label><Input value={subSkillsText} onChange={(event) => setSubSkillsText(event.target.value)} placeholder="AWS, Lambda, SageMaker, Python" /><p className="text-xs text-muted-foreground">Separate skills with commas.</p></div>
-                    <div className="space-y-2 md:col-span-2"><Label>Languages <span className="text-destructive">*</span></Label><Input value={languagesText} onChange={(event) => setLanguagesText(event.target.value)} placeholder="English, Hindi" /><p className="text-xs text-muted-foreground">Separate languages with commas.</p></div>
+                    <div className="space-y-2 md:col-span-2"><Label>Languages <span className="text-destructive">*</span></Label><LanguagePicker value={languages} onChange={setLanguages} /></div>
                   </div>
                 </div>
 
@@ -338,6 +456,7 @@ export function TrainerProfilePolishPage({ trainerId, registeredEmail }: { train
               <div className="grid gap-3 text-sm">
                 <div className="flex items-center gap-3 rounded-xl border p-3"><Code2 className="h-4 w-4 text-primary" /><span className="truncate">{subSkills.length ? subSkills.join(", ") : "Sub-skills not set"}</span></div>
                 <div className="flex items-center gap-3 rounded-xl border p-3"><Globe2 className="h-4 w-4 text-primary" /><span className="truncate">{languages.length ? languages.join(", ") : "Languages not set"}</span></div>
+                <div className="flex items-center gap-3 rounded-xl border p-3"><Phone className="h-4 w-4 text-primary" /><span className="truncate">{mobileNumber || "Mobile number not set"}</span></div>
                 <div className="flex items-center gap-3 rounded-xl border p-3"><Award className="h-4 w-4 text-primary" /><span className="truncate">{certifications.length} certification{certifications.length === 1 ? "" : "s"}</span></div>
               </div>
             </CardContent>
