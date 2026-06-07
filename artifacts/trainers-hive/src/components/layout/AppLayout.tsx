@@ -2,7 +2,7 @@ import React from "react";
 import { Navbar } from "./Navbar";
 import { Link } from "wouter";
 import { useLocation } from "wouter";
-import { MessageSquare, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, LayoutDashboard, MessageSquare, Settings, Sparkles, UserRound, X } from "lucide-react";
 import {
   useGetCurrentUser,
   useGetTrainer,
@@ -66,6 +66,45 @@ function DashboardLoadingShell() {
       </div>
       <Skeleton className="h-72 w-full rounded-2xl" />
     </div>
+  );
+}
+
+function ProfilePageSidebar({ role }: { role: "trainer" | "vendor" }) {
+  const items = role === "trainer"
+    ? [
+        { href: "#profile-overview", label: "Overview", helper: "Strength and summary", icon: <LayoutDashboard className="h-4 w-4" /> },
+        { href: "#profile-professional", label: "Professional", helper: "Identity, skills, proof", icon: <UserRound className="h-4 w-4" /> },
+        { href: "#profile-details", label: "More details", helper: "Contact, accomplishments", icon: <Sparkles className="h-4 w-4" /> },
+        { href: "#profile-availability", label: "Availability", helper: "Engaged dates", icon: <CalendarDays className="h-4 w-4" /> },
+      ]
+    : [
+        { href: "#profile-overview", label: "Overview", helper: "Company strength", icon: <LayoutDashboard className="h-4 w-4" /> },
+        { href: "#profile-company", label: "Company", helper: "Required details", icon: <BriefcaseBusiness className="h-4 w-4" /> },
+        { href: "#profile-details", label: "More details", helper: "Contact and links", icon: <Sparkles className="h-4 w-4" /> },
+      ];
+
+  return (
+    <aside className="hidden xl:block xl:sticky xl:top-24 xl:self-start">
+      <div className="rounded-2xl border bg-card/80 p-3 shadow-sm backdrop-blur">
+        <div className="mb-3 rounded-xl bg-primary/10 p-3">
+          <div className="flex items-center gap-2 font-semibold text-primary">
+            <Settings className="h-4 w-4" /> Profile menu
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Jump between profile sections without losing context.</p>
+        </div>
+        <nav className="space-y-2">
+          {items.map((item) => (
+            <a key={item.href} href={item.href} className="group flex gap-3 rounded-xl border bg-background p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{item.icon}</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold group-hover:text-primary">{item.label}</span>
+                <span className="block text-xs leading-relaxed text-muted-foreground">{item.helper}</span>
+              </span>
+            </a>
+          ))}
+        </nav>
+      </div>
+    </aside>
   );
 }
 
@@ -166,21 +205,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <VendorDashboardPolish vendorId={vendorDashboardId} />
             </div>
           ) : useVendorProfile ? (
-            <>
-              <div className="container mx-auto max-w-7xl px-4 py-8">
-                <VendorProfileRequired vendorId={vendorProfileId} />
+            <div className="container mx-auto max-w-[1500px] px-4 py-8">
+              <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+                <ProfilePageSidebar role="vendor" />
+                <div className="min-w-0 space-y-6 [&>.container]:max-w-none [&>.container]:px-0 [&>.container]:py-0">
+                  <div id="profile-overview" className="scroll-mt-24">
+                    <VendorProfileRequired vendorId={vendorProfileId} />
+                  </div>
+                  <div id="profile-details" className="scroll-mt-24">
+                    <ProfileExtrasPanel role="vendor" id={vendorProfileId} />
+                  </div>
+                </div>
               </div>
-              <div className="container mx-auto max-w-7xl px-4 pb-8">
-                <ProfileExtrasPanel role="vendor" id={vendorProfileId} />
-              </div>
-            </>
+            </div>
           ) : useTrainerProfile ? (
-            <>
-              <TrainerProfilePolishPage trainerId={trainerProfileId} registeredEmail={currentUser?.email ?? ""} />
-              <div className="container mx-auto max-w-7xl px-4 pb-8">
-                <ProfileExtrasPanel role="trainer" id={trainerProfileId} />
+            <div className="container mx-auto max-w-[1500px] px-4 py-8">
+              <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+                <ProfilePageSidebar role="trainer" />
+                <div className="min-w-0 space-y-6 [&>.container]:max-w-none [&>.container]:px-0 [&>.container]:py-0">
+                  <TrainerProfilePolishPage trainerId={trainerProfileId} registeredEmail={currentUser?.email ?? ""} />
+                  <div id="profile-details" className="scroll-mt-24">
+                    <ProfileExtrasPanel role="trainer" id={trainerProfileId} />
+                  </div>
+                </div>
               </div>
-            </>
+            </div>
           ) : usePaginatedTrainers ? (
             <PaginatedTrainersDirectory />
           ) : (
