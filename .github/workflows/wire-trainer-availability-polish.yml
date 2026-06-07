@@ -1,0 +1,47 @@
+name: Wire trainer availability polish
+
+on:
+  push:
+    branches:
+      - vendor-profile-polish-ui
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: vendor-profile-polish-ui
+      - name: Wire trainer availability component
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          path = Path('artifacts/trainers-hive/src/pages/Profile.tsx')
+          text = path.read_text()
+          if 'TrainerAvailabilityPolish' not in text:
+              text = text.replace(
+                  'import { VendorProfilePolish } from "@/components/VendorProfilePolish";\n',
+                  'import { VendorProfilePolish } from "@/components/VendorProfilePolish";\nimport { TrainerAvailabilityPolish } from "@/components/TrainerAvailabilityPolish";\n',
+              )
+          text = text.replace(
+              '<TrainerAvailability trainerId={user.trainerId} />',
+              '<TrainerAvailabilityPolish trainerId={user.trainerId} />',
+          )
+          path.write_text(text)
+          Path('.github/workflows/wire-trainer-availability-polish.yml').unlink(missing_ok=True)
+          Path('tmp-wire-trainer-availability-polish.txt').unlink(missing_ok=True)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/pages/Profile.tsx .github/workflows/wire-trainer-availability-polish.yml tmp-wire-trainer-availability-polish.txt
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Use polished trainer availability component"
+            git push origin HEAD:vendor-profile-polish-ui
+          fi
