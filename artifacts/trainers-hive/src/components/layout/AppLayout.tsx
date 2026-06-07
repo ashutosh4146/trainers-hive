@@ -2,7 +2,7 @@ import React from "react";
 import { Navbar } from "./Navbar";
 import { Link } from "wouter";
 import { useLocation } from "wouter";
-import { Award, BriefcaseBusiness, CalendarDays, FileText, GraduationCap, ImagePlus, LayoutDashboard, Link2, MessageSquare, Presentation, Settings, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, LayoutDashboard, Link2, MessageSquare, Settings, Sparkles, UserRound, X } from "lucide-react";
 import {
   useGetCurrentUser,
   useGetTrainer,
@@ -68,7 +68,7 @@ function ProfilePageSidebar({ role }: { role: "trainer" | "vendor" }) {
       ];
 
   return (
-    <aside className="hidden xl:block xl:sticky xl:top-24 xl:self-start">
+    <aside className="hidden xl:block xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:self-start xl:overflow-y-auto xl:overscroll-contain xl:pr-1">
       <div className="rounded-2xl border bg-card/80 p-3 shadow-sm backdrop-blur">
         <div className="mb-3 rounded-xl bg-primary/10 p-3">
           <div className="flex items-center gap-2 font-semibold text-primary"><Settings className="h-4 w-4" /> Profile menu</div>
