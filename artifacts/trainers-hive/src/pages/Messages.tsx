@@ -64,8 +64,21 @@ function writePriorityIds(ids: string[]) {
 function statusLabel(status: string) {
   if (status === "hired") return { label: "Hired", cls: "bg-primary/10 text-primary" };
   if (status === "shortlisted") return { label: "Shortlisted", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" };
+  if (status === "completed") return { label: "Completed", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" };
+  if (status === "rejected") return { label: "Not selected", cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" };
+  if (status === "withdrawn") return { label: "Withdrawn", cls: "bg-slate-100 text-slate-600 dark:bg-slate-900/40 dark:text-slate-300" };
   if (status === "applied" || status === "submitted") return { label: "Applied", cls: "bg-muted text-muted-foreground" };
   return { label: status || "Open", cls: "bg-muted text-muted-foreground" };
+}
+
+function statusDescription(status: string, role?: string) {
+  const isVendor = role === "vendor";
+  if (status === "hired") return isVendor ? "Trainer has been selected. Use this thread to finalize kickoff, scope, and agreement details." : "You have been selected. Use this thread to confirm kickoff, scope, and agreement details.";
+  if (status === "shortlisted") return isVendor ? "Trainer is shortlisted. Confirm availability, commercials, and final fit before hiring." : "You are shortlisted. Confirm your availability, commercials, and final delivery plan here.";
+  if (status === "completed") return "This engagement is marked completed. Keep final notes, payment follow-ups, and closure messages here.";
+  if (status === "rejected") return isVendor ? "This application was not selected. You can keep a note here for future reference." : "This application was not selected. You can still review the conversation history here.";
+  if (status === "withdrawn") return "This application was withdrawn. The conversation is kept for reference.";
+  return isVendor ? "Application is under review. Ask for availability, scope fit, or supporting details." : "Application is awaiting vendor review. Share your availability, approach, or clarifying questions.";
 }
 
 function getQuickReplies(status: string, role?: string): QuickReply[] {
@@ -180,6 +193,7 @@ function ConversationPanel({
   const [body, setBody] = useState(() => getSavedDraft(applicationId));
   const bottomRef = useRef<HTMLDivElement>(null);
   const quickReplies = getQuickReplies(status, auth?.role);
+  const statusInfo = statusLabel(status);
 
   const { data, isLoading } = useListApplicationMessages(applicationId, {
     query: {
@@ -241,11 +255,17 @@ function ConversationPanel({
           </Button>
           <TrainerAvatar name={otherPartyName} avatarUrl={otherPartyAvatarUrl ?? undefined} className="h-10 w-10" />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold">{otherPartyName}</h2>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h2 className="truncate text-sm font-semibold">{otherPartyName}</h2>
+              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", statusInfo.cls)}>{statusInfo.label}</span>
+            </div>
             <p className="truncate text-xs text-muted-foreground">{title}</p>
           </div>
         </div>
         <ApplicationPipeline status={status} compact className="mt-3" />
+        <div className="mt-3 rounded-lg border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          {statusDescription(status, auth?.role)}
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
@@ -261,7 +281,7 @@ function ConversationPanel({
               const isMine = msg.senderUserId === currentUserId;
               return (
                 <div key={msg.id} className={cn("flex flex-col gap-1", isMine ? "items-end" : "items-start")}>
-                  <div className={cn("max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm", isMine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground")}>
+                  <div className={cn("max-w-[82%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm", isMine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground")}>
                     {msg.body}
                   </div>
                   <span className="text-[10px] text-muted-foreground">
@@ -352,6 +372,10 @@ export default function Messages() {
     () => threads.filter((t) => prioritySet.has(t.applicationId)).length,
     [threads, prioritySet],
   );
+  const activeCount = useMemo(
+    () => threads.filter((t) => t.status === "shortlisted" || t.status === "hired").length,
+    [threads],
+  );
 
   const hasDraft = (applicationId: string) => {
     void draftRevision;
@@ -413,6 +437,20 @@ export default function Messages() {
                   <Inbox className="h-5 w-5" />
                 </div>
               </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg border bg-background px-2 py-2">
+                  <p className="text-base font-semibold leading-none">{threads.length}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Total</p>
+                </div>
+                <div className="rounded-lg border bg-background px-2 py-2">
+                  <p className="text-base font-semibold leading-none">{needsReplyCount}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Need reply</p>
+                </div>
+                <div className="rounded-lg border bg-background px-2 py-2">
+                  <p className="text-base font-semibold leading-none">{activeCount}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Active</p>
+                </div>
+              </div>
               <div className="relative mt-4">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations…" className="pl-9" />
@@ -454,7 +492,7 @@ export default function Messages() {
                     const { label, cls } = statusLabel(thread.status);
                     const isActive = activeThread?.applicationId === thread.applicationId;
                     return (
-                      <div key={thread.applicationId} className={cn("rounded-xl border bg-background transition-colors hover:bg-accent/50", isActive && "border-primary/40 bg-primary/5", needsReply && "border-primary/30", isPriority && "ring-1 ring-amber-300/60")}> 
+                      <div key={thread.applicationId} className={cn("rounded-xl border bg-background transition-colors hover:bg-accent/50", isActive && "border-primary/40 bg-primary/5", needsReply && "border-primary/30", isPriority && "ring-1 ring-amber-300/60")}>
                         <div className="flex items-start gap-3 p-3">
                           <TrainerAvatar name={thread.otherPartyName} avatarUrl={thread.otherPartyAvatarUrl} className="h-11 w-11 shrink-0" />
                           <button type="button" onClick={() => openThread(thread.applicationId)} className="min-w-0 flex-1 text-left">
@@ -497,7 +535,7 @@ export default function Messages() {
             </div>
           </aside>
 
-          <main className={cn("min-w-0 flex-1", activeThread ? "flex" : "hidden md:flex")}> 
+          <main className={cn("min-w-0 flex-1", activeThread ? "flex" : "hidden md:flex")}>
             {activeThread && currentUser ? (
               <ConversationPanel
                 applicationId={activeThread.applicationId}

@@ -519,6 +519,7 @@ function CertificationsEditor({
 
 const trainerSchema = z.object({
   name: z.string().min(2, "Full name is required"),
+  headline: z.string().trim().max(140, "Headline must be 140 characters or less").optional(),
   mainSkill: z.string().min(1, "Pick or add a primary skill"),
   experienceYears: z.coerce.number().int().min(0).max(80),
   developmentExperienceYears: z.coerce.number().int().min(0).max(80),
@@ -603,6 +604,7 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
     resolver: zodResolver(trainerSchema),
     defaultValues: {
       name: "",
+      headline: "",
       mainSkill: "",
       experienceYears: 0,
       developmentExperienceYears: 0,
@@ -617,6 +619,7 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
     if (trainer) {
       form.reset({
         name: trainer.name || "",
+        headline: trainer.headline || "",
         mainSkill: trainer.mainSkill || "",
         experienceYears: trainer.experienceYears ?? 0,
         developmentExperienceYears: trainer.developmentExperienceYears ?? 0,
@@ -694,6 +697,7 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
       certifications: { name: string; url?: string }[];
     } = {
       ...data,
+      headline: (data.headline ?? "").trim(),
       resumeUrl: (data.resumeUrl ?? "").trim(),
       subSkills,
       languages,
@@ -863,6 +867,24 @@ function TrainerProfile({ trainerId, registeredEmail }: { trainerId: string; reg
               <FormItem>
                 <FormLabel>Full name <span className="text-destructive">*</span></FormLabel>
                 <FormControl><Input {...field} placeholder="As you'd like it shown to vendors" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="headline" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Profile headline</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    maxLength={140}
+                    placeholder="e.g. AWS and Python trainer for corporate teams"
+                  />
+                </FormControl>
+                <FormDescription>
+                  This short line appears under your name on trainer cards.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )} />

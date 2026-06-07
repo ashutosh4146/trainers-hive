@@ -19,6 +19,7 @@ import {
 } from "@/components/ProfileCompletion";
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
+import { VendorDashboardPolish } from "@/components/VendorDashboardPolish";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -134,8 +135,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isDashboard = location === "/dashboard";
   const dashboardRole = auth?.role ?? currentUser?.role;
   const useTrainerDashboard = isDashboard && dashboardRole === "trainer";
+  const vendorDashboardId = isDashboard && dashboardRole === "vendor" ? (currentUser?.vendorId ?? auth?.vendorId ?? "") : "";
+  const useVendorDashboard = !!vendorDashboardId;
   const waitForDashboardRole = isDashboard && isSignedIn && currentUserLoading && !dashboardRole;
-  const usePaginatedTrainers = location === "/trainers";
+  const usePaginatedTrainers = location === "/trainers" && dashboardRole === "admin";
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
@@ -150,6 +153,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <DashboardLoadingShell />
           ) : useTrainerDashboard ? (
             <TrainerDashboardRedesign />
+          ) : useVendorDashboard ? (
+            <div className="container mx-auto max-w-7xl px-4 py-8">
+              <VendorDashboardPolish vendorId={vendorDashboardId} />
+            </div>
           ) : usePaginatedTrainers ? (
             <PaginatedTrainersDirectory />
           ) : (

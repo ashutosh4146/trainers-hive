@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
-import { useGetCurrentUser, useListMyApplications } from "@workspace/api-client-react";
+import { customFetch, getListMyApplicationsQueryKey, useGetCurrentUser, useListMyApplications } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, FileText, LogOut, MessageSquare, Search, XCircle } from "lucide-react";
 import { ApplicationPipeline } from "@/components/ApplicationPipeline";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,13 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
 
 const STATUS_ORDER = ["all", "submitted", "shortlisted", "hired", "completed", "rejected", "withdrawn"] as const;
 const PAGE_SIZE = 5;
 
-type Filter = typeof STATUS_ORDER[number];
+type Filter = typeof STATUS_ORDER[number] | "attention" | "closed";
+
+type TrainerApplication = NonNullable<ReturnType<typeof useListMyApplications>["data"]>[number];
 
 function statusMeta(status: string) {
   switch (status) {
@@ -45,7 +49,7 @@ function nextStep(status: string) {
   return "Track progress and next steps here.";
 }
 
-function getCounts(apps: any[]) {
+function getCounts(apps: TrainerApplication[]) {
   return {
     submitted: apps.filter((app) => app.status === "submitted").length,
     shortlisted: apps.filter((app) => app.status === "shortlisted").length,
@@ -60,14 +64,24 @@ function canWithdrawApplication(status: string) {
   return status === "submitted" || status === "shortlisted";
 }
 
+function matchesFilter(app: TrainerApplication, filter: Filter) {
+  if (filter === "all") return true;
+  if (filter === "attention") return app.status === "shortlisted" || app.status === "hired";
+  if (filter === "closed") return app.status === "completed" || app.status === "rejected" || app.status === "withdrawn";
+  return app.status === filter;
+}
+
 export function TrainerApplicationsSection() {
   const { data: user } = useGetCurrentUser();
   const { data: applications, isLoading } = useListMyApplications({
     query: { enabled: user?.role === "trainer" },
   });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [filter, setFilter] = React.useState<Filter>("all");
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [withdrawingId, setWithdrawingId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setPage(1);
@@ -78,8 +92,10 @@ export function TrainerApplicationsSection() {
   const apps = applications ?? [];
   const counts = getCounts(apps);
   const attentionCount = counts.shortlisted + counts.hired;
+  const activeCount = counts.submitted + counts.shortlisted + counts.hired;
+  const closedCount = counts.completed + counts.rejected + counts.withdrawn;
   const filtered = apps
-    .filter((app) => filter === "all" || app.status === filter)
+    .filter((app) => matchesFilter(app, filter))
     .filter((app) => {
       const q = query.trim().toLowerCase();
       if (!q) return true;
@@ -95,8 +111,34 @@ export function TrainerApplicationsSection() {
   const safePage = Math.min(page, totalPages);
   const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
+  const handleWithdraw = async (app: TrainerApplication) => {
+    if (!canWithdrawApplication(app.status) || withdrawingId) return;
+
+    const reason = window.prompt(
+      `Withdraw your application for ${app.requirement.title}?\n\nOptional: add a short reason for the vendor.`,
+      "",
+    );
+    if (reason === null) return;
+
+    setWithdrawingId(app.id);
+    try {
+      await customFetch(`/api/applications/${app.id}/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() || undefined }),
+      });
+      toast({ title: "Application withdrawn", description: "The vendor has been notified." });
+      queryClient.invalidateQueries({ queryKey: getListMyApplicationsQueryKey() });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : "Please try again.";
+      toast({ title: "Could not withdraw application", description, variant: "destructive" });
+    } finally {
+      setWithdrawingId(null);
+    }
+  };
+
   return (
-    <section id="trainer-applications-enhanced" className="container mx-auto max-w-6xl px-4 pt-6 pb-8">
+    <section id="trainer-applications-enhanced" className="pt-6 pb-8">
       <style>{`#your-applications { display: none !important; margin: 0 !important; }`}</style>
       <Card className="border-primary/10 shadow-sm">
         <CardHeader className="pb-4">
@@ -142,6 +184,24 @@ export function TrainerApplicationsSection() {
             </div>
           </div>
 
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <button type="button" onClick={() => setFilter("submitted")} className={cn("rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5", filter === "submitted" && "border-primary/40 bg-primary/5")}>
+              <p className="text-xs font-medium text-muted-foreground">Awaiting review</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{counts.submitted}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Applications sent to vendors.</p>
+            </button>
+            <button type="button" onClick={() => setFilter("attention")} className={cn("rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5", filter === "attention" && "border-primary/40 bg-primary/5")}>
+              <p className="text-xs font-medium text-muted-foreground">Needs follow-up</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{attentionCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Shortlisted or hired applications.</p>
+            </button>
+            <button type="button" onClick={() => setFilter("closed")} className={cn("rounded-xl border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5", filter === "closed" && "border-primary/40 bg-primary/5")}>
+              <p className="text-xs font-medium text-muted-foreground">Closed history</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{closedCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Completed, rejected, or withdrawn.</p>
+            </button>
+          </div>
+
           <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_280px] md:items-center">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -153,7 +213,7 @@ export function TrainerApplicationsSection() {
               />
             </div>
             <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{attentionCount}</span> applications need active follow-up.
+              <span className="font-medium text-foreground">{activeCount}</span> applications are currently active.
             </div>
           </div>
         </CardHeader>
@@ -178,7 +238,10 @@ export function TrainerApplicationsSection() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
-              No applications match your current filters.
+              <p>No applications match your current filters.</p>
+              <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setFilter("all"); setQuery(""); }}>
+                Clear filters
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -187,6 +250,7 @@ export function TrainerApplicationsSection() {
                 const inactive = app.status === "rejected" || app.status === "withdrawn";
                 const canMessage = app.status === "shortlisted" || app.status === "hired";
                 const canWithdraw = canWithdrawApplication(app.status);
+                const isWithdrawing = withdrawingId === app.id;
                 return (
                   <div
                     key={app.id}
@@ -237,8 +301,14 @@ export function TrainerApplicationsSection() {
                           </Button>
                         )}
                         {canWithdraw && (
-                          <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
-                            <LogOut className="h-3.5 w-3.5" /> Withdraw application
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                            disabled={!!withdrawingId}
+                            onClick={() => handleWithdraw(app)}
+                          >
+                            <LogOut className="h-3.5 w-3.5" /> {isWithdrawing ? "Withdrawing..." : "Withdraw application"}
                           </Button>
                         )}
                         <Button asChild size="sm">

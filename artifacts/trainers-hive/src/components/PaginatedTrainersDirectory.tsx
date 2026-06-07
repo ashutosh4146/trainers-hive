@@ -184,6 +184,7 @@ export function PaginatedTrainersDirectory() {
   const [minExp, setMinExp] = React.useState([0]);
   const [gender, setGender] = React.useState<"all" | "male" | "female">("all");
   const [sort, setSort] = React.useState<"rating" | "experience" | "recent" | "endorsements">("rating");
+  const [showSavedOnly, setShowSavedOnly] = React.useState(false);
   const [page, setPage] = React.useState(1);
 
   const debouncedLocation = useDebounce(location);
@@ -215,17 +216,22 @@ export function PaginatedTrainersDirectory() {
     query: { enabled: !!vendorId, queryKey: getListSavedTrainersQueryKey(vendorId ?? "") },
   });
 
-  const trainersList = toArray<any>(trainers);
+  const allTrainersList = toArray<any>(trainers);
   const skillCategories = toArray<{ skills?: string[] }>(skillsData);
   const allSkills = skillCategories.flatMap((category) => (Array.isArray(category.skills) ? category.skills : []));
   const savedIds = React.useMemo(
     () => new Set(toArray<{ trainerId: string }>(savedTrainers).map((trainer) => trainer.trainerId)),
     [savedTrainers],
   );
+  const savedCount = savedIds.size;
+  const trainersList = React.useMemo(
+    () => (showSavedOnly ? allTrainersList.filter((trainer) => savedIds.has(trainer.id)) : allTrainersList),
+    [allTrainersList, savedIds, showSavedOnly],
+  );
 
   React.useEffect(() => {
     setPage(1);
-  }, [selectedSkills, debouncedLocation, remote, debouncedMinExp[0], gender, sort]);
+  }, [selectedSkills, debouncedLocation, remote, debouncedMinExp[0], gender, sort, showSavedOnly]);
 
   const total = trainersList.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -233,7 +239,7 @@ export function PaginatedTrainersDirectory() {
   const pageItems = trainersList.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const start = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const end = Math.min(safePage * PAGE_SIZE, total);
-  const activeFiltersCount = selectedSkills.length + (location ? 1 : 0) + (remote ? 1 : 0) + (minExp[0] > 0 ? 1 : 0) + (gender !== "all" ? 1 : 0);
+  const activeFiltersCount = selectedSkills.length + (location ? 1 : 0) + (remote ? 1 : 0) + (minExp[0] > 0 ? 1 : 0) + (gender !== "all" ? 1 : 0) + (showSavedOnly ? 1 : 0);
 
   const clearFilters = () => {
     setSelectedSkills([]);
@@ -242,6 +248,7 @@ export function PaginatedTrainersDirectory() {
     setMinExp([0]);
     setGender("all");
     setSort("rating");
+    setShowSavedOnly(false);
     setPage(1);
   };
 
@@ -287,6 +294,18 @@ export function PaginatedTrainersDirectory() {
         </div>
 
         <div className="space-y-4">
+          {isVendor && (
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="saved-only-toggle" className="cursor-pointer">Saved trainers only</Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Show your {savedCount} bookmarked trainer{savedCount === 1 ? "" : "s"}.</p>
+                </div>
+                <Switch id="saved-only-toggle" checked={showSavedOnly} onCheckedChange={setShowSavedOnly} />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Skills</Label>
             <SkillMultiSelect selected={selectedSkills} onChange={setSelectedSkills} allSkills={allSkills} />
@@ -339,6 +358,18 @@ export function PaginatedTrainersDirectory() {
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
             {!isLoading && total > 0 && (
               <span className="text-sm text-muted-foreground">Showing {start}–{end} of {total}</span>
+            )}
+            {isVendor && (
+              <Button
+                type="button"
+                variant={showSavedOnly ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setShowSavedOnly((value) => !value)}
+              >
+                <Bookmark className={`h-4 w-4 ${showSavedOnly ? "fill-current" : ""}`} />
+                Saved only{savedCount > 0 ? ` (${savedCount})` : ""}
+              </Button>
             )}
             <div className="flex items-center gap-2">
               <Label className="whitespace-nowrap text-sm text-muted-foreground">Sort by:</Label>
@@ -434,8 +465,12 @@ export function PaginatedTrainersDirectory() {
           ) : (
             <div className="col-span-1 flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/30 py-20 text-center lg:col-span-2">
               <Users className="mb-4 h-12 w-12 text-muted-foreground/50" />
-              <h3 className="mb-1 text-lg font-semibold text-foreground">No trainers found</h3>
-              <p className="max-w-md text-muted-foreground">We couldn't find any trainers matching your current filters. Try adjusting your search criteria.</p>
+              <h3 className="mb-1 text-lg font-semibold text-foreground">{showSavedOnly ? "No saved trainers match" : "No trainers found"}</h3>
+              <p className="max-w-md text-muted-foreground">
+                {showSavedOnly
+                  ? "Saved trainers that match your current filters will appear here. Clear filters or browse all trainers to save more."
+                  : "We couldn't find any trainers matching your current filters. Try adjusting your search criteria."}
+              </p>
               <Button variant="outline" className="mt-4" onClick={clearFilters}>Clear all filters</Button>
             </div>
           )}

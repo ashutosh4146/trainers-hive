@@ -125,10 +125,7 @@ export function Navbar() {
             ) : (
               <>
                 {isSignedIn && (
-                  <>
-                    <Link href="/trainers" className="text-muted-foreground hover:text-primary transition-colors">Trainers</Link>
-                    <Link href="/requirements" className="text-muted-foreground hover:text-primary transition-colors">Requirements</Link>
-                  </>
+                  <Link href="/requirements" className="text-muted-foreground hover:text-primary transition-colors">Requirements</Link>
                 )}
                 {isSignedIn && auth?.role === "vendor" && (
                   <Link href="/hire-us" className="font-semibold text-primary hover:text-primary/80 transition-colors border border-primary/30 rounded-full px-3 py-0.5 text-xs bg-primary/5">Hire Us</Link>

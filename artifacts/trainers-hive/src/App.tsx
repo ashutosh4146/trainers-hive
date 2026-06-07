@@ -101,6 +101,13 @@ function PrivateRoute({ component: Component }: { component: React.ComponentType
   return <Component />;
 }
 
+function AdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isSignedIn, auth } = useAuth();
+  if (!isSignedIn) return <Redirect to="/login" />;
+  if (auth?.role !== "admin") return <Redirect to="/dashboard" />;
+  return <Component />;
+}
+
 function VendorRoute({ component: Component }: { component: React.ComponentType }) {
   const { isSignedIn, auth } = useAuth();
   if (!isSignedIn) return <Redirect to="/login" />;
@@ -157,8 +164,12 @@ function Router() {
           <AppLayout>
             <Switch>
               <Route path="/" component={Home} />
-              <Route path="/trainers" component={Trainers} />
-              <Route path="/trainers/:id" component={TrainerDetail} />
+              <Route path="/trainers">
+                <AdminRoute component={Trainers} />
+              </Route>
+              <Route path="/trainers/:id">
+                <PrivateRoute component={TrainerDetail} />
+              </Route>
               <Route path="/requirements" component={Requirements} />
               <Route path="/requirements/new">
                 <PrivateRoute component={NewRequirement} />
