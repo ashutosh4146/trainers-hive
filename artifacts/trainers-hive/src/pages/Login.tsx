@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Activity, Mail, ArrowLeft, KeyRound, Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { Button } from "@/components/ui/button";
@@ -242,8 +242,10 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background flex flex-col">
       <header className="flex items-center gap-2 px-8 py-5 border-b bg-background/80 backdrop-blur">
-        <Activity className="h-6 w-6 text-primary" />
-        <span className="font-bold text-xl tracking-tight text-primary">Trainers Hive</span>
+        <Link href="/" className="flex items-center gap-2 rounded-md text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Go to homepage">
+          <Activity className="h-6 w-6" />
+          <span className="font-bold text-xl tracking-tight">Trainers Hive</span>
+        </Link>
       </header>
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md space-y-6">
