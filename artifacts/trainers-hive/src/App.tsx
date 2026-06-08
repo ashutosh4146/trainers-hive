@@ -35,6 +35,10 @@ function loginWithRedirect() {
   return `/login?redirect=${redirect}`;
 }
 
+function isPublicAuthProbePath() {
+  return window.location.pathname === "/requirements" || window.location.pathname === "/";
+}
+
 const _initialToken = localStorage.getItem("th_session_token");
 if (_initialToken && !isJwtExpired(_initialToken)) {
   setAuthTokenGetter(() => Promise.resolve(_initialToken));
@@ -49,6 +53,7 @@ const queryClient = new QueryClient({
         localStorage.removeItem("th_session_token");
         setAuthTokenGetter(null);
         clearAuthState();
+        if (isPublicAuthProbePath()) return;
         if (!window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/signup")) {
           window.location.replace(loginWithRedirect());
         }
