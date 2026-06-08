@@ -1,0 +1,52 @@
+name: Temporary login resend cooldown patch
+
+on:
+  push:
+    branches:
+      - profile-contact-section-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: profile-contact-section-cleanup
+      - name: Patch login magic-link resend cooldown
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/trainers-hive/src/pages/Login.tsx')
+          s = p.read_text()
+          if 'const MAGIC_LINK_RESEND_WAIT_SECONDS = 45;' not in s:
+            s = s.replace('type LoginMethod = "link" | "password";\n', 'type LoginMethod = "link" | "password";\n\nconst MAGIC_LINK_RESEND_WAIT_SECONDS = 45;\n')
+          if 'const [resendSeconds, setResendSeconds] = useState(0);' not in s:
+            s = s.replace('  const [isSending, setIsSending] = useState(false);\n', '  const [isSending, setIsSending] = useState(false);\n  const [resendSeconds, setResendSeconds] = useState(0);\n')
+          if 'const canResendMagicLink = resendSeconds <= 0 && !isSending;' not in s:
+            s = s.replace('  const redirectTarget = getSafeRedirectTarget();\n', '  const redirectTarget = getSafeRedirectTarget();\n  const canResendMagicLink = resendSeconds <= 0 && !isSending;\n')
+          if 'const timer = window.setInterval(() => {' not in s:
+            s = s.replace('  React.useEffect(() => {\n    if (auth?.signedIn) navigate(redirectTarget);\n  }, [auth, redirectTarget, navigate]);\n', '  React.useEffect(() => {\n    if (auth?.signedIn) navigate(redirectTarget);\n  }, [auth, redirectTarget, navigate]);\n\n  React.useEffect(() => {\n    if (resendSeconds <= 0) return;\n    const timer = window.setInterval(() => {\n      setResendSeconds((seconds) => Math.max(0, seconds - 1));\n    }, 1000);\n    return () => window.clearInterval(timer);\n  }, [resendSeconds]);\n')
+          s = s.replace('      await sendEmailSignInLink(normalizedEmail);\n      setView("sent");', '      await sendEmailSignInLink(normalizedEmail);\n      setResendSeconds(MAGIC_LINK_RESEND_WAIT_SECONDS);\n      setView("sent");')
+          if 'if (resendSeconds > 0)' not in s:
+            s = s.replace('  const handleResend = async () => {\n    if (!validate()) return;\n', '  const handleResend = async () => {\n    if (!validate()) return;\n    if (resendSeconds > 0) {\n      toast({ title: "Please wait", description: `You can resend the magic link in ${resendSeconds}s.` });\n      return;\n    }\n')
+          s = s.replace('      await sendEmailSignInLink(normalizedEmail);\n      toast({ title: "New link sent", description: "Check your inbox for a fresh sign-in link." });', '      await sendEmailSignInLink(normalizedEmail);\n      setResendSeconds(MAGIC_LINK_RESEND_WAIT_SECONDS);\n      toast({ title: "New link sent", description: "Check your inbox for a fresh sign-in link." });')
+          old = '<Button type="button" variant="ghost" size="sm" className="gap-1.5" disabled={isSending} onClick={handleResend}>{isSending ? "Sending…" : "Resend link"}</Button>'
+          new = '<Button type="button" variant="ghost" size="sm" className="gap-1.5" disabled={!canResendMagicLink} onClick={handleResend}>{isSending ? "Sending…" : resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend link"}</Button>{resendSeconds > 0 && <p className="text-xs text-muted-foreground">For security, wait {resendSeconds}s before requesting another magic link.</p>}'
+          s = s.replace(old, new)
+          Path('tmp-login-resend-cooldown.txt').unlink(missing_ok=True)
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/pages/Login.tsx tmp-login-resend-cooldown.txt
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Add magic link resend cooldown"
+            git push origin HEAD:profile-contact-section-cleanup
+          fi
