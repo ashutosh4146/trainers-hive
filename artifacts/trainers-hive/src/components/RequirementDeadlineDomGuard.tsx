@@ -85,11 +85,36 @@ function patchRequirementsLocationFilter() {
   }
 }
 
+function isMobileNumberInput(input: HTMLInputElement) {
+  const id = input.id;
+  const aria = input.getAttribute("aria-label") || "";
+  const placeholder = input.getAttribute("placeholder") || "";
+  const nearbyText = input.closest("div")?.textContent || "";
+  return /mobile number/i.test(`${id} ${aria} ${placeholder} ${nearbyText}`);
+}
+
+function sanitizeMobileInput(input: HTMLInputElement) {
+  if (!isMobileNumberInput(input)) return;
+  const clean = input.value.replace(/\D/g, "").slice(0, 15);
+  if (input.value === clean) return;
+  input.value = clean;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function patchMobileInputs() {
+  if (!window.location.pathname.startsWith("/profile")) return;
+  for (const input of Array.from(document.querySelectorAll<HTMLInputElement>("input"))) {
+    sanitizeMobileInput(input);
+  }
+}
+
 export function RequirementDeadlineDomGuard() {
   const [location] = useLocation();
 
   React.useEffect(() => {
-    if (!location.startsWith("/requirements")) return;
+    const shouldWatchRequirements = location.startsWith("/requirements");
+    const shouldWatchProfile = location === "/profile";
+    if (!shouldWatchRequirements && !shouldWatchProfile) return;
 
     const patch = () => {
       if (location === "/requirements") patchRequirementsLocationFilter();
@@ -97,18 +122,24 @@ export function RequirementDeadlineDomGuard() {
         patchExpiredRequirementUi();
         patchAppliedRequirementUi();
       }
+      if (location === "/profile") patchMobileInputs();
+    };
+
+    const handleInput = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement) sanitizeMobileInput(target);
+      patch();
     };
 
     patch();
     const observer = new MutationObserver(() => patch());
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-    const locationInput = document.querySelector<HTMLInputElement>('input#location');
-    locationInput?.addEventListener("input", patch);
+    document.addEventListener("input", handleInput, true);
 
     return () => {
       observer.disconnect();
-      locationInput?.removeEventListener("input", patch);
+      document.removeEventListener("input", handleInput, true);
     };
   }, [location]);
 
