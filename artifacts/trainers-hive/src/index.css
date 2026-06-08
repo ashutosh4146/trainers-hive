@@ -235,4 +235,15 @@
     line-height: 1.8;
     font-size: 0.95rem;
   }
+
+  .grid:has(> #profile-professional) {
+    display: block;
+  }
+
+  .grid:has(> #profile-professional) > .space-y-6 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
 }
