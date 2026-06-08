@@ -56,6 +56,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { VendorProfilePolish } from "@/components/VendorProfilePolish";
+import { TrainerAvailabilityPolish } from "@/components/TrainerAvailabilityPolish";
 
 // =========================
 // Vendor Form (unchanged)
@@ -74,6 +76,8 @@ const vendorSchema = z.object({
 type VendorFormValues = z.infer<typeof vendorSchema>;
 
 function VendorProfile({ vendorId }: { vendorId: string }) {
+  return <VendorProfilePolish vendorId={vendorId} />;
+
   const { data: vendor, isLoading } = useGetVendor(vendorId, {
     query: { enabled: !!vendorId, queryKey: getGetVendorQueryKey(vendorId) },
   });
@@ -1391,7 +1395,7 @@ export default function Profile() {
         {user.role === "trainer" && user.trainerId && (
           <>
             <TrainerProfile trainerId={user.trainerId} registeredEmail={user.email} />
-            <TrainerAvailability trainerId={user.trainerId} />
+            <TrainerAvailabilityPolish trainerId={user.trainerId} />
           </>
         )}
         {user.role === "admin" && (
