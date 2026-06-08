@@ -1,5 +1,5 @@
 import React from "react";
-import { Award, Building2, FileText, ImagePlus, Link2, Loader2, MapPin, Presentation, Save, ShieldCheck, Sparkles, UserRound, X } from "lucide-react";
+import { Award, Building2, FileText, ImagePlus, Link2, Loader2, MapPin, Presentation, Save, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,16 +30,10 @@ type TrainerExtras = {
   educationDetails?: unknown[];
 };
 
-type VendorExtras = {
-  mobileNumber?: string;
-  locality?: string;
-  fullAddress?: string;
-  onlineProfiles?: LinkItem[];
-};
-
+type VendorExtras = { mobileNumber?: string; locality?: string; fullAddress?: string; onlineProfiles?: LinkItem[] };
 type ResponseShape = { avatarUrl?: string; logoUrl?: string; profileExtras?: TrainerExtras | VendorExtras };
 type Props = { role: "trainer" | "vendor"; id: string };
-type ModalType = "contact" | "onlineProfiles" | "workSamples" | "publications" | "presentations" | "patents" | "certifications";
+type ModalType = "vendorContact" | "onlineProfiles" | "workSamples" | "publications" | "presentations" | "patents" | "certifications";
 
 const emptyTrainer: TrainerExtras = { onlineProfiles: [], workSamples: [], publications: [], presentations: [], patents: [], extraCertifications: [], employmentDetails: [], educationDetails: [] };
 const emptyVendor: VendorExtras = { onlineProfiles: [] };
@@ -96,7 +90,6 @@ export function ProfileExtrasPanel({ role, id }: Props) {
   const [imageUrl, setImageUrl] = React.useState("");
   const [extras, setExtras] = React.useState<TrainerExtras | VendorExtras>(role === "trainer" ? emptyTrainer : emptyVendor);
   const [draft, setDraft] = React.useState<Record<string, string>>({});
-
   const endpoint = role === "trainer" ? `/api/trainers/${id}/profile-extras` : `/api/vendors/${id}/profile-extras`;
   const trainerExtras = extras as TrainerExtras;
   const onlineProfiles = extras.onlineProfiles ?? [];
@@ -133,7 +126,7 @@ export function ProfileExtrasPanel({ role, id }: Props) {
 
   const openModal = (type: ModalType) => {
     setModal(type);
-    setDraft({ mobileNumber: extras.mobileNumber || "", dateOfBirth: trainerExtras.dateOfBirth || "", workPermit: trainerExtras.workPermit || "", locality: extras.locality || "", fullAddress: extras.fullAddress || "", imageUrl, label: "", title: "", url: "", description: "", year: "" });
+    setDraft({ mobileNumber: extras.mobileNumber || "", locality: extras.locality || "", fullAddress: extras.fullAddress || "", imageUrl, label: "", title: "", url: "", description: "", year: "" });
   };
   const appendAndSave = (key: keyof TrainerExtras | keyof VendorExtras, item: unknown) => {
     const current = Array.isArray((extras as Record<string, unknown>)[key as string]) ? (extras as Record<string, unknown[]>)[key as string] : [];
@@ -142,10 +135,10 @@ export function ProfileExtrasPanel({ role, id }: Props) {
 
   const renderModal = () => {
     if (!modal) return null;
-    if (modal === "contact") return <Modal title={role === "trainer" ? "Contact, photo and address" : "Contact, logo and address"} description="Update contact and location details used for internal coordination." onClose={() => setModal(null)} onSave={() => savePayload({ ...extras, mobileNumber: draft.mobileNumber, locality: draft.locality, fullAddress: draft.fullAddress, ...(role === "trainer" ? { dateOfBirth: draft.dateOfBirth, workPermit: draft.workPermit } : {}) }, draft.imageUrl)} saving={saving}><div className="grid gap-4 md:grid-cols-2"><Field label={role === "trainer" ? "Profile photo URL" : "Company logo URL"} value={draft.imageUrl || ""} setValue={(v) => setDraft({ ...draft, imageUrl: v })} placeholder="https://..." /><Field label="Mobile number" value={draft.mobileNumber || ""} setValue={(v) => setDraft({ ...draft, mobileNumber: v })} placeholder="+91..." />{role === "trainer" && <Field type="date" label="Date of birth" value={draft.dateOfBirth || ""} setValue={(v) => setDraft({ ...draft, dateOfBirth: v })} />}{role === "trainer" && <Field label="Work permit" value={draft.workPermit || ""} setValue={(v) => setDraft({ ...draft, workPermit: v })} placeholder="India, UAE, US H1B, etc." />}<Field label="Locality" value={draft.locality || ""} setValue={(v) => setDraft({ ...draft, locality: v })} placeholder="Mansarovar, Jaipur" /><div className="md:col-span-2"><Area label="Full address" value={draft.fullAddress || ""} setValue={(v) => setDraft({ ...draft, fullAddress: v })} placeholder="Full address for internal coordination" /></div></div></Modal>;
+    if (modal === "vendorContact") return <Modal title="Contact, logo and address" description="Update vendor contact and location details." onClose={() => setModal(null)} onSave={() => savePayload({ ...extras, mobileNumber: draft.mobileNumber, locality: draft.locality, fullAddress: draft.fullAddress }, draft.imageUrl)} saving={saving}><div className="grid gap-4 md:grid-cols-2"><Field label="Company logo URL" value={draft.imageUrl || ""} setValue={(v) => setDraft({ ...draft, imageUrl: v })} placeholder="https://..." /><Field label="Mobile number" value={draft.mobileNumber || ""} setValue={(v) => setDraft({ ...draft, mobileNumber: v })} placeholder="+91..." /><Field label="Locality" value={draft.locality || ""} setValue={(v) => setDraft({ ...draft, locality: v })} placeholder="Mansarovar, Jaipur" /><div className="md:col-span-2"><Area label="Full address" value={draft.fullAddress || ""} setValue={(v) => setDraft({ ...draft, fullAddress: v })} placeholder="Full address for internal coordination" /></div></div></Modal>;
     if (modal === "onlineProfiles") return <Modal title="Online profile" description="Add link to online professional profiles, for example LinkedIn, GitHub, Behance, or portfolio." onClose={() => setModal(null)} onSave={() => appendAndSave("onlineProfiles", { label: draft.label || "Profile", url: normalizeUrl(draft.url || "") })} saving={saving}><Field label="Profile title" value={draft.label || ""} setValue={(v) => setDraft({ ...draft, label: v })} placeholder="LinkedIn, GitHub, Portfolio" /><Field label="URL" value={draft.url || ""} setValue={(v) => setDraft({ ...draft, url: v })} placeholder="https://..." /></Modal>;
     if (modal === "patents") return <Modal title="Patent" description="Add details of patents you have filed." onClose={() => setModal(null)} onSave={() => appendAndSave("patents", { title: draft.title, year: draft.year, url: normalizeUrl(draft.url || ""), description: draft.description })} saving={saving}><Field label="Patent title" value={draft.title || ""} setValue={(v) => setDraft({ ...draft, title: v })} /><Field label="Year" value={draft.year || ""} setValue={(v) => setDraft({ ...draft, year: v })} /><Field label="URL optional" value={draft.url || ""} setValue={(v) => setDraft({ ...draft, url: v })} placeholder="https://..." /><Area label="Description" value={draft.description || ""} setValue={(v) => setDraft({ ...draft, description: v })} /></Modal>;
-    const keyMap: Record<Exclude<ModalType, "contact" | "onlineProfiles" | "patents">, keyof TrainerExtras> = { workSamples: "workSamples", publications: "publications", presentations: "presentations", certifications: "extraCertifications" };
+    const keyMap: Record<Exclude<ModalType, "vendorContact" | "onlineProfiles" | "patents">, keyof TrainerExtras> = { workSamples: "workSamples", publications: "publications", presentations: "presentations", certifications: "extraCertifications" };
     const titleMap: Record<string, string> = { workSamples: "Work sample", publications: "White paper / Research publication / Journal entry", presentations: "Presentation", certifications: "Certification" };
     return <Modal title={titleMap[modal]} description="Add title, link, and a short description." onClose={() => setModal(null)} onSave={() => appendAndSave(keyMap[modal as keyof typeof keyMap], { title: draft.title, url: normalizeUrl(draft.url || ""), description: draft.description })} saving={saving}><Field label="Title" value={draft.title || ""} setValue={(v) => setDraft({ ...draft, title: v })} placeholder="Enter title" /><Field label="URL" value={draft.url || ""} setValue={(v) => setDraft({ ...draft, url: v })} placeholder="https://..." /><Area label="Description" value={draft.description || ""} setValue={(v) => setDraft({ ...draft, description: v })} rows={5} placeholder="Type here..." /></Modal>;
   };
@@ -154,9 +147,9 @@ export function ProfileExtrasPanel({ role, id }: Props) {
 
   return (
     <Card className="border-primary/10">
-      <CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> Additional profile details</CardTitle><CardDescription>Contact and accomplishments stay here. Employment and education are merged into Experience and proof above.</CardDescription></div><Badge variant="outline">{role === "trainer" ? "Trainer" : "Vendor"}</Badge></div></CardHeader>
+      <CardHeader><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> Additional profile details</CardTitle><CardDescription>{role === "trainer" ? "Accomplishments stay here. Personal contact details are now in the single Contact section above." : "Vendor contact details and online profiles stay here."}</CardDescription></div><Badge variant="outline">{role === "trainer" ? "Trainer" : "Vendor"}</Badge></div></CardHeader>
       <CardContent className="space-y-8">
-        <section id="profile-contact" className="scroll-mt-24 rounded-2xl border bg-background p-5"><div className="mb-2 flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Contact and address</h3></div><SectionRow title={role === "trainer" ? "Mobile, DOB, work permit, address and photo" : "Mobile, address and logo"} description="Manage contact details, location, full address, and profile image/logo." count={[extras.mobileNumber, extras.locality, extras.fullAddress, imageUrl].filter(Boolean).length} summary={extras.mobileNumber || extras.locality || undefined} onAdd={() => openModal("contact")} icon={role === "trainer" ? <UserRound className="h-5 w-5" /> : <Building2 className="h-5 w-5" />} /></section>
+        {role === "vendor" && <section id="profile-contact" className="scroll-mt-24 rounded-2xl border bg-background p-5"><div className="mb-2 flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Contact and address</h3></div><SectionRow title="Mobile, address and logo" description="Manage contact details, location, full address, and company logo." count={[extras.mobileNumber, extras.locality, extras.fullAddress, imageUrl].filter(Boolean).length} summary={extras.mobileNumber || extras.locality || undefined} onAdd={() => openModal("vendorContact")} icon={<Building2 className="h-5 w-5" />} /></section>}
         <section id="profile-accomplishments" className="scroll-mt-24 rounded-2xl border bg-background p-5"><div className="mb-2 flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Accomplishments</h3></div><SectionRow title="Online profile" description="Add link to online professional profiles, for example LinkedIn, GitHub, etc." count={listCount(onlineProfiles)} summary={itemSummary(onlineProfiles)} onAdd={() => openModal("onlineProfiles")} icon={<Link2 className="h-5 w-5" />} />{role === "trainer" && <><SectionRow title="Work sample" description="Link relevant work samples, for example GitHub or Behance." count={listCount(trainerExtras.workSamples)} summary={itemSummary(trainerExtras.workSamples)} onAdd={() => openModal("workSamples")} icon={<ImagePlus className="h-5 w-5" />} /><SectionRow title="White paper / Research publication / Journal entry" description="Add links to your online publications." count={listCount(trainerExtras.publications)} summary={itemSummary(trainerExtras.publications)} onAdd={() => openModal("publications")} icon={<FileText className="h-5 w-5" />} /><SectionRow title="Presentation" description="Add links to online presentations, for example slide-share presentation links." count={listCount(trainerExtras.presentations)} summary={itemSummary(trainerExtras.presentations)} onAdd={() => openModal("presentations")} icon={<Presentation className="h-5 w-5" />} /><SectionRow title="Patent" description="Add details of patents you have filed." count={listCount(trainerExtras.patents)} summary={itemSummary(trainerExtras.patents)} onAdd={() => openModal("patents")} icon={<ShieldCheck className="h-5 w-5" />} /><SectionRow title="Certification" description="Add details of certifications you have completed." count={listCount(trainerExtras.extraCertifications)} summary={itemSummary(trainerExtras.extraCertifications)} onAdd={() => openModal("certifications")} icon={<Award className="h-5 w-5" />} /></>}</section>
       </CardContent>
       {renderModal()}
