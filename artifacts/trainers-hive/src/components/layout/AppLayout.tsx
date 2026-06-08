@@ -55,8 +55,8 @@ function ProfilePageSidebar({ role }: { role: "trainer" | "vendor" }) {
   const items = role === "trainer"
     ? [
         { href: "#profile-overview", label: "Overview", helper: "Strength and summary", icon: <LayoutDashboard className="h-4 w-4" /> },
-        { href: "#profile-professional", label: "Professional", helper: "Identity, skills, proof", icon: <UserRound className="h-4 w-4" /> },
-        { href: "#profile-contact", label: "Contact", helper: "Mobile, address, photo", icon: <Link2 className="h-4 w-4" /> },
+        { href: "#profile-contact", label: "Contact", helper: "Name, email, phone, address", icon: <Link2 className="h-4 w-4" /> },
+        { href: "#profile-professional", label: "Professional", helper: "Skills, language, bio", icon: <UserRound className="h-4 w-4" /> },
         { href: "#profile-accomplishments", label: "Accomplishments", helper: "Profiles, work, patents", icon: <Sparkles className="h-4 w-4" /> },
         { href: "#profile-experience", label: "Experience", helper: "Employment, education", icon: <BriefcaseBusiness className="h-4 w-4" /> },
         { href: "#profile-availability", label: "Availability", helper: "Engaged dates", icon: <CalendarDays className="h-4 w-4" /> },
