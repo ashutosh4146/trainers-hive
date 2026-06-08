@@ -1,0 +1,61 @@
+name: Temporary requirement deadline patch
+
+on:
+  push:
+    branches:
+      - profile-contact-section-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: profile-contact-section-cleanup
+      - name: Patch requirement deadline behavior
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/trainers-hive/src/pages/RequirementDetail.tsx')
+          s = p.read_text()
+          s = s.replace(
+            '  const isExpired = deadlineDate < now;\n  const isExpiringSoon = !isExpired && daysToDeadline <= 7;\n',
+            '  const isExpired = deadlineDate < now;\n  const isExpiringSoon = !isExpired && daysToDeadline <= 7;\n  const isOpenForApplications = requirement.status === "open" && !isExpired;\n  const visibleRequirementStatus = requirement.status === "open" && isExpired ? "expired" : requirement.status;\n'
+          )
+          s = s.replace(
+            "<Badge variant={requirement.status === 'open' ? 'default' : requirement.status === 'vacant' ? 'destructive' : 'secondary'} className=\"capitalize\">\n                  {requirement.status}\n                </Badge>",
+            "<Badge variant={visibleRequirementStatus === 'open' ? 'default' : visibleRequirementStatus === 'vacant' ? 'destructive' : 'secondary'} className=\"capitalize\">\n                  {visibleRequirementStatus}\n                </Badge>"
+          )
+          s = s.replace(
+            "              {isTrainer && !myApplication && requirement.status === 'open' && trainerLoading && (",
+            "              {isTrainer && !myApplication && isOpenForApplications && trainerLoading && ("
+          )
+          s = s.replace(
+            "              {isTrainer && !myApplication && requirement.status === 'open' && !trainerLoading && conflict && (",
+            "              {isTrainer && !myApplication && isOpenForApplications && !trainerLoading && conflict && ("
+          )
+          s = s.replace(
+            "              {isTrainer && !myApplication && requirement.status === 'open' && !trainerLoading && !conflict && (",
+            "              {isTrainer && !myApplication && isOpenForApplications && !trainerLoading && !conflict && ("
+          )
+          marker = "              {isTrainer && !myApplication && isOpenForApplications && trainerLoading && ("
+          insert = '''              {isTrainer && !myApplication && requirement.status === 'open' && isExpired && (\n                <Button size=\"lg\" className=\"w-full mt-2\" disabled aria-disabled=\"true\">\n                  Deadline Passed\n                </Button>\n              )}\n'''
+          if insert.strip() not in s:
+            s = s.replace(marker, insert + marker)
+          p.write_text(s)
+          Path('tmp-requirement-deadline.txt').unlink(missing_ok=True)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/trainers-hive/src/pages/RequirementDetail.tsx tmp-requirement-deadline.txt
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Treat expired open requirements as closed for applications"
+            git push origin HEAD:profile-contact-section-cleanup
+          fi
