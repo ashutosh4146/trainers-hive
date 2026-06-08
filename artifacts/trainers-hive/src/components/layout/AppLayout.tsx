@@ -19,6 +19,7 @@ import {
 } from "@/components/ProfileCompletion";
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { ProfileExtrasPanel } from "@/components/ProfileExtrasPanel";
+import { RequirementDeadlineDomGuard } from "@/components/RequirementDeadlineDomGuard";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { TrainerProfilePolishPage } from "@/components/TrainerProfilePolishPage";
 import { VendorDashboardPolish } from "@/components/VendorDashboardPolish";
@@ -132,6 +133,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
+      <RequirementDeadlineDomGuard />
       <Navbar />
       <main className="relative w-full">
         <ProfileCompletionPrompt />
