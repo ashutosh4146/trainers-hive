@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { AlertCircle, CalendarCheck2, CalendarDays, CalendarPlus, Clock3, Info, Trash2 } from "lucide-react";
+import { AlertCircle, CalendarCheck2, CalendarDays, CalendarPlus, Check, Clock3, Info, Pencil, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +38,10 @@ function daysInRange(range: EngagedRange) {
   return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
 }
 
+function rangesOverlap(a: EngagedRange, b: EngagedRange) {
+  return a.startDate <= b.endDate && a.endDate >= b.startDate;
+}
+
 function SummaryTile({ label, value, helper, icon }: { label: string; value: React.ReactNode; helper: string; icon: React.ReactNode }) {
   return (
     <div className="rounded-xl border bg-background p-4">
@@ -64,15 +68,20 @@ export function TrainerAvailabilityPolish({ trainerId }: { trainerId: string }) 
   const [start, setStart] = React.useState("");
   const [end, setEnd] = React.useState("");
   const [note, setNote] = React.useState("");
+  const [editingKey, setEditingKey] = React.useState<string | null>(null);
+  const [editStart, setEditStart] = React.useState("");
+  const [editEnd, setEditEnd] = React.useState("");
+  const [editNote, setEditNote] = React.useState("");
 
   const engaged: EngagedRange[] = React.useMemo(() => {
     const raw = (trainer as { engagedDates?: EngagedRange[] } | undefined)?.engagedDates;
     return Array.isArray(raw) ? raw : [];
   }, [trainer]);
 
-  const sorted = React.useMemo(() => [...engaged].sort((a, b) => a.startDate.localeCompare(b.startDate)), [engaged]);
+  const keyed = React.useMemo(() => engaged.map((range, index) => ({ range, index, key: `${range.startDate}-${range.endDate}-${index}` })), [engaged]);
+  const sorted = React.useMemo(() => [...keyed].sort((a, b) => a.range.startDate.localeCompare(b.range.startDate)), [keyed]);
   const todayIso = new Date().toISOString().slice(0, 10);
-  const activeUpcoming = sorted.filter((range) => range.endDate >= todayIso);
+  const activeUpcoming = sorted.map((item) => item.range).filter((range) => range.endDate >= todayIso);
   const totalBlockedDays = activeUpcoming.reduce((sum, range) => sum + daysInRange(range), 0);
   const nextBooking = activeUpcoming[0];
 
@@ -82,6 +91,7 @@ export function TrainerAvailabilityPolish({ trainerId }: { trainerId: string }) 
       {
         onSuccess: () => {
           toast({ title: successTitle });
+          setEditingKey(null);
           queryClient.invalidateQueries({ queryKey: getGetTrainerQueryKey(trainerId) });
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
         },
@@ -92,32 +102,61 @@ export function TrainerAvailabilityPolish({ trainerId }: { trainerId: string }) 
     );
   };
 
-  const handleAdd = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!start || !end) {
+  const validateRange = (candidate: EngagedRange, otherRanges: EngagedRange[]) => {
+    if (!candidate.startDate || !candidate.endDate) {
       toast({ title: "Pick both dates", description: "Start and end dates are required.", variant: "destructive" });
-      return;
+      return false;
     }
-    if (end < start) {
+    if (candidate.endDate < candidate.startDate) {
       toast({ title: "Invalid range", description: "End date must be on or after start date.", variant: "destructive" });
-      return;
+      return false;
     }
-    const overlaps = engaged.some((range) => start <= range.endDate && end >= range.startDate);
+    if (candidate.startDate < todayIso || candidate.endDate < todayIso) {
+      toast({ title: "Invalid range", description: "Booked periods must be today or later.", variant: "destructive" });
+      return false;
+    }
+    const overlaps = otherRanges.some((range) => rangesOverlap(candidate, range));
     if (overlaps) {
       toast({ title: "Dates overlap", description: "This period overlaps with an existing engaged range.", variant: "destructive" });
-      return;
+      return false;
     }
-    const next: EngagedRange[] = [...engaged, { startDate: start, endDate: end, ...(note.trim() ? { note: note.trim() } : {}) }];
-    persist(next, "Engaged dates added");
+    return true;
+  };
+
+  const handleAdd = (event: React.FormEvent) => {
+    event.preventDefault();
+    const candidate: EngagedRange = { startDate: start, endDate: end, ...(note.trim() ? { note: note.trim() } : {}) };
+    if (!validateRange(candidate, engaged)) return;
+    persist([...engaged, candidate], "Engaged dates added");
     setStart("");
     setEnd("");
     setNote("");
   };
 
-  const handleRemove = (range: EngagedRange) => {
-    const realIndex = engaged.indexOf(range);
-    if (realIndex < 0) return;
-    persist(engaged.filter((_, index) => index !== realIndex), "Engaged dates removed");
+  const handleRemove = (index: number) => {
+    persist(engaged.filter((_, itemIndex) => itemIndex !== index), "Engaged dates removed");
+  };
+
+  const beginEdit = (range: EngagedRange, key: string) => {
+    setEditingKey(key);
+    setEditStart(range.startDate);
+    setEditEnd(range.endDate);
+    setEditNote(range.note ?? "");
+  };
+
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setEditStart("");
+    setEditEnd("");
+    setEditNote("");
+  };
+
+  const saveEdit = (index: number) => {
+    const candidate: EngagedRange = { startDate: editStart, endDate: editEnd, ...(editNote.trim() ? { note: editNote.trim() } : {}) };
+    const otherRanges = engaged.filter((_, itemIndex) => itemIndex !== index);
+    if (!validateRange(candidate, otherRanges)) return;
+    const next = engaged.map((range, itemIndex) => (itemIndex === index ? candidate : range));
+    persist(next, "Booked period updated");
   };
 
   if (isLoading) {
@@ -193,7 +232,7 @@ export function TrainerAvailabilityPolish({ trainerId }: { trainerId: string }) 
                   <li>• Dates must be today or later.</li>
                   <li>• End date cannot be before start date.</li>
                   <li>• Overlapping engaged periods are blocked.</li>
-                  <li>• Remove a period when you become available again.</li>
+                  <li>• Edit or remove a period when your availability changes.</li>
                 </ul>
               </div>
             </div>
@@ -217,20 +256,55 @@ export function TrainerAvailabilityPolish({ trainerId }: { trainerId: string }) 
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {sorted.map((range, index) => (
-                <div key={`${range.startDate}-${range.endDate}-${index}`} className="rounded-2xl border bg-background p-4 transition-colors hover:border-primary/40">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold">{formatRange(range)}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{daysInRange(range)} day{daysInRange(range) === 1 ? "" : "s"} blocked</p>
-                      {range.note && <p className="mt-2 rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{range.note}</p>}
-                    </div>
-                    <Button type="button" variant="ghost" size="icon" onClick={() => handleRemove(range)} disabled={updateTrainer.isPending} aria-label="Remove engaged dates" title="Remove engaged dates">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+              {sorted.map(({ range, index, key }) => {
+                const isEditing = editingKey === key;
+                return (
+                  <div key={key} className="rounded-2xl border bg-background p-4 transition-colors hover:border-primary/40">
+                    {isEditing ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`edit-start-${key}`}>Start date</Label>
+                            <Input id={`edit-start-${key}`} type="date" value={editStart} min={todayIso} onChange={(event) => setEditStart(event.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`edit-end-${key}`}>End date</Label>
+                            <Input id={`edit-end-${key}`} type="date" value={editEnd} min={editStart || todayIso} onChange={(event) => setEditEnd(event.target.value)} />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`edit-note-${key}`}>Note optional</Label>
+                          <Textarea id={`edit-note-${key}`} rows={3} value={editNote} maxLength={120} onChange={(event) => setEditNote(event.target.value)} />
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={cancelEdit} disabled={updateTrainer.isPending}>
+                            <X className="mr-1.5 h-3.5 w-3.5" /> Cancel
+                          </Button>
+                          <Button type="button" size="sm" onClick={() => saveEdit(index)} disabled={updateTrainer.isPending}>
+                            <Check className="mr-1.5 h-3.5 w-3.5" /> {updateTrainer.isPending ? "Saving…" : "Save"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold">{formatRange(range)}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{daysInRange(range)} day{daysInRange(range) === 1 ? "" : "s"} blocked</p>
+                          {range.note && <p className="mt-2 rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{range.note}</p>}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button type="button" variant="ghost" size="icon" onClick={() => beginEdit(range, key)} disabled={updateTrainer.isPending} aria-label="Edit booked period" title="Edit booked period">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => handleRemove(index)} disabled={updateTrainer.isPending} aria-label="Remove engaged dates" title="Remove engaged dates">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
