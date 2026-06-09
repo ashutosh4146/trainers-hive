@@ -38,62 +38,6 @@
         </div>
       </section>
     </div>
-    <script>
-      (() => {
-        const WAIT_SECONDS = 45;
-        const STORAGE_KEY = 'th_magic_link_resend_after';
-        const isLoginPage = () => location.pathname === '/login';
-        const getRemaining = () => Math.max(0, Math.ceil(((Number(localStorage.getItem(STORAGE_KEY)) || 0) - Date.now()) / 1000));
-        const startWait = () => localStorage.setItem(STORAGE_KEY, String(Date.now() + WAIT_SECONDS * 1000));
-        const isValidEmail = () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((document.querySelector('input[type="email"]')?.value || '').trim());
-        const findButton = (label) => Array.from(document.querySelectorAll('button')).find((button) => button.textContent && button.textContent.includes(label));
-        const ensureHint = (button, seconds) => {
-          const parent = button.parentElement;
-          if (!parent) return;
-          let hint = parent.querySelector('[data-magic-link-wait-hint]');
-          if (!hint) {
-            hint = document.createElement('p');
-            hint.setAttribute('data-magic-link-wait-hint', 'true');
-            hint.className = 'text-xs text-muted-foreground';
-            parent.appendChild(hint);
-          }
-          hint.textContent = seconds > 0 ? `For security, wait ${seconds}s before requesting another magic link.` : '';
-        };
-        const patch = () => {
-          if (!isLoginPage()) return;
-          const seconds = getRemaining();
-          const resendButton = findButton('Resend link') || findButton('Resend in');
-          if (resendButton) {
-            resendButton.disabled = seconds > 0;
-            resendButton.style.opacity = seconds > 0 ? '0.6' : '';
-            resendButton.style.cursor = seconds > 0 ? 'not-allowed' : '';
-            if (seconds > 0) resendButton.textContent = `Resend in ${seconds}s`;
-            else if (resendButton.textContent && resendButton.textContent.includes('Resend in')) resendButton.textContent = 'Resend link';
-            ensureHint(resendButton, seconds);
-          }
-        };
-        document.addEventListener('click', (event) => {
-          if (!isLoginPage()) return;
-          const button = event.target instanceof Element ? event.target.closest('button') : null;
-          if (!button) return;
-          const text = button.textContent || '';
-          if (text.includes('Send Sign-In Link') && isValidEmail()) {
-            startWait();
-            setTimeout(patch, 0);
-          }
-          if ((text.includes('Resend link') || text.includes('Resend in')) && getRemaining() > 0) {
-            event.preventDefault();
-            event.stopPropagation();
-            patch();
-          } else if (text.includes('Resend link') && isValidEmail()) {
-            startWait();
-            setTimeout(patch, 0);
-          }
-        }, true);
-        new MutationObserver(patch).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-        setInterval(patch, 1000);
-      })();
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
