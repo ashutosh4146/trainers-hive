@@ -19,6 +19,33 @@ function hasExistingApplicationState() {
   });
 }
 
+function hasActiveAgreementState() {
+  return Array.from(document.querySelectorAll("main div, main p, main span, main button")).some((node) => {
+    const text = node.textContent?.trim().toLowerCase() || "";
+    return (
+      text.includes("agreement active") ||
+      text.includes("signed by both parties") ||
+      text.includes("agreement signed")
+    );
+  });
+}
+
+function hideApplySoonBannerWhenAgreementActive() {
+  if (!hasActiveAgreementState()) return;
+
+  const main = document.querySelector("main");
+  if (!main) return;
+
+  for (const node of Array.from(main.querySelectorAll<HTMLElement>("div"))) {
+    const text = node.textContent || "";
+    if (text.includes("Apply soon!") || text.includes("Closes in")) {
+      node.style.display = "none";
+      node.setAttribute("data-th-hidden-apply-soon", "true");
+      break;
+    }
+  }
+}
+
 function patchAppliedRequirementUi() {
   if (!hasExistingApplicationState()) return;
 
@@ -121,6 +148,7 @@ export function RequirementDeadlineDomGuard() {
       if (location.startsWith("/requirements/")) {
         patchExpiredRequirementUi();
         patchAppliedRequirementUi();
+        hideApplySoonBannerWhenAgreementActive();
       }
       if (location === "/profile") patchMobileInputs();
     };
