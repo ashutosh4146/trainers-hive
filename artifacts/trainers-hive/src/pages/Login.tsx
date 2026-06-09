@@ -33,6 +33,11 @@ function getSafeRedirectTarget() {
   return candidate;
 }
 
+function getBrowseBackTarget(redirectTarget: string) {
+  if (redirectTarget.startsWith("/requirements")) return "/requirements";
+  return "/";
+}
+
 function getCooldownRemaining() {
   return Math.max(0, Math.ceil(((Number(localStorage.getItem(MAGIC_LINK_COOLDOWN_KEY)) || 0) - Date.now()) / 1000));
 }
@@ -64,6 +69,7 @@ export default function Login() {
   const detectedRole = getDetectedRole(normalizedEmail);
   const detectedRoleLabel = getRoleLabel(detectedRole);
   const redirectTarget = getSafeRedirectTarget();
+  const browseBackTarget = getBrowseBackTarget(redirectTarget);
   const isMagicLinkCoolingDown = cooldownRemaining > 0;
 
   useEffect(() => {
@@ -213,8 +219,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background flex flex-col">
-      <header className="flex items-center gap-2 px-8 py-5 border-b bg-background/80 backdrop-blur">
+      <header className="flex items-center justify-between gap-3 px-8 py-5 border-b bg-background/80 backdrop-blur">
         <Link href="/" className="flex items-center gap-2 rounded-md text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Go to homepage"><Activity className="h-6 w-6" /><span className="font-bold text-xl tracking-tight">Trainers Hive</span></Link>
+        <Button type="button" variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate(browseBackTarget)}>
+          <ArrowLeft className="h-4 w-4" /> Back to browsing
+        </Button>
       </header>
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md space-y-6">
