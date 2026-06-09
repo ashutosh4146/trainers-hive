@@ -336,24 +336,26 @@ export default function NewRequirement() {
         undefined,
       benefits:
         ((template as any).benefits as FormValues["benefits"]) ?? undefined,
-      payoutChoice: (template as any).budget > 0 ? "reveal" : "discuss",
-      budget: (template as any).budget > 0 ? (template as any).budget : undefined,
-      feeType: ((template as any).feeType as FormValues["feeType"]) ?? "negotiable",
-      startDate: (template as any).startDate ?? "",
+      payoutChoice: "discuss",
+      budget: undefined,
+      feeType: "negotiable",
+      startDate: "",
       durationDays: template.durationDays,
-      deadline: template.deadline
-        ? new Date(template.deadline).toISOString().split("T")[0]
-        : "",
+      deadline: "",
       description: "",
       certifications: (template as any).certifications ?? "",
       language: (template as any).language ?? "",
+      isUrgent: false,
+      isFeatured: false,
+      isPrivate: false,
+      hireThroughUs: false,
     });
 
     toast({
       title: "Template loaded",
-      description: "Fields filled from your previous post. Update as needed.",
+      description: "Reusable details copied. Please set fresh dates, payout, visibility, and description.",
     });
-  }, [selectedTemplate]);
+  }, [selectedTemplate, previousRequirements, form, toast]);
 
   const onSubmit = (data: FormValues) => {
     const subSkillsArray = data.subSkills
