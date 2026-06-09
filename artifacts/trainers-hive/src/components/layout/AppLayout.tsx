@@ -2,28 +2,17 @@ import React from "react";
 import { Navbar } from "./Navbar";
 import { Link } from "wouter";
 import { useLocation } from "wouter";
-import { BriefcaseBusiness, CalendarDays, LayoutDashboard, Link2, MessageSquare, Settings, Sparkles, UserRound, X } from "lucide-react";
-import {
-  useGetCurrentUser,
-  useGetTrainer,
-  useGetVendor,
-  getGetTrainerQueryKey,
-  getGetVendorQueryKey,
-} from "@workspace/api-client-react";
+import { BriefcaseBusiness, CalendarDays, LayoutDashboard, Link2, MessageSquare, Settings, Sparkles, UserRound } from "lucide-react";
+import { useGetCurrentUser } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useUnreadMessages } from "@/hooks/useUnreadMessages";
-import {
-  ProfileCompletion,
-  getTrainerCompletionItems,
-  getVendorCompletionItems,
-} from "@/components/ProfileCompletion";
+import { markRead, useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { PaginatedTrainersDirectory } from "@/components/PaginatedTrainersDirectory";
 import { ProfileExtrasPanel } from "@/components/ProfileExtrasPanel";
+import { RequirementDeadlineDomGuard } from "@/components/RequirementDeadlineDomGuard";
 import { TrainerDashboardRedesign } from "@/components/TrainerDashboardRedesign";
 import { TrainerProfilePolishPage } from "@/components/TrainerProfilePolishPage";
 import { VendorDashboardPolish } from "@/components/VendorDashboardPolish";
 import { VendorProfileRequired } from "@/components/VendorProfileRequired";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function FloatingMessagesButton() {
@@ -33,7 +22,15 @@ function FloatingMessagesButton() {
   const canShow = isSignedIn && (auth?.role === "trainer" || auth?.role === "vendor") && location !== "/messages";
   if (!canShow) return null;
   return (
-    <button type="button" onClick={() => navigate("/messages")} aria-label={count > 0 ? `${count} unread messages` : "Open messages"} className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg border border-primary-border transition-transform hover:scale-105 active:scale-95">
+    <button
+      type="button"
+      onClick={() => {
+        if (auth?.email) markRead(auth.email);
+        navigate("/messages");
+      }}
+      aria-label={count > 0 ? `${count} unread messages` : "Open messages"}
+      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg border border-primary-border transition-transform hover:scale-105 active:scale-95"
+    >
       <MessageSquare className="h-6 w-6" />
       {count > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-white leading-none ring-2 ring-background">{count > 9 ? "9+" : count}</span>}
     </button>
@@ -54,8 +51,8 @@ function ProfilePageSidebar({ role }: { role: "trainer" | "vendor" }) {
   const items = role === "trainer"
     ? [
         { href: "#profile-overview", label: "Overview", helper: "Strength and summary", icon: <LayoutDashboard className="h-4 w-4" /> },
-        { href: "#profile-professional", label: "Professional", helper: "Identity, skills, proof", icon: <UserRound className="h-4 w-4" /> },
-        { href: "#profile-contact", label: "Contact", helper: "Mobile, address, photo", icon: <Link2 className="h-4 w-4" /> },
+        { href: "#profile-contact", label: "Contact", helper: "Name, email, phone, address", icon: <Link2 className="h-4 w-4" /> },
+        { href: "#profile-professional", label: "Professional", helper: "Skills, language, bio", icon: <UserRound className="h-4 w-4" /> },
         { href: "#profile-accomplishments", label: "Accomplishments", helper: "Profiles, work, patents", icon: <Sparkles className="h-4 w-4" /> },
         { href: "#profile-experience", label: "Experience", helper: "Employment, education", icon: <BriefcaseBusiness className="h-4 w-4" /> },
         { href: "#profile-availability", label: "Availability", helper: "Engaged dates", icon: <CalendarDays className="h-4 w-4" /> },
@@ -87,31 +84,6 @@ function ProfilePageSidebar({ role }: { role: "trainer" | "vendor" }) {
   );
 }
 
-function ProfileCompletionPrompt() {
-  const [location] = useLocation();
-  const { isSignedIn, auth } = useAuth();
-  const [dismissed, setDismissed] = React.useState(false);
-  const { data: user } = useGetCurrentUser({ query: { enabled: isSignedIn } });
-  const trainerId = user?.trainerId ?? "";
-  const vendorId = user?.vendorId ?? "";
-  const { data: trainer } = useGetTrainer(trainerId, { query: { enabled: isSignedIn && auth?.role === "trainer" && !!trainerId, queryKey: getGetTrainerQueryKey(trainerId) } });
-  const { data: vendor } = useGetVendor(vendorId, { query: { enabled: isSignedIn && auth?.role === "vendor" && !!vendorId, queryKey: getGetVendorQueryKey(vendorId) } });
-
-  if (dismissed || !isSignedIn || location === "/dashboard" || location === "/profile" || location === "/messages" || location === "/trainers" || location.startsWith("/trainers/") || (auth?.role !== "trainer" && auth?.role !== "vendor")) return null;
-  const items = auth?.role === "trainer" ? getTrainerCompletionItems(trainer) : getVendorCompletionItems(vendor);
-  const score = items.length ? Math.round((items.filter((item) => item.done).length / items.length) * 100) : 100;
-  if (score >= 100) return null;
-
-  return (
-    <div className="container mx-auto px-4 pt-4">
-      <div className="relative">
-        <ProfileCompletion title="Complete your profile" description="A complete profile improves trust, matching quality, and response rates." items={items} ctaHref="/profile" />
-        <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2 h-7 w-7" onClick={() => setDismissed(true)} aria-label="Dismiss profile completion prompt"><X className="h-4 w-4" /></Button>
-      </div>
-    </div>
-  );
-}
-
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { isSignedIn, auth } = useAuth();
@@ -132,9 +104,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-primary">
+      <RequirementDeadlineDomGuard />
       <Navbar />
       <main className="relative w-full">
-        <ProfileCompletionPrompt />
         <div key={location} className="flex flex-col w-full animate-in fade-in slide-in-from-bottom-2 duration-200">
           {waitForDashboardRole ? <DashboardLoadingShell /> : useTrainerDashboard ? <TrainerDashboardRedesign /> : useVendorDashboard ? (
             <div className="container mx-auto max-w-7xl px-4 py-8"><VendorDashboardPolish vendorId={vendorDashboardId} /></div>

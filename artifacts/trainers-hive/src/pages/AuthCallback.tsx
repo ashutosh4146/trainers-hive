@@ -22,6 +22,12 @@ const ROLES: { value: UserRole; label: string }[] = [
   { value: "vendor",  label: "Organisation" },
 ];
 
+function getSafeRedirectTarget() {
+  const candidate = localStorage.getItem("th_auth_redirect") || "/dashboard";
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.startsWith("/login") || candidate.startsWith("/signup")) return "/dashboard";
+  return candidate;
+}
+
 export default function AuthCallback() {
   const [status, setStatus] = useState<Status>("verifying");
   const [errorMsg, setErrorMsg] = useState("");
@@ -45,6 +51,7 @@ export default function AuthCallback() {
       },
       {
         onSuccess: () => {
+          const redirectTarget = getSafeRedirectTarget();
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
           signIn({
             signedIn: true,
@@ -55,8 +62,9 @@ export default function AuthCallback() {
             orgType: pending.orgType,
           });
           clearPendingAuth();
+          localStorage.removeItem("th_auth_redirect");
           setStatus("success");
-          setTimeout(() => navigate("/dashboard"), 1200);
+          setTimeout(() => navigate(redirectTarget), 1200);
         },
         onError: () => {
           setStatus("error");
@@ -76,7 +84,6 @@ export default function AuthCallback() {
 
       const pending = loadPendingAuth();
       if (!pending) {
-        // Link opened in a different browser — ask for email to recover
         setStatus("needs-email");
         return;
       }
@@ -119,13 +126,10 @@ export default function AuthCallback() {
 
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="text-center space-y-4 max-w-sm w-full">
-
           {(status === "verifying" || status === "completing") && (
             <>
               <Loader2 className="h-12 w-12 text-primary animate-spin mx-auto" />
-              <h2 className="text-xl font-semibold">
-                {status === "completing" ? "Signing you in…" : "Verifying your email…"}
-              </h2>
+              <h2 className="text-xl font-semibold">{status === "completing" ? "Signing you in…" : "Verifying your email…"}</h2>
               <p className="text-muted-foreground text-sm">Just a moment while we sign you in.</p>
             </>
           )}
@@ -134,36 +138,17 @@ export default function AuthCallback() {
             <>
               <Mail className="h-12 w-12 text-primary mx-auto" />
               <h2 className="text-xl font-semibold">Confirm your email</h2>
-              <p className="text-muted-foreground text-sm">
-                The sign-in link was opened in a different browser. Enter the email you used to request the link.
-              </p>
+              <p className="text-muted-foreground text-sm">The sign-in link was opened in a different browser. Enter the email you used to request the link.</p>
               <form onSubmit={handleRecoverySubmit} className="space-y-4 text-left pt-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="recovery-email">Email address</Label>
-                  <Input
-                    id="recovery-email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={recoveryEmail}
-                    onChange={e => setRecoveryEmail(e.target.value)}
-                    required
-                    autoFocus
-                  />
+                  <Input id="recovery-email" type="email" placeholder="you@example.com" value={recoveryEmail} onChange={e => setRecoveryEmail(e.target.value)} required autoFocus />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Sign in as</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {ROLES.map(r => (
-                      <button
-                        key={r.value}
-                        type="button"
-                        onClick={() => setRecoveryRole(r.value)}
-                        className={`rounded-lg border py-2 px-1 text-xs font-medium transition-colors ${
-                          recoveryRole === r.value
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border text-muted-foreground hover:border-primary/50"
-                        }`}
-                      >
+                      <button key={r.value} type="button" onClick={() => setRecoveryRole(r.value)} className={`rounded-lg border py-2 px-1 text-xs font-medium transition-colors ${recoveryRole === r.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}>
                         {r.label}
                       </button>
                     ))}
@@ -178,7 +163,7 @@ export default function AuthCallback() {
             <>
               <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
               <h2 className="text-xl font-semibold">You're in!</h2>
-              <p className="text-muted-foreground text-sm">Redirecting to your dashboard…</p>
+              <p className="text-muted-foreground text-sm">Redirecting you back…</p>
             </>
           )}
 
@@ -193,13 +178,10 @@ export default function AuthCallback() {
               </div>
             </>
           )}
-
         </div>
       </div>
 
-      <footer className="text-center text-xs text-muted-foreground py-5 border-t">
-        &copy; {new Date().getFullYear()} Trainers Hive. A trusted B2B training marketplace.
-      </footer>
+      <footer className="text-center text-xs text-muted-foreground py-5 border-t">&copy; {new Date().getFullYear()} Trainers Hive. A trusted B2B training marketplace.</footer>
     </div>
   );
 }

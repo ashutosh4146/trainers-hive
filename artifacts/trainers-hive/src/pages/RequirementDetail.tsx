@@ -80,6 +80,27 @@ function findScheduleConflict(
   return null;
 }
 
+function hasDeadlinePassed(value: unknown) {
+  if (!value) return false;
+  const deadline = new Date(String(value));
+  if (Number.isNaN(deadline.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  deadline.setHours(23, 59, 59, 999);
+  return deadline.getTime() < today.getTime();
+}
+
+function isTrainerProfileReady(trainer: any) {
+  return !!(
+    trainer?.name?.trim?.() &&
+    trainer?.mainSkill?.trim?.() &&
+    trainer?.location?.trim?.() &&
+    trainer?.trainerType &&
+    Array.isArray(trainer?.languages) &&
+    trainer.languages.length > 0
+  );
+}
+
 export default function RequirementDetail() {
   const params = useParams<{ id: string }>();
   const id = params.id as string;
@@ -228,6 +249,17 @@ export default function RequirementDetail() {
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!trainerProfileReady) {
+      toast({
+        title: "Complete your profile first",
+        description: "Please complete your trainer profile before applying.",
+        variant: "destructive",
+      });
+      setIsApplyOpen(false);
+      navigate("/profile");
+      return;
+    }
+
     applyMutation.mutate(
       { id, data: { message: message.trim() || DEFAULT_APPLY_MSG, proposedRate: proposedRate ? Number(proposedRate) : undefined } },
       {
@@ -347,9 +379,19 @@ export default function RequirementDetail() {
 
   const now = new Date();
   const deadlineDate = new Date(requirement.deadline);
+  deadlineDate.setHours(23, 59, 59, 999);
   const daysToDeadline = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  const isExpired = deadlineDate < now;
+  const isExpired = hasDeadlinePassed(requirement.deadline);
   const isExpiringSoon = !isExpired && daysToDeadline <= 7;
+  const hasActiveEngagement =
+  myApplication?.status === "hired" ||
+  myApplication?.status === "completed" ||
+  (applications ?? []).some((app) => app.status === "hired" || app.status === "completed");
+
+  const canAcceptApplications =
+  requirement.status === "open" && !isExpired && !hasActiveEngagement;
+
+  const trainerProfileReady = !isTrainer || isTrainerProfileReady(currentTrainer);
 
   return (
     <div className="container mx-auto px-4 py-8 md:py-12 max-w-5xl">
@@ -360,7 +402,7 @@ export default function RequirementDetail() {
             Application deadline has passed.{" "}
             {isVendorOwner
               ? "Extend the deadline or close this requirement."
-              : "This requirement may close soon."}
+              : "Applications are closed for this requirement."}
           </span>
         </div>
       )}
@@ -377,8 +419,8 @@ export default function RequirementDetail() {
           <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
             <div className="flex-1 space-y-4">
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant={requirement.status === 'open' ? 'default' : requirement.status === 'vacant' ? 'destructive' : 'secondary'} className="capitalize">
-                  {requirement.status}
+                <Badge variant={isExpired || requirement.status === 'vacant' ? 'destructive' : requirement.status === 'open' ? 'default' : 'secondary'} className="capitalize">
+                  {isExpired ? "Expired" : requirement.status}
                 </Badge>
                 {(requirement as any).isUrgent && (
                   <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
@@ -452,12 +494,12 @@ export default function RequirementDetail() {
               <p className="text-sm text-muted-foreground font-semibold uppercase tracking-wider mb-1">Deadline</p>
               <p className="text-xl font-bold">{format(new Date(requirement.deadline), 'MMM d, yyyy')}</p>
               
-              {isTrainer && !myApplication && requirement.status === 'open' && trainerLoading && (
+              {isTrainer && !myApplication && canAcceptApplications && trainerLoading && (
                 <Button size="lg" className="w-full mt-2" disabled aria-disabled="true">
                   Checking availability...
                 </Button>
               )}
-              {isTrainer && !myApplication && requirement.status === 'open' && !trainerLoading && conflict && (
+              {isTrainer && !myApplication && canAcceptApplications && !trainerLoading && conflict && (
                 <div className="w-full mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                   <div className="flex items-start gap-2 text-destructive">
                     <CalendarX className="h-4 w-4 mt-0.5 shrink-0" />
@@ -465,16 +507,16 @@ export default function RequirementDetail() {
                       <p className="font-medium">You're already engaged on these dates.</p>
                       <p className="text-destructive/80 mt-1">
                         Conflicts with your booked period {formatRangeLabel(conflict)}
-                        {conflict.note ? ` (${conflict.note})` : ""}. Update your availability in your profile to apply.
+                        {conflict.note ? ` (${conflict.note})` : ""}. You can still apply if you want the vendor to consider you.
                       </p>
                     </div>
                   </div>
-                  <Button size="lg" className="w-full mt-3" disabled aria-disabled="true">
-                    Apply Now
+                  <Button size="lg" className="w-full mt-3" onClick={() => setIsApplyOpen(true)}>
+                    Apply Anyway
                   </Button>
                 </div>
               )}
-              {isTrainer && !myApplication && requirement.status === 'open' && !trainerLoading && !conflict && (
+              {isTrainer && !myApplication && canAcceptApplications && !trainerLoading && (
                 <Dialog open={isApplyOpen} onOpenChange={setIsApplyOpen}>
                   <DialogTrigger asChild>
                     <Button size="lg" className="w-full mt-2">Apply Now</Button>
@@ -485,6 +527,16 @@ export default function RequirementDetail() {
                       <DialogDescription>Submit your proposal to {requirement.vendorName}</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleApply} className="space-y-4 pt-4">
+                      {conflict && (
+                        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                          You are already booked during this period. Apply anyway only if you can manage this assignment.
+                        </div>
+                      )}
+                      {!trainerProfileReady && (
+                        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                          Please complete your trainer profile before applying.
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label htmlFor="proposedRate">
                           Proposed Rate (Total) <span className="text-muted-foreground font-normal text-xs">(optional)</span>
@@ -516,6 +568,11 @@ export default function RequirementDetail() {
                     </form>
                   </DialogContent>
                 </Dialog>
+              )}
+              {isTrainer && !myApplication && !canAcceptApplications && (
+                <Button size="lg" className="w-full mt-2" variant="secondary" disabled>
+                  Applications closed
+                </Button>
               )}
               {isTrainer && myApplication && (myApplication.status === 'submitted' || myApplication.status === 'rejected' || myApplication.status === 'withdrawn') && (
                 <div className={`w-full mt-2 rounded-md border p-3 text-sm ${myApplication.status === 'rejected' || myApplication.status === 'withdrawn' ? 'border-destructive/40 bg-destructive/10' : 'border-border bg-muted/50'}`}>
@@ -552,11 +609,15 @@ export default function RequirementDetail() {
                 </Button>
               )}
               {isTrainer && myApplication && (myApplication.status === 'hired' || myApplication.status === 'completed') && (
-                <div className="mt-3">
+                <div className="mt-3 w-full space-y-2">
                   <AgreementSection applicationId={myApplication.id} role="trainer" />
+                  <Button size="lg" className="w-full" variant="secondary" disabled>
+                     Agreement active
+                  </Button>
                 </div>
               )}
-              {isTrainer && myApplication && myApplication.status !== 'rejected' && myApplication.status !== 'withdrawn' && (
+              
+              {isTrainer && myApplication && ['submitted', 'shortlisted'].includes(myApplication.status) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -572,7 +633,7 @@ export default function RequirementDetail() {
                   {requirement.status === 'open' && (
                     <Button variant="outline" onClick={() => setIsCloseConfirmOpen(true)} disabled={updateReqMutation.isPending}>Close</Button>
                   )}
-                  {requirement.status === 'open' && new Date() > new Date(requirement.deadline) && (
+                  {requirement.status === 'open' && isExpired && (
                     <Button
                       variant="outline"
                       onClick={() => {

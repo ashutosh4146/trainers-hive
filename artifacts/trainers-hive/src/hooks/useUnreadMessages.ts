@@ -35,12 +35,15 @@ export function useUnreadMessages() {
   const { isSignedIn, auth } = useAuth();
   const { toast } = useToast();
   const prevCountRef = useRef<number | null>(null);
+  const hasInitializedRef = useRef(false);
 
   const [since, setSince] = useState<string>(() => readSince(auth?.email));
 
   // Keep `since` in sync when auth email changes (login / role switch)
   useEffect(() => {
     setSince(readSince(auth?.email));
+    prevCountRef.current = null;
+    hasInitializedRef.current = false;
   }, [auth?.email]);
 
   // Listen for markRead() calls from any component
@@ -49,6 +52,8 @@ export function useUnreadMessages() {
       const { email, since: newSince } = (e as CustomEvent<{ email: string; since: string }>).detail;
       if (email === auth?.email) {
         setSince(newSince);
+        prevCountRef.current = 0;
+        hasInitializedRef.current = true;
       }
     };
     window.addEventListener(MARK_READ_EVENT, handler);
@@ -75,19 +80,25 @@ export function useUnreadMessages() {
   const count = data?.count ?? 0;
 
   useEffect(() => {
-    if (prevCountRef.current === null) {
+    if (!data) return;
+
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
       prevCountRef.current = count;
       return;
     }
-    if (count > prevCountRef.current) {
-      const diff = count - prevCountRef.current;
+
+    const previousCount = prevCountRef.current ?? 0;
+    if (count > previousCount) {
+      const diff = count - previousCount;
       toast({
         title: diff === 1 ? "New message" : `${diff} new messages`,
         description: "You have a new message in one of your conversations.",
       });
     }
+
     prevCountRef.current = count;
-  }, [count, toast]);
+  }, [data, count, toast]);
 
   return { count };
 }
