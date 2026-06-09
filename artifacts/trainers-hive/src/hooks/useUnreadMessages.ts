@@ -53,6 +53,7 @@ export function useUnreadMessages() {
       if (email === auth?.email) {
         setSince(newSince);
         prevCountRef.current = 0;
+        hasInitializedRef.current = true;
       }
     };
     window.addEventListener(MARK_READ_EVENT, handler);
@@ -79,6 +80,8 @@ export function useUnreadMessages() {
   const count = data?.count ?? 0;
 
   useEffect(() => {
+    if (!data) return;
+
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
       prevCountRef.current = count;
@@ -95,7 +98,7 @@ export function useUnreadMessages() {
     }
 
     prevCountRef.current = count;
-  }, [count, toast]);
+  }, [data, count, toast]);
 
   return { count };
 }
