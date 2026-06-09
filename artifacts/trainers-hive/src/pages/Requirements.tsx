@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListRequirements,
