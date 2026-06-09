@@ -383,7 +383,14 @@ export default function RequirementDetail() {
   const daysToDeadline = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   const isExpired = hasDeadlinePassed(requirement.deadline);
   const isExpiringSoon = !isExpired && daysToDeadline <= 7;
-  const canAcceptApplications = requirement.status === "open" && !isExpired;
+  const hasActiveEngagement =
+  myApplication?.status === "hired" ||
+  myApplication?.status === "completed" ||
+  (applications ?? []).some((app) => app.status === "hired" || app.status === "completed");
+
+  const canAcceptApplications =
+  requirement.status === "open" && !isExpired && !hasActiveEngagement;
+
   const trainerProfileReady = !isTrainer || isTrainerProfileReady(currentTrainer);
 
   return (
@@ -602,11 +609,15 @@ export default function RequirementDetail() {
                 </Button>
               )}
               {isTrainer && myApplication && (myApplication.status === 'hired' || myApplication.status === 'completed') && (
-                <div className="mt-3">
+                <div className="mt-3 w-full space-y-2">
                   <AgreementSection applicationId={myApplication.id} role="trainer" />
+                  <Button size="lg" className="w-full" variant="secondary" disabled>
+                     Agreement active
+                  </Button>
                 </div>
               )}
-              {isTrainer && myApplication && myApplication.status !== 'rejected' && myApplication.status !== 'withdrawn' && (
+              
+              {isTrainer && myApplication && ['submitted', 'shortlisted'].includes(myApplication.status) && (
                 <Button
                   size="sm"
                   variant="outline"
