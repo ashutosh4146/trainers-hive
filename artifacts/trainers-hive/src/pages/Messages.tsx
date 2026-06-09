@@ -275,28 +275,28 @@ function ConversationPanel({
             <Skeleton className="ml-auto h-12 w-2/3 rounded-2xl" />
             <Skeleton className="h-12 w-1/2 rounded-2xl" />
           </div>
-        ) : messages.length > 0 ? (
+        ) : messages.length === 0 ? (
+          <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center text-muted-foreground">
+            <MessageSquare className="mb-3 h-9 w-9 opacity-20" />
+            <p className="text-sm font-medium text-foreground">No messages yet</p>
+            <p className="mt-1 text-xs">Start the conversation below.</p>
+          </div>
+        ) : (
           <div className="space-y-4">
             {messages.map((msg) => {
               const isMine = msg.senderUserId === currentUserId;
               return (
                 <div key={msg.id} className={cn("flex flex-col gap-1", isMine ? "items-end" : "items-start")}>
-                  <div className={cn("max-w-[82%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm", isMine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground")}>
+                  <div className={cn("max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm", isMine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted text-foreground")}>
                     {msg.body}
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="px-1 text-[10px] text-muted-foreground">
                     {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
                   </span>
                 </div>
               );
             })}
             <div ref={bottomRef} />
-          </div>
-        ) : (
-          <div className="flex h-full min-h-[300px] flex-col items-center justify-center text-center text-muted-foreground">
-            <Send className="mb-3 h-8 w-8 opacity-30" />
-            <p className="text-sm font-medium text-foreground">Start the conversation</p>
-            <p className="mt-1 max-w-xs text-xs">Send a short message about next steps, availability, scope, or expectations.</p>
           </div>
         )}
       </div>
@@ -359,10 +359,6 @@ export default function Messages() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>("all");
 
-  useEffect(() => {
-    if (!activeApplicationId && threads.length > 0) setActiveApplicationId(threads[0].applicationId);
-  }, [activeApplicationId, threads]);
-
   const prioritySet = useMemo(() => new Set(priorityIds), [priorityIds]);
   const needsReplyCount = useMemo(
     () => threads.filter((t) => !!t.lastMessageBody && t.lastMessageSenderUserId !== currentUser?.id).length,
@@ -408,7 +404,9 @@ export default function Messages() {
     );
   }, [threads, search, tab, currentUser?.id, prioritySet]);
 
-  const activeThread = threads.find((t) => t.applicationId === activeApplicationId) ?? filtered[0];
+  const activeThread = activeApplicationId
+    ? threads.find((t) => t.applicationId === activeApplicationId)
+    : null;
   const isVendor = currentUser?.role === "vendor" || auth?.role === "vendor";
 
   const openThread = (applicationId: string) => {
