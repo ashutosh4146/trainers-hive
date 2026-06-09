@@ -19,6 +19,40 @@ function hasExistingApplicationState() {
   });
 }
 
+function hasActiveAgreementState() {
+  return Array.from(document.querySelectorAll("main div, main p, main span, main button")).some((node) => {
+    const text = node.textContent?.trim().toLowerCase() || "";
+    return (
+      text.includes("agreement active") ||
+      text.includes("signed by both parties") ||
+      text.includes("agreement signed")
+    );
+  });
+}
+
+function patchApplySoonBannerForActiveAgreement() {
+  if (!hasActiveAgreementState()) return;
+
+  const main = document.querySelector("main");
+  if (!main) return;
+
+  for (const span of Array.from(main.querySelectorAll("span"))) {
+    const text = span.textContent || "";
+    if (!text.includes("Apply soon!")) continue;
+
+    const banner = span.closest<HTMLElement>(
+      "div.border-orange-200, div.dark\\:border-orange-800, div.bg-orange-50, div.dark\\:bg-orange-950\\/30",
+    );
+
+    if (banner) {
+      banner.style.display = "none";
+      banner.setAttribute("data-th-hidden-apply-soon", "true");
+    } else {
+      span.textContent = text.replace("Apply soon!", "Engagement is already active.");
+    }
+  }
+}
+
 function patchAppliedRequirementUi() {
   if (!hasExistingApplicationState()) return;
 
@@ -121,6 +155,7 @@ export function RequirementDeadlineDomGuard() {
       if (location.startsWith("/requirements/")) {
         patchExpiredRequirementUi();
         patchAppliedRequirementUi();
+        patchApplySoonBannerForActiveAgreement();
       }
       if (location === "/profile") patchMobileInputs();
     };
