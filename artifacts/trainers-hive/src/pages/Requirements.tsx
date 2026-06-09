@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListRequirements,
@@ -23,6 +23,10 @@ import { Search, MapPin, Briefcase, Filter, X, Building, BookOpen, Clock, Users,
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 
+const PAGE_SIZE = 10;
+
+type PaginatedMeta = { total?: number; page?: number; limit?: number; hasMore?: boolean; nextPage?: number | null };
+
 function toArray<T = any>(value: unknown): T[] {
   if (Array.isArray(value)) return value;
   if (value && typeof value === "object") {
@@ -34,6 +38,19 @@ function toArray<T = any>(value: unknown): T[] {
     if (Array.isArray(wrapped.requirements)) return wrapped.requirements;
   }
   return [];
+}
+
+function getPaginationMeta(value: unknown): PaginatedMeta {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const wrapped = value as Record<string, any>;
+  const meta = (wrapped.meta && typeof wrapped.meta === "object") ? wrapped.meta : wrapped;
+  return {
+    total: typeof meta.total === "number" ? meta.total : typeof meta.totalCount === "number" ? meta.totalCount : undefined,
+    page: typeof meta.page === "number" ? meta.page : typeof meta.currentPage === "number" ? meta.currentPage : undefined,
+    limit: typeof meta.limit === "number" ? meta.limit : typeof meta.pageSize === "number" ? meta.pageSize : undefined,
+    hasMore: typeof meta.hasMore === "boolean" ? meta.hasMore : undefined,
+    nextPage: typeof meta.nextPage === "number" || meta.nextPage === null ? meta.nextPage : undefined,
+  };
 }
 
 function hasDeadlinePassed(value: unknown) {
@@ -179,6 +196,7 @@ export default function Requirements() {
   const [remote, setRemote] = useState(false);
   const [status, setStatus] = useState<string>("open");
   const [sort, setSort] = useState<"recent" | "deadline" | "budget">("recent");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [previewRequirement, setPreviewRequirement] = useState<any | null>(null);
 
   const queryParams = {
@@ -199,10 +217,24 @@ export default function Requirements() {
   const queryClient = useQueryClient();
 
   const requirementsList = toArray(requirements);
+  const paginationMeta = getPaginationMeta(requirements);
+  const visibleRequirements = requirementsList.slice(0, visibleCount);
+  const hasMoreLocal = visibleCount < requirementsList.length;
+  const hasMoreFromApi = paginationMeta.hasMore === true || (typeof paginationMeta.total === "number" && visibleCount < paginationMeta.total);
+  const hasMore = hasMoreLocal || hasMoreFromApi;
+  const shownCount = Math.min(visibleCount, requirementsList.length);
+  const totalCount = paginationMeta.total ?? requirementsList.length;
   const skillCategories = toArray<{ skills?: string[] }>(skillsData);
   const allSkills = skillCategories.flatMap((cat) => Array.isArray(cat.skills) ? cat.skills : []);
 
-  const clearFilters = () => { setSearch(""); setSelectedSkills([]); setLocation(""); setRemote(false); setStatus("open"); setSort("recent"); };
+  const resetPagination = () => setVisibleCount(PAGE_SIZE);
+  const setSearchFilter = (value: string) => { setSearch(value); resetPagination(); };
+  const setSkillsFilter = (next: string[]) => { setSelectedSkills(next); resetPagination(); };
+  const setLocationFilter = (value: string) => { setLocation(value); resetPagination(); };
+  const setRemoteFilter = (value: boolean) => { setRemote(value); resetPagination(); };
+  const setStatusFilter = (value: string) => { setStatus(value); resetPagination(); };
+  const setSortFilter = (value: "recent" | "deadline" | "budget") => { setSort(value); resetPagination(); };
+  const clearFilters = () => { setSearch(""); setSelectedSkills([]); setLocation(""); setRemote(false); setStatus("open"); setSort("recent"); resetPagination(); };
   const activeFiltersCount = (search ? 1 : 0) + (selectedSkills.length > 0 ? 1 : 0) + (location ? 1 : 0) + (remote ? 1 : 0) + (status !== "open" ? 1 : 0);
   const openRequirement = (req: any) => { if (isLoggedIn) navigate(`/requirements/${req.id}`); else setPreviewRequirement(req); };
 
@@ -211,11 +243,11 @@ export default function Requirements() {
       <aside className="w-full md:w-64 lg:w-72 shrink-0 self-start sticky top-24 space-y-6">
         <div className="flex items-center justify-between pb-4 border-b"><h2 className="text-lg font-semibold flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</h2>{activeFiltersCount > 0 && <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 px-2 text-xs text-muted-foreground">Clear <X className="ml-1 h-3 w-3" /></Button>}</div>
         <div className="space-y-4">
-          <div className="space-y-2"><Label htmlFor="search">Search</Label><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="search" placeholder="Title or keyword..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
-          <div className="space-y-2"><Label>Skill Required</Label><SkillMultiSelect selected={selectedSkills} onChange={setSelectedSkills} allSkills={allSkills} /></div>
-          <div className="space-y-2"><Label htmlFor="location">Location</Label><div className="relative"><MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="location" placeholder="City, Country..." className="pl-9" value={location} onChange={(e) => setLocation(e.target.value)} /></div></div>
-          <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={status} onValueChange={setStatus}><SelectTrigger id="status"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem><SelectItem value="open">Open</SelectItem><SelectItem value="closed">Closed</SelectItem><SelectItem value="vacant">Vacant (No applicants)</SelectItem></SelectContent></Select></div>
-          <div className="space-y-4 pt-2"><div className="flex items-center justify-between"><Label htmlFor="remote-toggle" className="cursor-pointer">Remote OK</Label><Switch id="remote-toggle" checked={remote} onCheckedChange={setRemote} /></div></div>
+          <div className="space-y-2"><Label htmlFor="search">Search</Label><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="search" placeholder="Title or keyword..." className="pl-9" value={search} onChange={(e) => setSearchFilter(e.target.value)} /></div></div>
+          <div className="space-y-2"><Label>Skill Required</Label><SkillMultiSelect selected={selectedSkills} onChange={setSkillsFilter} allSkills={allSkills} /></div>
+          <div className="space-y-2"><Label htmlFor="location">Location</Label><div className="relative"><MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="location" placeholder="City, Country..." className="pl-9" value={location} onChange={(e) => setLocationFilter(e.target.value)} /></div></div>
+          <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={status} onValueChange={setStatusFilter}><SelectTrigger id="status"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem><SelectItem value="open">Open</SelectItem><SelectItem value="closed">Closed</SelectItem><SelectItem value="vacant">Vacant (No applicants)</SelectItem></SelectContent></Select></div>
+          <div className="space-y-4 pt-2"><div className="flex items-center justify-between"><Label htmlFor="remote-toggle" className="cursor-pointer">Remote OK</Label><Switch id="remote-toggle" checked={remote} onCheckedChange={setRemoteFilter} /></div></div>
         </div>
       </aside>
 
@@ -224,12 +256,19 @@ export default function Requirements() {
           <div><h1 className="text-3xl font-bold tracking-tight">Training Requirements</h1><p className="text-muted-foreground mt-1">Browse open training opportunities posted by verified institutions.</p></div>
           <div className="flex items-center gap-4 self-start sm:self-auto">
             {user?.role === "vendor" && <Link href="/requirements/new"><Button className="shrink-0">Post Requirement</Button></Link>}
-            <div className="flex items-center gap-2"><Label className="hidden lg:block whitespace-nowrap text-sm text-muted-foreground">Sort:</Label><Select value={sort} onValueChange={(v: any) => setSort(v)}><SelectTrigger className="w-[140px] h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="recent">Most Recent</SelectItem><SelectItem value="deadline">Closing Soon</SelectItem><SelectItem value="budget">Highest Budget</SelectItem></SelectContent></Select></div>
+            <div className="flex items-center gap-2"><Label className="hidden lg:block whitespace-nowrap text-sm text-muted-foreground">Sort:</Label><Select value={sort} onValueChange={(v: any) => setSortFilter(v)}><SelectTrigger className="w-[140px] h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="recent">Most Recent</SelectItem><SelectItem value="deadline">Closing Soon</SelectItem><SelectItem value="budget">Highest Budget</SelectItem></SelectContent></Select></div>
           </div>
         </div>
 
+        {!isLoading && requirementsList.length > 0 && (
+          <div className="flex flex-col gap-1 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Showing <strong className="text-foreground">{shownCount}</strong>{totalCount ? <> of <strong className="text-foreground">{totalCount}</strong></> : null} requirements</span>
+            {hasMore && <span>Use Load more to continue browsing.</span>}
+          </div>
+        )}
+
         <div className="space-y-4">
-          {isLoading ? Array.from({ length: 5 }).map((_, i) => <Card key={i}><CardContent className="p-6"><div className="flex gap-4"><Skeleton className="h-12 w-12 rounded-md shrink-0" /><div className="space-y-2 flex-1"><Skeleton className="h-6 w-1/3" /><Skeleton className="h-4 w-1/4" /><div className="flex gap-4 pt-3"><Skeleton className="h-5 w-24 rounded-full" /><Skeleton className="h-5 w-24 rounded-full" /></div></div></div></CardContent></Card>) : requirementsList.length ? requirementsList.map((req: any) => {
+          {isLoading ? Array.from({ length: 5 }).map((_, i) => <Card key={i}><CardContent className="p-6"><div className="flex gap-4"><Skeleton className="h-12 w-12 rounded-md shrink-0" /><div className="space-y-2 flex-1"><Skeleton className="h-6 w-1/3" /><Skeleton className="h-4 w-1/4" /><div className="flex gap-4 pt-3"><Skeleton className="h-5 w-24 rounded-full" /><Skeleton className="h-5 w-24 rounded-full" /></div></div></div></CardContent></Card>) : visibleRequirements.length ? visibleRequirements.map((req: any) => {
             const expired = hasDeadlinePassed(req.deadline);
             const appStatus = user?.role === "trainer" ? getTrainerApplicationStatus(req) : null;
             return (
@@ -249,6 +288,14 @@ export default function Requirements() {
             );
           }) : <div className="flex flex-col items-center justify-center py-20 text-center border rounded-lg bg-muted/30 border-dashed"><Briefcase className="h-12 w-12 text-muted-foreground/50 mb-4" /><h3 className="text-lg font-semibold text-foreground mb-1">No requirements found</h3><p className="text-muted-foreground max-w-md">We couldn't find any training requirements matching your current filters.</p><Button variant="outline" className="mt-4" onClick={clearFilters}>Clear all filters</Button></div>}
         </div>
+
+        {!isLoading && requirementsList.length > 0 && hasMore && (
+          <div className="flex justify-center pt-2">
+            <Button variant="outline" size="lg" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)} disabled={!hasMoreLocal && hasMoreFromApi}>
+              {!hasMoreLocal && hasMoreFromApi ? "More results available after backend pagination is enabled" : "Load more requirements"}
+            </Button>
+          </div>
+        )}
       </div>
       <GuestPreviewModal requirement={previewRequirement} onClose={() => setPreviewRequirement(null)} />
     </div>
