@@ -4,7 +4,7 @@ import { Activity, CheckCircle2, XCircle, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useSwitchUser, getGetCurrentUserQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
+import { getGetCurrentUserQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth, getRoleLabel, getRoleSessionKey, type UserRole } from "@/hooks/useAuth";
 import {
@@ -36,63 +36,58 @@ export default function AuthCallback() {
   const [, navigate] = useLocation();
   const { signIn } = useAuth();
   const queryClient = useQueryClient();
-  const switchUser = useSwitchUser();
 
-  const completeSignIn = (pending: PendingAuth) => {
-    switchUser.mutate(
-      {
-        data: {
+  const completeSignIn = async (pending: PendingAuth, idToken: string) => {
+    try {
+      const res = await fetch("/api/auth/firebase-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
           role: getRoleSessionKey(pending.role as UserRole),
           name: pending.name || pending.email.split("@")[0]!,
-          email: pending.email,
           orgName: pending.orgName,
           orgType: pending.orgType,
-        },
-      },
-      {
-        onSuccess: (data: any) => {
-          if (data?.sessionToken) {
-            localStorage.setItem("th_session_token", data.sessionToken);
-            setAuthTokenGetter(() => Promise.resolve(data.sessionToken));
-          }
-          const redirectTarget = getSafeRedirectTarget();
-          queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
-          signIn({
-            signedIn: true,
-            name: pending.name || pending.email.split("@")[0]!,
-            email: pending.email,
-            role: pending.role as UserRole,
-            orgName: pending.orgName,
-            orgType: pending.orgType,
-          });
-          clearPendingAuth();
-          localStorage.removeItem("th_auth_redirect");
-          setStatus("success");
-          setTimeout(() => navigate(redirectTarget), 1200);
-        },
-        onError: () => {
-          setStatus("error");
-          setErrorMsg("Sign-in succeeded but could not set up your session. Please try again.");
-        },
-      }
-    );
+        }),
+      });
+
+      if (!res.ok) throw new Error("Session setup failed");
+
+      const data = await res.json() as {
+        sessionToken?: string;
+        user?: { name?: string; email?: string; role?: UserRole };
+      };
+
+      if (!data.sessionToken || !data.user?.email) throw new Error("Session token missing");
+
+      localStorage.setItem("th_session_token", data.sessionToken);
+      setAuthTokenGetter(() => Promise.resolve(data.sessionToken!));
+
+      const redirectTarget = getSafeRedirectTarget();
+      queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+
+      signIn({
+        signedIn: true,
+        name: data.user.name || pending.name || data.user.email.split("@")[0]!,
+        email: data.user.email,
+        role: data.user.role || pending.role as UserRole,
+        orgName: pending.orgName,
+        orgType: pending.orgType,
+      });
+
+      clearPendingAuth();
+      localStorage.removeItem("th_auth_redirect");
+      setStatus("success");
+      setTimeout(() => navigate(redirectTarget), 1200);
+    } catch {
+      setStatus("error");
+      setErrorMsg("Sign-in succeeded but could not set up your app session. Please try again.");
+    }
   };
 
-  async function verifyEmailLinkAndPrepareApiSession(email: string) {
+  async function verifyEmailLinkAndGetToken(email: string) {
     const user = await completeEmailLinkSignIn(email);
-    const firebaseToken = await user.getIdToken();
-    setAuthTokenGetter(() => Promise.resolve(firebaseToken));
-
-    const sessionRes = await fetch("/api/auth/session-token", {
-      headers: { Authorization: `Bearer ${firebaseToken}` },
-    });
-    if (sessionRes.ok) {
-      const data = await sessionRes.json().catch(() => null) as { sessionToken?: string } | null;
-      if (data?.sessionToken) {
-        localStorage.setItem("th_session_token", data.sessionToken);
-        setAuthTokenGetter(() => Promise.resolve(data.sessionToken!));
-      }
-    }
+    return user.getIdToken(true);
   }
 
   useEffect(() => {
@@ -110,14 +105,14 @@ export default function AuthCallback() {
       }
 
       try {
-        await verifyEmailLinkAndPrepareApiSession(pending.email);
+        const idToken = await verifyEmailLinkAndGetToken(pending.email);
       } catch (err) {
         setStatus("error");
         setErrorMsg((err as Error).message || "Failed to verify the sign-in link. It may have expired.");
         return;
       }
 
-      completeSignIn(pending);
+      await completeSignIn(pending);
     }
 
     handleCallback();
@@ -135,7 +130,7 @@ export default function AuthCallback() {
       setErrorMsg((err as Error).message || "Could not verify email. The link may have expired — please request a new one.");
       return;
     }
-    completeSignIn({ type: "login", role: recoveryRole, email });
+    await completeSignIn({ type: "login", role: recoveryRole, email });
   };
 
   return (

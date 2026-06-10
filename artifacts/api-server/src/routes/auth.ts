@@ -1,15 +1,128 @@
 import { Router, type IRouter } from "express";
 import { createOtp, verifyOtp } from "../lib/otp";
 import { sendOtpEmail, sendPasswordResetEmail } from "../lib/email";
-import { createCustomToken } from "../lib/firebase";
-import { getActiveUserId, signAppJwt } from "../lib/session";
-import { db, usersTable } from "@workspace/db";
+import { createCustomToken, verifyIdToken } from "../lib/firebase";
+import { getActiveUserId, setActiveUserId, signAppJwt } from "../lib/session";
+import { newId } from "../lib/ids";
+import { db, usersTable, trainersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 const router: IRouter = Router();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const FREE_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "yahoo.co.uk",
+  "hotmail.com", "hotmail.co.uk", "hotmail.in", "outlook.com", "outlook.in",
+  "live.com", "live.in", "aol.com", "icloud.com", "me.com", "mac.com",
+  "protonmail.com", "proton.me", "pm.me", "tutanota.com", "tutamail.com",
+  "zoho.com", "yandex.com", "yandex.ru", "mail.com", "inbox.com",
+  "gmx.com", "gmx.de", "rediffmail.com", "msn.com",
+]);
+
+type LoginRole = "trainer" | "vendor";
+
+function detectLoginRole(email: string, role?: unknown): LoginRole {
+  if (role === "trainer" || role === "vendor") return role;
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
+  return FREE_EMAIL_DOMAINS.has(domain) ? "trainer" : "vendor";
+}
+
+async function findOrCreateLoginUser(input: {
+  email: string;
+  name?: string;
+  role?: unknown;
+  orgName?: string;
+  orgType?: string;
+}) {
+  const email = input.email.toLowerCase().trim();
+  const role = detectLoginRole(email, input.role);
+  const displayName = input.name?.trim() || email.split("@")[0]!;
+
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
+
+  if (existing.length > 0) {
+    const user = existing[0]!;
+    if (user.deactivatedAt) throw new Error("account_deactivated");
+    await setActiveUserId(user.id);
+    return user;
+  }
+
+  let trainerId: string | undefined;
+  let vendorId: string | undefined;
+
+  if (role === "trainer") {
+    const tid = newId("trainer");
+    await db.insert(trainersTable).values({
+      id: tid,
+      name: displayName,
+      headline: "",
+      mainSkill: "",
+      subSkills: [],
+      experienceYears: 0,
+      location: "",
+      hourlyRate: 0,
+      bio: "",
+      avatarUrl: "",
+      verified: false,
+      certifications: [],
+      languages: [],
+      completedTrainings: 0,
+    });
+    trainerId = tid;
+  } else {
+    const vid = newId("vendor");
+    await db.insert(vendorsTable).values({
+      id: vid,
+      companyName: input.orgName || "",
+      orgType: input.orgType ?? null,
+      industry: "",
+      location: "",
+      contactName: displayName,
+      contactDesignation: "",
+      email,
+      logoUrl: "",
+      verified: false,
+    });
+    vendorId = vid;
+  }
+
+  const [newUser] = await db
+    .insert(usersTable)
+    .values({
+      id: newId("user"),
+      name: displayName,
+      email,
+      role,
+      avatarUrl: null,
+      trainerId: trainerId ?? null,
+      vendorId: vendorId ?? null,
+    })
+    .returning();
+
+  await setActiveUserId(newUser!.id);
+  return newUser!;
+}
+
+function loginSessionPayload(user: Awaited<ReturnType<typeof findOrCreateLoginUser>>) {
+  return {
+    sessionToken: signAppJwt(user.id),
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      trainerId: user.trainerId,
+      vendorId: user.vendorId,
+    },
+  };
+}
+
 
 router.post("/auth/otp/send", async (req, res) => {
   const { email } = req.body ?? {};
@@ -100,6 +213,48 @@ router.post("/auth/admin/login", async (req, res) => {
   });
 });
 
+
+router.post("/auth/firebase-login", async (req, res) => {
+  const { idToken, role, name, orgName, orgType } = (req.body ?? {}) as {
+    idToken?: string;
+    role?: string;
+    name?: string;
+    orgName?: string;
+    orgType?: string;
+  };
+
+  if (!idToken) {
+    res.status(400).json({ error: "Firebase ID token is required." });
+    return;
+  }
+
+  try {
+    const decoded = await verifyIdToken(idToken);
+    const email = decoded.email?.toLowerCase().trim();
+
+    if (!email || !EMAIL_RE.test(email)) {
+      res.status(401).json({ error: "Firebase account email is required." });
+      return;
+    }
+
+    const user = await findOrCreateLoginUser({
+      email,
+      name: name || (decoded as { name?: string }).name || email.split("@")[0]!,
+      role,
+      orgName,
+      orgType,
+    });
+
+    res.json(loginSessionPayload(user));
+  } catch (err) {
+    if ((err as Error).message === "account_deactivated") {
+      res.status(403).json({ error: "account_deactivated", message: "This account has been deactivated." });
+      return;
+    }
+    res.status(401).json({ error: "unauthenticated" });
+  }
+});
+
 router.post("/auth/set-password", async (req, res) => {
   const activeId = await getActiveUserId(req);
   if (!activeId) {
@@ -163,7 +318,6 @@ router.post("/auth/password/login", async (req, res) => {
   const sessionToken = signAppJwt(user.id);
 
   // Also set the server-side session for dev-mode fallback
-  const { setActiveUserId } = await import("../lib/session.js");
   await setActiveUserId(user.id);
 
   let customToken: string | null = null;

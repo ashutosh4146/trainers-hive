@@ -144,10 +144,44 @@ export default function Login() {
     setIsGoogleLoading(true);
     try {
       rememberRedirect();
-      const user = await signInWithGoogle();
-      const googleEmail = (user.email || "").trim().toLowerCase();
+      const firebaseUser = await signInWithGoogle();
+      const googleEmail = (firebaseUser.email || "").trim().toLowerCase();
       const role = getDetectedRole(googleEmail);
-      completeSession(user.displayName || googleEmail.split("@")[0] || "User", googleEmail, role);
+      const idToken = await firebaseUser.getIdToken(true);
+
+      const res = await fetch("/api/auth/firebase-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          role: getRoleSessionKey(role),
+          name: firebaseUser.displayName || googleEmail.split("@")[0] || "User",
+        }),
+      });
+
+      if (!res.ok) throw new Error("Could not create app session.");
+
+      const data = await res.json() as {
+        sessionToken?: string;
+        user?: { name?: string; email?: string; role?: UserRole };
+      };
+
+      if (!data.sessionToken || !data.user?.email) throw new Error("Session token missing.");
+
+      localStorage.setItem("th_session_token", data.sessionToken);
+      setAuthTokenGetter(() => Promise.resolve(data.sessionToken!));
+
+      const finalRole = data.user.role || role;
+      queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+      signIn({
+        signedIn: true,
+        name: data.user.name || firebaseUser.displayName || data.user.email.split("@")[0] || "User",
+        email: data.user.email,
+        role: finalRole,
+      });
+      toast({ title: "Welcome back!", description: `Signed in as ${getRoleLabel(finalRole)}.` });
+      localStorage.removeItem("th_auth_redirect");
+      navigate(redirectTarget);
     } catch (err) {
       const msg = (err as Error).message;
       if (!msg.includes("popup-closed")) toast({ title: "Google sign-in failed", description: msg, variant: "destructive" });
