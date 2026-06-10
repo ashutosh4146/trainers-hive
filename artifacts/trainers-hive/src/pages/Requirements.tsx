@@ -239,8 +239,8 @@ export default function Requirements() {
   const openRequirement = (req: any) => { if (isLoggedIn) navigate(`/requirements/${req.id}`); else setPreviewRequirement(req); };
 
   return (
-    <div className="container mx-auto px-4 py-8 md:py-12 flex flex-col md:flex-row gap-8">
-      <aside className="w-full md:w-64 lg:w-72 shrink-0 self-start sticky top-24 space-y-6">
+    <div className="container mx-auto flex flex-col gap-6 px-4 py-6 md:flex-row md:gap-8 md:py-12">
+      <aside className="w-full shrink-0 space-y-6 self-start rounded-2xl border bg-card p-4 shadow-sm md:sticky md:top-24 md:w-64 md:border-0 md:bg-transparent md:p-0 md:shadow-none lg:w-72">
         <div className="flex items-center justify-between pb-4 border-b"><h2 className="text-lg font-semibold flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</h2>{activeFiltersCount > 0 && <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 px-2 text-xs text-muted-foreground">Clear <X className="ml-1 h-3 w-3" /></Button>}</div>
         <div className="space-y-4">
           <div className="space-y-2"><Label htmlFor="search">Search</Label><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="search" placeholder="Title or keyword..." className="pl-9" value={search} onChange={(e) => setSearchFilter(e.target.value)} /></div></div>
