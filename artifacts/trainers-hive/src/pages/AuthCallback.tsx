@@ -104,15 +104,16 @@ export default function AuthCallback() {
         return;
       }
 
+      let idToken: string;
       try {
-        const idToken = await verifyEmailLinkAndGetToken(pending.email);
+        idToken = await verifyEmailLinkAndGetToken(pending.email);
       } catch (err) {
         setStatus("error");
         setErrorMsg((err as Error).message || "Failed to verify the sign-in link. It may have expired.");
         return;
       }
 
-      await completeSignIn(pending);
+      await completeSignIn(pending, idToken);
     }
 
     handleCallback();
@@ -123,14 +124,15 @@ export default function AuthCallback() {
     const email = recoveryEmail.trim();
     if (!email) return;
     setStatus("completing");
+    let idToken: string;
     try {
-      await verifyEmailLinkAndPrepareApiSession(email);
+      idToken = await verifyEmailLinkAndGetToken(email);
     } catch (err) {
       setStatus("error");
       setErrorMsg((err as Error).message || "Could not verify email. The link may have expired — please request a new one.");
       return;
     }
-    await completeSignIn({ type: "login", role: recoveryRole, email });
+    await completeSignIn({ type: "login", role: recoveryRole, email }, idToken);
   };
 
   return (
