@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, usersTable, trainersTable, vendorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { SwitchUserBody } from "@workspace/api-zod";
-import { getActiveUserId, setActiveUserId } from "../lib/session";
+import { getActiveUserId, setActiveUserId, signAppJwt } from "../lib/session";
 import { newId } from "../lib/ids";
 
 const router: IRouter = Router();
@@ -56,6 +56,7 @@ router.post("/session/switch", async (req, res) => {
         avatarUrl: u.avatarUrl ?? undefined,
         vendorId: u.vendorId ?? undefined,
         trainerId: u.trainerId ?? undefined,
+        sessionToken: signAppJwt(u.id),
       });
       return;
     }
@@ -123,6 +124,7 @@ router.post("/session/switch", async (req, res) => {
       avatarUrl: newUser!.avatarUrl ?? undefined,
       vendorId: newUser!.vendorId ?? undefined,
       trainerId: newUser!.trainerId ?? undefined,
+      sessionToken: signAppJwt(newUser!.id),
     });
     return;
   }
@@ -150,6 +152,7 @@ router.post("/session/switch", async (req, res) => {
     avatarUrl: u.avatarUrl ?? undefined,
     vendorId: u.vendorId ?? undefined,
     trainerId: u.trainerId ?? undefined,
+    sessionToken: signAppJwt(u.id),
   });
 });
 
