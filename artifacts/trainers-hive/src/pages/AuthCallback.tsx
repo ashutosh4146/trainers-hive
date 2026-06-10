@@ -50,7 +50,11 @@ export default function AuthCallback() {
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: (data: any) => {
+          if (data?.sessionToken) {
+            localStorage.setItem("th_session_token", data.sessionToken);
+            setAuthTokenGetter(() => Promise.resolve(data.sessionToken));
+          }
           const redirectTarget = getSafeRedirectTarget();
           queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
           signIn({
