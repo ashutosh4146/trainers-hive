@@ -198,6 +198,7 @@ export default function Requirements() {
   const [sort, setSort] = useState<"recent" | "deadline" | "budget">("recent");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [previewRequirement, setPreviewRequirement] = useState<any | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const queryParams = {
     ...(search ? { q: search } : {}),
@@ -238,17 +239,21 @@ export default function Requirements() {
   const activeFiltersCount = (search ? 1 : 0) + (selectedSkills.length > 0 ? 1 : 0) + (location ? 1 : 0) + (remote ? 1 : 0) + (status !== "open" ? 1 : 0);
   const openRequirement = (req: any) => { if (isLoggedIn) navigate(`/requirements/${req.id}`); else setPreviewRequirement(req); };
 
+  const renderFilters = () => (
+    <div className="space-y-4">
+      <div className="space-y-2"><Label htmlFor="search">Search</Label><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="search" placeholder="Title or keyword..." className="pl-9" value={search} onChange={(e) => setSearchFilter(e.target.value)} /></div></div>
+      <div className="space-y-2"><Label>Skill Required</Label><SkillMultiSelect selected={selectedSkills} onChange={setSkillsFilter} allSkills={allSkills} /></div>
+      <div className="space-y-2"><Label htmlFor="location">Location</Label><div className="relative"><MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="location" placeholder="City, Country..." className="pl-9" value={location} onChange={(e) => setLocationFilter(e.target.value)} /></div></div>
+      <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={status} onValueChange={setStatusFilter}><SelectTrigger id="status"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem><SelectItem value="open">Open</SelectItem><SelectItem value="closed">Closed</SelectItem><SelectItem value="vacant">Vacant (No applicants)</SelectItem></SelectContent></Select></div>
+      <div className="space-y-4 pt-2"><div className="flex items-center justify-between"><Label htmlFor="remote-toggle" className="cursor-pointer">Remote OK</Label><Switch id="remote-toggle" checked={remote} onCheckedChange={setRemoteFilter} /></div></div>
+    </div>
+  );
+
   return (
     <div className="container mx-auto flex flex-col gap-6 px-4 py-6 md:flex-row md:gap-8 md:py-12">
-      <aside className="w-full shrink-0 space-y-6 self-start rounded-2xl border bg-card p-4 shadow-sm md:sticky md:top-24 md:w-64 md:border-0 md:bg-transparent md:p-0 md:shadow-none lg:w-72">
-        <div className="flex items-center justify-between pb-4 border-b"><h2 className="text-lg font-semibold flex items-center gap-2"><Filter className="h-5 w-5" /> Filters</h2>{activeFiltersCount > 0 && <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 px-2 text-xs text-muted-foreground">Clear <X className="ml-1 h-3 w-3" /></Button>}</div>
-        <div className="space-y-4">
-          <div className="space-y-2"><Label htmlFor="search">Search</Label><div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="search" placeholder="Title or keyword..." className="pl-9" value={search} onChange={(e) => setSearchFilter(e.target.value)} /></div></div>
-          <div className="space-y-2"><Label>Skill Required</Label><SkillMultiSelect selected={selectedSkills} onChange={setSkillsFilter} allSkills={allSkills} /></div>
-          <div className="space-y-2"><Label htmlFor="location">Location</Label><div className="relative"><MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input id="location" placeholder="City, Country..." className="pl-9" value={location} onChange={(e) => setLocationFilter(e.target.value)} /></div></div>
-          <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={status} onValueChange={setStatusFilter}><SelectTrigger id="status"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem><SelectItem value="open">Open</SelectItem><SelectItem value="closed">Closed</SelectItem><SelectItem value="vacant">Vacant (No applicants)</SelectItem></SelectContent></Select></div>
-          <div className="space-y-4 pt-2"><div className="flex items-center justify-between"><Label htmlFor="remote-toggle" className="cursor-pointer">Remote OK</Label><Switch id="remote-toggle" checked={remote} onCheckedChange={setRemoteFilter} /></div></div>
-        </div>
+      <aside className="hidden w-64 shrink-0 self-start space-y-6 md:sticky md:top-24 md:block lg:w-72">
+        <div className="flex items-center justify-between border-b pb-4"><h2 className="flex items-center gap-2 text-lg font-semibold"><Filter className="h-5 w-5" /> Filters</h2>{activeFiltersCount > 0 && <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 px-2 text-xs text-muted-foreground">Clear <X className="ml-1 h-3 w-3" /></Button>}</div>
+        {renderFilters()}
       </aside>
 
       <div className="flex-1 space-y-6 min-w-0">
@@ -258,6 +263,19 @@ export default function Requirements() {
             {user?.role === "vendor" && <Link href="/requirements/new"><Button className="shrink-0">Post Requirement</Button></Link>}
             <div className="flex items-center gap-2"><Label className="hidden lg:block whitespace-nowrap text-sm text-muted-foreground">Sort:</Label><Select value={sort} onValueChange={(v: any) => setSortFilter(v)}><SelectTrigger className="w-[140px] h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="recent">Most Recent</SelectItem><SelectItem value="deadline">Closing Soon</SelectItem><SelectItem value="budget">Highest Budget</SelectItem></SelectContent></Select></div>
           </div>
+        </div>
+
+        <div className="md:hidden rounded-2xl border bg-card p-3 shadow-sm">
+          <button type="button" onClick={() => setFiltersOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left font-semibold">
+            <span className="flex items-center gap-2"><Filter className="h-5 w-5" /> Filters {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1">{activeFiltersCount}</Badge>}</span>
+            <span className="text-sm text-muted-foreground">{filtersOpen ? "Hide" : "Show"}</span>
+          </button>
+          {filtersOpen && (
+            <div className="mt-3 border-t pt-4">
+              <div className="mb-4 flex justify-end">{activeFiltersCount > 0 && <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 px-2 text-xs text-muted-foreground">Clear filters <X className="ml-1 h-3 w-3" /></Button>}</div>
+              {renderFilters()}
+            </div>
+          )}
         </div>
 
         {!isLoading && requirementsList.length > 0 && (
