@@ -38,12 +38,14 @@ export function useUnreadMessages() {
   const hasInitializedRef = useRef(false);
 
   const [since, setSince] = useState<string>(() => readSince(auth?.email));
+  const [visibleCount, setVisibleCount] = useState(0);
 
   // Keep `since` in sync when auth email changes (login / role switch)
   useEffect(() => {
     setSince(readSince(auth?.email));
     prevCountRef.current = null;
     hasInitializedRef.current = false;
+    setVisibleCount(0);
   }, [auth?.email]);
 
   // Listen for markRead() calls from any component
@@ -54,6 +56,7 @@ export function useUnreadMessages() {
         setSince(newSince);
         prevCountRef.current = 0;
         hasInitializedRef.current = true;
+        setVisibleCount(0);
       }
     };
     window.addEventListener(MARK_READ_EVENT, handler);
@@ -82,23 +85,30 @@ export function useUnreadMessages() {
   useEffect(() => {
     if (!data) return;
 
+    // Do not show old unread messages as a red badge immediately after login.
+    // The floating button badge should appear only for messages that arrive after
+    // this screen has loaded, or after the user last opened the messages page.
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
       prevCountRef.current = count;
+      setVisibleCount(0);
       return;
     }
 
     const previousCount = prevCountRef.current ?? 0;
     if (count > previousCount) {
       const diff = count - previousCount;
+      setVisibleCount((current) => current + diff);
       toast({
         title: diff === 1 ? "New message" : `${diff} new messages`,
         description: "You have a new message in one of your conversations.",
       });
+    } else if (count <= 0) {
+      setVisibleCount(0);
     }
 
     prevCountRef.current = count;
   }, [data, count, toast]);
 
-  return { count };
+  return { count: visibleCount };
 }
