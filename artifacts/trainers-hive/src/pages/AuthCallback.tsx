@@ -4,7 +4,7 @@ import { Activity, CheckCircle2, XCircle, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useSwitchUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
+import { useSwitchUser, getGetCurrentUserQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth, getRoleLabel, getRoleSessionKey, type UserRole } from "@/hooks/useAuth";
 import {
@@ -74,6 +74,23 @@ export default function AuthCallback() {
     );
   };
 
+  async function verifyEmailLinkAndPrepareApiSession(email: string) {
+    const user = await completeEmailLinkSignIn(email);
+    const firebaseToken = await user.getIdToken();
+    setAuthTokenGetter(() => Promise.resolve(firebaseToken));
+
+    const sessionRes = await fetch("/api/auth/session-token", {
+      headers: { Authorization: `Bearer ${firebaseToken}` },
+    });
+    if (sessionRes.ok) {
+      const data = await sessionRes.json().catch(() => null) as { sessionToken?: string } | null;
+      if (data?.sessionToken) {
+        localStorage.setItem("th_session_token", data.sessionToken);
+        setAuthTokenGetter(() => Promise.resolve(data.sessionToken!));
+      }
+    }
+  }
+
   useEffect(() => {
     async function handleCallback() {
       if (!isEmailLinkCallback()) {
@@ -89,7 +106,7 @@ export default function AuthCallback() {
       }
 
       try {
-        await completeEmailLinkSignIn(pending.email);
+        await verifyEmailLinkAndPrepareApiSession(pending.email);
       } catch (err) {
         setStatus("error");
         setErrorMsg((err as Error).message || "Failed to verify the sign-in link. It may have expired.");
@@ -108,7 +125,7 @@ export default function AuthCallback() {
     if (!email) return;
     setStatus("completing");
     try {
-      await completeEmailLinkSignIn(email);
+      await verifyEmailLinkAndPrepareApiSession(email);
     } catch (err) {
       setStatus("error");
       setErrorMsg((err as Error).message || "Could not verify email. The link may have expired — please request a new one.");
