@@ -5,6 +5,8 @@ APP_DIR="${APP_DIR:-$HOME/trainers-hive}"
 WEB_ROOT="${WEB_ROOT:-/var/www/html}"
 NODE_HEAP_MB="${NODE_HEAP_MB:-6144}"
 API_PM2_NAME="${API_PM2_NAME:-api-server}"
+API_HEALTH_URL="${API_HEALTH_URL:-http://localhost:8080/api/healthz}"
+API_HEALTH_WAIT_SECONDS="${API_HEALTH_WAIT_SECONDS:-8}"
 
 cd "$APP_DIR"
 
@@ -41,9 +43,12 @@ echo "==> Restarting API PM2 process"
 pm2 restart "$API_PM2_NAME" --update-env
 pm2 status
 
+echo "==> Waiting ${API_HEALTH_WAIT_SECONDS}s for API to start"
+sleep "$API_HEALTH_WAIT_SECONDS"
+
 echo "==> Health check"
 if command -v curl >/dev/null 2>&1; then
-  curl -fsS http://localhost:8080/api/healthz || true
+  curl -fsS "$API_HEALTH_URL" || true
   echo
 fi
 
