@@ -55,6 +55,8 @@ export async function ensureAgreementDraftForApplication(
   if (!trainer) return;
 
   const fee = app.proposedRate ?? (reqRow.budget > 0 ? reqRow.budget : null);
+  if (fee == null || fee <= 0) return;
+
   const startIso = reqRow.startDate ? reqRow.startDate.slice(0, 10) : null;
   let endIso: string | null = null;
   if (startIso) {
