@@ -118,9 +118,10 @@ const requirementSchema = z.object({
   skill: z.string().min(1, "Please select a primary skill"),
   subSkills: z.string(),
   trainingType: z.string().min(1, "Please select a training type"),
-  audienceType: z.enum(["freshers", "lateral", "both"], {
+  audienceType: z.enum(["freshers", "lateral"], {
     required_error: "Please select an audience type",
   }),
+  audienceCount: z.coerce.number().int().min(1, "Audience count is required"),
   trainingMode: z.enum(["remote", "in-person", "hybrid"], {
     required_error: "Please select a delivery mode",
   }),
@@ -273,6 +274,7 @@ export default function NewRequirement() {
       subSkills: "",
       trainingType: "",
       audienceType: undefined,
+      audienceCount: undefined,
       trainingMode: undefined,
       city: "",
       state: "",
@@ -322,6 +324,10 @@ export default function NewRequirement() {
       skill: template.skill,
       subSkills: (template.subSkills ?? []).join(", "),
       trainingType: (template as any).trainingType ?? "",
+      audienceType: ["freshers", "lateral"].includes((template as any).audienceType)
+        ? ((template as any).audienceType as FormValues["audienceType"])
+        : undefined,
+      audienceCount: (template as any).audienceCount ?? undefined,
       trainingMode:
         ((template as any).trainingMode as FormValues["trainingMode"]) ??
         (template.remote ? "remote" : "in-person"),
@@ -372,6 +378,7 @@ export default function NewRequirement() {
           trainingType: data.trainingType,
           // audienceType is not yet in the OpenAPI spec; passed through as an extra field.
           audienceType: data.audienceType,
+          audienceCount: data.audienceCount,
           trainingMode: data.trainingMode,
           location: [data.city, data.state].filter(Boolean).join(", ") || undefined,
           trainerCount: data.trainerCount,
@@ -551,13 +558,13 @@ export default function NewRequirement() {
                   render={({ field }) => (
                     <FormItem className="md:col-span-2">
                       <FormLabel>Audience Type</FormLabel>
-                      <div className="grid grid-cols-3 gap-3 mt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                         <IconCard
                           selected={field.value === "freshers"}
                           onClick={() => field.onChange("freshers")}
                           icon={<Users />}
                           label="Freshers"
-                          sub="0–1 yrs experience"
+                          sub="0-1 yrs experience"
                         />
                         <IconCard
                           selected={field.value === "lateral"}
@@ -566,14 +573,33 @@ export default function NewRequirement() {
                           label="Lateral"
                           sub="Experienced hires"
                         />
-                        <IconCard
-                          selected={field.value === "both"}
-                          onClick={() => field.onChange("both")}
-                          icon={<LayoutGrid />}
-                          label="Both"
-                          sub="Mixed audience"
-                        />
                       </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="audienceCount"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel className="flex items-center gap-1.5">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        Audience Count
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="e.g. 30"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Estimated number of learners attending this training.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
