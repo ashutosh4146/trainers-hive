@@ -34,7 +34,8 @@ export const requirementsTable = pgTable("requirements", {
   language: text("language"),               // specific language required (optional)
   trainerScope: text("trainer_scope"),      // "local" | "pan-india"
   startDate: text("start_date"),            // expected start date (ISO string)
-  audienceType: text("audience_type"),      // "freshers" | "lateral" | "both"
+  audienceType: text("audience_type"),      // "freshers" | "lateral"
+  audienceCount: integer("audience_count"),  // estimated learner count
   // Posting options / upgrade flags
   isUrgent: boolean("is_urgent").notNull().default(false),
   isFeatured: boolean("is_featured").notNull().default(false),

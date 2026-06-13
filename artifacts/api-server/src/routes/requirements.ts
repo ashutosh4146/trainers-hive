@@ -66,6 +66,7 @@ async function buildRequirementCard(
     trainerScope: r.trainerScope ?? undefined,
     startDate: r.startDate ?? undefined,
     audienceType: r.audienceType ?? undefined,
+    audienceCount: r.audienceCount ?? undefined,
     flagged: r.flagged ?? false,
     flagReason: r.flagReason ?? undefined,
     flaggedBy: r.flaggedBy ?? undefined,
@@ -246,8 +247,8 @@ router.post("/requirements", async (req, res) => {
   const rawAudience = typeof (req.body as { audienceType?: unknown })?.audienceType === "string"
     ? ((req.body as { audienceType: string }).audienceType.trim().toLowerCase())
     : "";
-  if (rawAudience !== "freshers" && rawAudience !== "lateral" && rawAudience !== "both") {
-    res.status(400).json({ error: "audienceType is required and must be 'freshers', 'lateral' or 'both'" });
+  if (rawAudience !== "freshers" && rawAudience !== "lateral") {
+    res.status(400).json({ error: "audienceType is required and must be 'freshers' or 'lateral'" });
     return;
   }
   const audienceType = rawAudience;
@@ -301,6 +302,7 @@ router.post("/requirements", async (req, res) => {
     trainerScope: parsed.data.trainerScope,
     startDate: parsed.data.startDate ?? null,
     audienceType,
+    audienceCount: parsed.data.audienceCount,
     isUrgent: parsed.data.isUrgent ?? false,
     isFeatured: parsed.data.isFeatured ?? false,
     isPrivate: parsed.data.isPrivate ?? false,
